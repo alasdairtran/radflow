@@ -3,7 +3,7 @@ import logging
 import torch.nn as nn
 from allennlp.common.registrable import Registrable
 
-from nos.modules import LoadStateDictWithPrefix
+from nos.modules.mixins import LoadStateDictWithPrefix
 
 logger = logging.getLogger(__name__)
 

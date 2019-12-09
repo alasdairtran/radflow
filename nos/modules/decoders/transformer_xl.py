@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from nos.modules import GehringLinear
+from nos.modules.linear import GehringLinear
 
 from .base import Decoder
 

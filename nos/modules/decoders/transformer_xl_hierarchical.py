@@ -3,7 +3,7 @@ import logging
 import torch
 import torch.nn as nn
 
-from nos.modules import GehringLinear
+from nos.modules.linear import GehringLinear
 
 from .base import Decoder
 from .transformer_xl import (PositionalEmbedding, PositionwiseFF,
@@ -42,7 +42,7 @@ class TransformerXLHierarchicalDecoder(nn.Module):
         self.mems = [None for _ in self.layers]
 
     def forward(self, X, seeding=False):
-        X = self.in_projs(X)
+        X = self.in_proj(X)
 
         all_hiddens = []
         for i, layer in enumerate(self.layers):
@@ -92,7 +92,7 @@ class TransformerXLLayer(nn.Module):
                  dropout=0.1, dropatt=0, d_head=64, d_inner=2048,
                  pre_lnorm=False, mem_len=1000, ext_len=0, clamp_len=10000):
         super().__init__()
-        self.layers = RelPartialLearnableDecoderLayer(
+        self.layer = RelPartialLearnableDecoderLayer(
             n_head, d_model, d_head, d_inner, dropout,
             ext_len=ext_len, mem_len=mem_len,
             dropatt=dropatt, pre_lnorm=pre_lnorm,
