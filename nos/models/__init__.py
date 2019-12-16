@@ -1,2 +1,2 @@
-from .naive import NaivePreviousDayModel
+from .naive import NaivePreviousDayModel, NaiveSeasonalModel
 from .transformer import TimeSeriesTransformer

@@ -47,3 +47,38 @@ class NaivePreviousDayModel(BaseModel):
             out_dict['smape'] = smape
 
         return out_dict
+
+
+@Model.register('naive_seasonal')
+class NaiveSeasonalModel(BaseModel):
+    def __init__(self,
+                 vocab: Vocabulary):
+        self.n_days = 7
+        super().__init__(vocab)
+
+    def forward(self, series) -> Dict[str, Any]:
+        B = series.shape[0]
+        # series.shape == [batch_size, seq_len]
+
+        self.history['_n_batches'] += 1
+        self.history['_n_samples'] += B
+
+        out_dict = {
+            'loss': None,
+            'sample_size': torch.tensor(B).to(series.device),
+        }
+
+        if not self.training:
+            # Predict the last n_days using the week before
+            preds = series[:, -self.n_days*2:-self.n_days]
+            # previous.shape == [batch_size, n_days]
+
+            targets = series[:, -self.n_days:]
+            # targets.shape == [batch_size, n_days]
+
+            smape, _ = get_smape(targets, preds)
+            # smape.shape == [batch_size]
+
+            out_dict['smape'] = smape
+
+        return out_dict
