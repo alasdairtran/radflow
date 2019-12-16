@@ -47,7 +47,9 @@ class VevovReader(DatasetReader):
             raise ValueError(f'Unknown split: {split}')
 
         while True:
-            for key in self.series:
+            keys = list(self.series.keys())
+            self.rs.shuffle(keys)
+            for key in keys:
                 series = np.array(self.series[key])
 
                 if split == 'train':
