@@ -29,7 +29,7 @@ class TimeSeriesTransformer(BaseModel):
         super().__init__(vocab)
         self.decoder = decoder
         self.mse = nn.MSELoss()
-        self.fc = GehringLinear(32, 1)
+        self.fc = GehringLinear(decoder.get_output_dim(), 1)
         self.n_days = 7
         initializer(self)
 
