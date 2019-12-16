@@ -26,9 +26,9 @@ model:
     ext_len: 0
 iterator:
   type: basic
-  batch_size: 64
-  instances_per_epoch: 4096
+  batch_size: 512
   cache_instances: false
+  instances_per_epoch: 4194304
 validation_iterator:
   type: basic
   batch_size: 64
@@ -42,7 +42,7 @@ trainer:
     lr: 0.0001
     weight_decay: 0.0001
     warmup: 0.05
-    t_total: 204800 # 2048 batches per epoch
+    t_total: 81920 # 8192 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
       - - - project_in
@@ -55,7 +55,7 @@ trainer:
         - {}
       - - - ^fc
         - {}
-  num_epochs: 100
+  num_epochs: 10
   cuda_device: 0
   shuffle: false
   callbacks:

@@ -46,13 +46,17 @@ class VevovReader(DatasetReader):
         if split not in ['train', 'valid', 'test']:
             raise ValueError(f'Unknown split: {split}')
 
-        for key in self.series:
-            series = np.array(self.series[key])
+        while True:
+            for key in self.series:
+                series = np.array(self.series[key])
 
-            if split == 'train':
-                series = series[:-7]
+                if split == 'train':
+                    series = series[:-7]
 
-            yield self.series_to_instance(series)
+                yield self.series_to_instance(series)
+
+            if split != 'train':
+                break
 
     def series_to_instance(self, series) -> Instance:
         fields = {

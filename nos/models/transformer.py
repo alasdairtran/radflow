@@ -30,6 +30,7 @@ class TimeSeriesTransformer(BaseModel):
         self.decoder = decoder
         self.mse = nn.MSELoss()
         self.fc = GehringLinear(32, 1)
+        self.n_days = 7
         initializer(self)
 
     def forward(self, series) -> Dict[str, Any]:
@@ -37,12 +38,22 @@ class TimeSeriesTransformer(BaseModel):
         # its gradient.
         # torch.autograd.set_detect_anomaly(True)
 
+        B = series.shape[0]
         # series.shape == [batch_size, seq_len]
 
-        series[series == 0] = 1
+        self.history['_n_batches'] += 1
+        self.history['_n_samples'] += B
+
+        out_dict = {
+            'loss': None,
+            'sample_size': torch.tensor(B).to(series.device),
+        }
+
+        training_series = series.clone().detach()
+        training_series[training_series == 0] = 1
 
         # Take the difference
-        diff = series[:, 1:] / series[:, :-1]
+        diff = training_series[:, 1:] / training_series[:, :-1]
         targets = diff[:, 1:]
         inputs = diff[:, :-1]
 
@@ -54,13 +65,53 @@ class TimeSeriesTransformer(BaseModel):
         X = self.fc(X)
         preds = X.squeeze(-1)
 
-        loss = self.mse(preds, targets)
-        batch_size = series.shape[0]
+        if not self.training:
+            preds = preds[-self.n_days:]
+            targets = targets[-self.n_days:]
 
-        out_dict = {
-            'loss': loss,
-            'sample_size': torch.tensor(batch_size).to(X.device),
-        }
+        loss = self.mse(preds, targets)
+        out_dict['loss'] = loss
+
+        if not self.training:
+            seed = series[:, :-self.n_days]
+            seed[seed == 0] = 1
+            # seed.shape == [batch_size, seq_len]
+
+            seed_diff = seed[:, 1:] / seed[:, :-1]
+            # seed_diff.shape == [batch_size, seq_len]
+
+            X = seed_diff.unsqueeze(-1)
+            # X.shape == [batch_size, seq_len, 1]
+
+            self.decoder.reset_mems()
+            X_out = self.decoder(X, seeding=False)
+            X_out = self.fc(X_out).squeeze(-1)
+            # X_out.shape == [batch_size, seq_len]
+
+            pred_diff = X_out[:, -1]
+            # pred_diff.shape == [batch_size]
+
+            pred_i = seed[:, -1] * pred_diff
+
+            pred_list = [pred_i]
+
+            for i in range(self.n_days - 1):
+                X = pred_diff.unsqueeze(1).unsqueeze(2)
+                # X.shape == [batch_size, 1, 1]
+
+                X_out = self.decoder(X, seeding=False)
+                pred_diff = self.fc(X_out).squeeze(-1).squeeze(-1)
+                # pred_diff.shape == [batch_size]
+
+                pred_i = pred_list[-1] * pred_diff
+                pred_list.append(pred_i)
+
+            preds = torch.stack(pred_list, dim=1)
+            targets = series[:, -self.n_days:]
+            smape, _ = get_smape(targets, preds)
+            # smape.shape == [batch_size]
+
+            out_dict['smape'] = smape
 
         return out_dict
 
