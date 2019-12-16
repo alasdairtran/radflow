@@ -15,17 +15,9 @@ from allennlp.nn.initializers import InitializerApplicator
 from nos.modules import Decoder, GehringLinear
 
 from .base import BaseModel
+from .metrics import get_smape
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
-def symmetric_mean_absolute_percentage_error(true, pred):
-    # percentage error, zero if both true and pred are zero
-    true = np.array(true)
-    pred = np.array(pred)
-    daily_smape_arr = 200 * \
-        np.nan_to_num(np.abs(true - pred) / (np.abs(true) + np.abs(pred)))
-    return np.mean(daily_smape_arr), daily_smape_arr
 
 
 @Model.register('time_series_transformer')

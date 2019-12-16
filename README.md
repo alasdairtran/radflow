@@ -12,5 +12,5 @@ python setup.py develop
 ## Training
 
 ```sh
-CUDA_VISIBLE_DEVICES=1 nos train expt/1_baseline/config.yaml -f
+CUDA_VISIBLE_DEVICES=1 nos evaluate expt/1_naive_previous_day/config.yaml
 ```

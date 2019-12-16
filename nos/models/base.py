@@ -72,5 +72,10 @@ class BaseModel(LoadStateDictWithPrefix, Model):
 
         return model
 
+    @classmethod
+    def get_params(cls, vocab: Vocabulary, params: Params) -> Dict[str, Any]:
+        params_dict: Dict[str, Any] = {}
+        return params_dict
+
     def extend_embedder_vocab(self, embedding_sources_mapping: Dict[str, str] = None) -> None:
         """ Turn off vocab extension for now."""

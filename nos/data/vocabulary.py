@@ -1,12 +1,21 @@
 from collections import defaultdict
 from typing import Dict, Iterable, List, Optional, Union
 
+from allennlp.common import Params
 from allennlp.data import instance as adi  # pylint: disable=unused-import
 from allennlp.data.vocabulary import DEFAULT_NON_PADDED_NAMESPACES, Vocabulary
 
 
 @Vocabulary.register('empty')
 class EmptyVocabulary(Vocabulary):
+    @classmethod
+    def from_params(cls, params: Params, instances: Iterable['adi.Instance'] = None):
+        namespace_token_counts: Dict[str, Dict[str, int]] = defaultdict(
+            lambda: defaultdict(int))
+
+        return cls(counter=namespace_token_counts,
+                   non_padded_namespaces=DEFAULT_NON_PADDED_NAMESPACES)
+
     @classmethod
     def from_instances(cls,
                        instances: Iterable['adi.Instance'],

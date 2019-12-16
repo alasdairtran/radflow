@@ -4,6 +4,7 @@ import random
 from typing import Dict, List
 
 import numpy as np
+import pandas as pd
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import ArrayField
 from allennlp.data.instance import Instance
@@ -22,12 +23,20 @@ class VevovReader(DatasetReader):
         self.data_dir = data_dir
         self.dtype = np.float16 if fp16 else np.float32
 
+        # Load persistent network
+        network_path = os.path.join(data_dir, 'persistent_network.csv')
+        network_df = pd.read_csv(network_path)
+        target_ids = set(network_df['Target'])
+
         self.series: Dict[int, List[int]] = {}
         path = os.path.join(data_dir, 'vevo_forecast_data_60k.tsv')
         with open(path) as f:
             for line in f:
                 embed, _, ts_view, _ = line.rstrip().split('\t')
+                if int(embed) not in target_ids:
+                    continue
                 self.series[int(embed)] = [int(x) for x in ts_view.split(',')]
+        assert len(self.series) == 13710
 
         random.seed(1234)
         self.rs = np.random.RandomState(1234)
