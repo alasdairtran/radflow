@@ -41,17 +41,24 @@ class TimeSeriesLSTMNetwork(BaseModel):
         self.decoder = decoder
         self.mse = nn.MSELoss()
         self.hidden_size = decoder.get_output_dim()
-        self.fc = GehringLinear(self.hidden_size * 2, 1)
+
         self.n_days = 7
         self.evaluate_mode = evaluate_mode
         initializer(self)
 
-        assert agg_type in ['attention', 'mean']
+        assert agg_type in ['attention', 'mean', 'gcn']
         self.agg_type = agg_type
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
                 self.hidden_size, 4, dropout=0.1, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+        elif agg_type == 'gcn':
+            self.conv1 = GCNConv(self.hidden_size, self.hidden_size)
+
+        if agg_type == 'gcn':
+            self.fc = GehringLinear(self.hidden_size, 1)
+        else:
+            self.fc = GehringLinear(self.hidden_size * 2, 1)
 
         # Load persistent network
         network_path = os.path.join(data_dir, 'persistent_network_2.csv')
@@ -82,6 +89,9 @@ class TimeSeriesLSTMNetwork(BaseModel):
         target_series_path = os.path.join(data_dir, 'vevo_series.json')
         with open(target_series_path) as f:
             self.target_series = json.load(f, object_pairs_hook=keystoint)
+
+        # Shortcut to create new tensors in the same device as the module
+        self.register_buffer('_long', torch.LongTensor(1))
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
@@ -152,13 +162,30 @@ class TimeSeriesLSTMNetwork(BaseModel):
             if self.agg_type == 'attention':
                 X_out, _ = self.attn(X_key, X_source, X_source)
                 # X_out.shape == [1, seq_len, hidden_size]
+
+                # Combine own embedding with neighbor embedding
+                X_full = torch.cat([X_key, X_out], dim=-1)
+                # X_full.shape == [1, seq_len, 2 * hidden_size]
+
             elif self.agg_type == 'mean':
                 X_out = X_source.mean(dim=0).unsqueeze(0)
                 # X_out.shape == [1, seq_len, hidden_size]
 
-            # Combine own embedding with neighbor embedding
-            X_full = torch.cat([X_key, X_out], dim=-1)
-            # X_full.shape == [1, seq_len, 2 * hidden_size]
+                # Combine own embedding with neighbor embedding
+                X_full = torch.cat([X_key, X_out], dim=-1)
+                # X_full.shape == [1, seq_len, 2 * hidden_size]
+
+            elif self.agg_type == 'gcn':
+                # The central node is the first node. The rest are neighbors
+                feats = torch.cat([X_key] + X_source_list, dim=0)
+                # feats.shape == [n_nodes, seq_len, hidden_size]
+
+                source_idx = torch.arange(1, len(feats)).to(self._long.device)
+                target_idx = self._long.new_zeros(len(X_source_list))
+                edge_list = [source_idx, target_idx]
+                edge_index = torch.stack(edge_list, dim=0)
+
+                X_full = self.conv1(feats, edge_index)
 
             X_full_list.append(X_full)
 
@@ -227,6 +254,21 @@ class TimeSeriesLSTMNetwork(BaseModel):
                             X_out = n_hidden.mean(dim=0).unsqueeze(0)
                             # X_out.shape == [1, 1, hidden_size]
 
+                        elif self.agg_type == 'gcn':
+                            # The central node is the first node. The rest are neighbors
+                            feats = torch.cat(
+                                [hidden_dict[key]] + n_hidden_list, dim=0)
+                            # feats.shape == [n_nodes, seq_len, hidden_size]
+
+                            source_idx = torch.arange(
+                                1, len(feats)).to(self._long.device)
+                            target_idx = self._long.new_zeros(
+                                len(X_source_list))
+                            edge_list = [source_idx, target_idx]
+                            edge_index = torch.stack(edge_list, dim=0)
+
+                            X_full = self.conv1(feats, edge_index)
+
                     # If there are no neighbors, we simply append a zero vector
                     else:
                         X_out = X_key.new_zeros(1, 1, self.hidden_size)
@@ -234,8 +276,9 @@ class TimeSeriesLSTMNetwork(BaseModel):
                     # Now we have both the hidden state of the central node,
                     # and of the neighboring nodes. Let's concatenate them
                     # and feed it through a fully-connected layer
-                    X_full = torch.cat([hidden_dict[key], X_out], dim=-1)
-                    # X_full.shape == [1, 1, 2 * hidden_size]
+                    if self.agg_type != 'gcn':
+                        X_full = torch.cat([hidden_dict[key], X_out], dim=-1)
+                    #    X_full.shape == [1, 1, 2 * hidden_size]
 
                     # This is our prediction, the percentage change from
                     # the previous time step.
