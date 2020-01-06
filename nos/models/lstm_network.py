@@ -46,7 +46,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
         self.evaluate_mode = evaluate_mode
         initializer(self)
 
-        assert agg_type in ['attention', 'mean', 'gcn']
+        assert agg_type in ['attention', 'mean', 'gcn', 'none']
         self.agg_type = agg_type
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
@@ -55,7 +55,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
         elif agg_type == 'gcn':
             self.conv1 = GCNConv(self.hidden_size, self.hidden_size)
 
-        if agg_type == 'gcn':
+        if agg_type in ['gcn', 'none']:
             self.fc = GehringLinear(self.hidden_size, 1)
         else:
             self.fc = GehringLinear(self.hidden_size * 2, 1)
@@ -119,6 +119,98 @@ class TimeSeriesLSTMNetwork(BaseModel):
 
         return X, targets
 
+    def _get_source_embeds(self, key, X_key):
+        if self.agg_type == 'none':
+            return X_key
+
+        sources = self.sources[key]
+        X_source_list = []
+        for s in sources:
+            s_series = self.series[s]
+            s_series = s_series[:-self.n_days]
+            X_source_list.append(self._forward(s, s_series)[0])
+        X_source = torch.cat(X_source_list, dim=0)
+        # X_source.shape == [n_neighbors, seq_len, hidden_size]
+
+        if self.agg_type == 'attention':
+            X_out, _ = self.attn(X_key, X_source, X_source)
+            # X_out.shape == [1, seq_len, hidden_size]
+
+            # Combine own embedding with neighbor embedding
+            X_full = torch.cat([X_key, X_out], dim=-1)
+            # X_full.shape == [1, seq_len, 2 * hidden_size]
+
+        elif self.agg_type == 'mean':
+            X_out = X_source.mean(dim=0).unsqueeze(0)
+            # X_out.shape == [1, seq_len, hidden_size]
+
+            # Combine own embedding with neighbor embedding
+            X_full = torch.cat([X_key, X_out], dim=-1)
+            # X_full.shape == [1, seq_len, 2 * hidden_size]
+
+        elif self.agg_type == 'gcn':
+            # The central node is the first node. The rest are neighbors
+            feats = torch.cat([X_key] + X_source_list, dim=0)
+            # feats.shape == [n_nodes, seq_len, hidden_size]
+
+            source_idx = torch.arange(1, len(feats)).to(self._long.device)
+            target_idx = self._long.new_zeros(len(X_source_list))
+            edge_list = [source_idx, target_idx]
+            edge_index = torch.stack(edge_list, dim=0)
+
+            X_full = self.conv1(feats, edge_index)
+
+        return X_full
+
+    def _get_source_embeds_eval(self, key, hidden_dict):
+        if self.agg_type == 'none':
+            return hidden_dict[key]
+
+        # if a node has neighbors, we concatenate all of the
+        # neighboring hidden states at the same time step and
+        # do a multi-head attention over them.
+        if key in self.sources:
+            neighbors = self.sources[key]
+            n_hidden_list = [hidden_dict[n] for n in neighbors]
+            n_hidden = torch.cat(n_hidden_list, dim=0)
+            # n_hidden.shape == [n_neighbors, 1, hidden_size]
+
+            if self.agg_type == 'attention':
+                X_out, _ = self.attn(hidden_dict[key],
+                                     n_hidden, n_hidden)
+                # X_out.shape == [1, 1, hidden_size]
+            elif self.agg_type == 'mean':
+                X_out = n_hidden.mean(dim=0).unsqueeze(0)
+                # X_out.shape == [1, 1, hidden_size]
+
+            elif self.agg_type == 'gcn':
+                # The central node is the first node. The rest are neighbors
+                feats = torch.cat(
+                    [hidden_dict[key]] + n_hidden_list, dim=0)
+                # feats.shape == [n_nodes, seq_len, hidden_size]
+
+                source_idx = torch.arange(
+                    1, len(feats)).to(self._long.device)
+                target_idx = self._long.new_zeros(
+                    len(n_hidden_list))
+                edge_list = [source_idx, target_idx]
+                edge_index = torch.stack(edge_list, dim=0)
+
+                X_full = self.conv1(feats, edge_index)
+
+        # If there are no neighbors, we simply append a zero vector
+        else:
+            X_out = hidden_dict[key].new_zeros(1, 1, self.hidden_size)
+
+        # Now we have both the hidden state of the central node,
+        # and of the neighboring nodes. Let's concatenate them
+        # and feed it through a fully-connected layer
+        if self.agg_type != 'gcn':
+            X_full = torch.cat([hidden_dict[key], X_out], dim=-1)
+            # X_full.shape == [1, 1, 2 * hidden_size]
+
+        return X_full
+
     def forward(self, keys) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
         # its gradient.
@@ -149,45 +241,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
             # X_target.shape == [seq_len]
 
             target_list.append(X_target)
-
-            sources = self.sources[key]
-            X_source_list = []
-            for s in sources:
-                s_series = self.series[s]
-                s_series = s_series[:-self.n_days]
-                X_source_list.append(self._forward(s, s_series)[0])
-            X_source = torch.cat(X_source_list, dim=0)
-            # X_source.shape == [n_neighbors, seq_len, hidden_size]
-
-            if self.agg_type == 'attention':
-                X_out, _ = self.attn(X_key, X_source, X_source)
-                # X_out.shape == [1, seq_len, hidden_size]
-
-                # Combine own embedding with neighbor embedding
-                X_full = torch.cat([X_key, X_out], dim=-1)
-                # X_full.shape == [1, seq_len, 2 * hidden_size]
-
-            elif self.agg_type == 'mean':
-                X_out = X_source.mean(dim=0).unsqueeze(0)
-                # X_out.shape == [1, seq_len, hidden_size]
-
-                # Combine own embedding with neighbor embedding
-                X_full = torch.cat([X_key, X_out], dim=-1)
-                # X_full.shape == [1, seq_len, 2 * hidden_size]
-
-            elif self.agg_type == 'gcn':
-                # The central node is the first node. The rest are neighbors
-                feats = torch.cat([X_key] + X_source_list, dim=0)
-                # feats.shape == [n_nodes, seq_len, hidden_size]
-
-                source_idx = torch.arange(1, len(feats)).to(self._long.device)
-                target_idx = self._long.new_zeros(len(X_source_list))
-                edge_list = [source_idx, target_idx]
-                edge_index = torch.stack(edge_list, dim=0)
-
-                X_full = self.conv1(feats, edge_index)
-
-            X_full_list.append(X_full)
+            X_full_list.append(self._get_source_embeds(key, X_key))
 
         X_full = torch.cat(X_full_list, dim=0)
         # X_full.shape == [batch_size, seq_len, 2 * hidden_size]
@@ -237,48 +291,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
 
                 # Second pass: aggregate effect from neighboring nodes
                 for key in tqdm(self.series.keys()):
-                    # if a node has neighbors, we concatenate all of the
-                    # neighboring hidden states at the same time step and
-                    # do a multi-head attention over them.
-                    if key in self.sources:
-                        neighbors = self.sources[key]
-                        n_hidden_list = [hidden_dict[n] for n in neighbors]
-                        n_hidden = torch.cat(n_hidden_list, dim=0)
-                        # n_hidden.shape == [n_neighbors, 1, hidden_size]
-
-                        if self.agg_type == 'attention':
-                            X_out, _ = self.attn(hidden_dict[key],
-                                                 n_hidden, n_hidden)
-                            # X_out.shape == [1, 1, hidden_size]
-                        elif self.agg_type == 'mean':
-                            X_out = n_hidden.mean(dim=0).unsqueeze(0)
-                            # X_out.shape == [1, 1, hidden_size]
-
-                        elif self.agg_type == 'gcn':
-                            # The central node is the first node. The rest are neighbors
-                            feats = torch.cat(
-                                [hidden_dict[key]] + n_hidden_list, dim=0)
-                            # feats.shape == [n_nodes, seq_len, hidden_size]
-
-                            source_idx = torch.arange(
-                                1, len(feats)).to(self._long.device)
-                            target_idx = self._long.new_zeros(
-                                len(X_source_list))
-                            edge_list = [source_idx, target_idx]
-                            edge_index = torch.stack(edge_list, dim=0)
-
-                            X_full = self.conv1(feats, edge_index)
-
-                    # If there are no neighbors, we simply append a zero vector
-                    else:
-                        X_out = X_key.new_zeros(1, 1, self.hidden_size)
-
-                    # Now we have both the hidden state of the central node,
-                    # and of the neighboring nodes. Let's concatenate them
-                    # and feed it through a fully-connected layer
-                    if self.agg_type != 'gcn':
-                        X_full = torch.cat([hidden_dict[key], X_out], dim=-1)
-                    #    X_full.shape == [1, 1, 2 * hidden_size]
+                    X_full = self._get_source_embeds_eval(key, hidden_dict)
 
                     # This is our prediction, the percentage change from
                     # the previous time step.

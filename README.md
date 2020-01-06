@@ -35,4 +35,9 @@ CUDA_VISIBLE_DEVICES=0 nos train expt/10_gcn/config.yaml -f
 CUDA_VISIBLE_DEVICES=0 nos evaluate expt/10_gcn/config.yaml \
     -m expt/10_gcn/serialization/best.th \
     --overrides '{"dataset_reader": {"evaluate_mode": true}, "model": {"evaluate_mode": true}}'
+
+CUDA_VISIBLE_DEVICES=0 nos train expt/11_no_agg/config.yaml -f
+CUDA_VISIBLE_DEVICES=0 nos evaluate expt/11_no_agg/config.yaml \
+    -m expt/11_no_agg/serialization/best.th \
+    --overrides '{"dataset_reader": {"evaluate_mode": true}, "model": {"evaluate_mode": true}}'
 ```
