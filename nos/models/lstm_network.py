@@ -153,12 +153,30 @@ class TimeSeriesLSTMNetwork(BaseModel):
             feats = torch.cat([X_key] + X_source_list, dim=0)
             # feats.shape == [n_nodes, seq_len, hidden_size]
 
-            source_idx = torch.arange(1, len(feats)).to(self._long.device)
-            target_idx = self._long.new_zeros(len(X_source_list))
+            N, S, H = feats.shape
+            feats = feats.transpose(0, 1).reshape(S * N, H)
+            # feats.shape == [seq_len * n_nodes, hidden_size]
+
+            # We add self-loops as well to make easier
+            source_idx = torch.arange(0, len(feats))
+            source_idx = source_idx.to(self._long.device)
+            # source_idx.shape == [seq_len * n_neighbors]
+
+            target_idx = torch.arange(0, N * S, N)
+            target_idx = target_idx.to(self._long.device)
+            target_idx = target_idx.repeat(N, 1).reshape(-1)
+
             edge_list = [source_idx, target_idx]
             edge_index = torch.stack(edge_list, dim=0)
 
             X_full = self.conv1(feats, edge_index)
+            # X_full.shape == [seq_len * n_nodes, hidden_size]
+
+            X_full = X_full.reshape(S, N, H).transpose(0, 1)
+            # X_full.shape == [n_nodes, seq_len, hidden_size]
+
+            X_full = X_full[:1]
+            # X_full.shape == [1, seq_len, hidden_size]
 
         return X_full
 
@@ -187,16 +205,32 @@ class TimeSeriesLSTMNetwork(BaseModel):
                 # The central node is the first node. The rest are neighbors
                 feats = torch.cat(
                     [hidden_dict[key]] + n_hidden_list, dim=0)
-                # feats.shape == [n_nodes, seq_len, hidden_size]
+                # feats.shape == [n_nodes, 1, hidden_size]
 
-                source_idx = torch.arange(
-                    1, len(feats)).to(self._long.device)
-                target_idx = self._long.new_zeros(
-                    len(n_hidden_list))
+                N, S, H = feats.shape
+                feats = feats.transpose(0, 1).reshape(S * N, H)
+                # feats.shape == [1 * n_nodes, hidden_size]
+
+                # We add self-loops as well to make easier
+                source_idx = torch.arange(0, len(feats))
+                source_idx = source_idx.to(self._long.device)
+                # source_idx.shape == [1 * n_neighbors]
+
+                target_idx = torch.arange(0, N * S, N)
+                target_idx = target_idx.to(self._long.device)
+                target_idx = target_idx.repeat(N, 1).reshape(-1)
+
                 edge_list = [source_idx, target_idx]
                 edge_index = torch.stack(edge_list, dim=0)
 
                 X_full = self.conv1(feats, edge_index)
+                # X_full.shape == [1 * n_nodes, hidden_size]
+
+                X_full = X_full.reshape(S, N, H).transpose(0, 1)
+                # X_full.shape == [n_nodes, 1, hidden_size]
+
+                X_full = X_full[:1]
+                # X_full.shape == [1, 1, hidden_size]
 
         # If there are no neighbors, we simply append a zero vector
         else:
