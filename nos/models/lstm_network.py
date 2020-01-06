@@ -35,6 +35,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
                  decoder: Decoder,
                  data_dir: str,
                  evaluate_mode: bool,
+                 agg_type: str,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
@@ -45,9 +46,12 @@ class TimeSeriesLSTMNetwork(BaseModel):
         self.evaluate_mode = evaluate_mode
         initializer(self)
 
-        self.attn = nn.MultiheadAttention(
-            self.hidden_size, 4, dropout=0.1, bias=True,
-            add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+        assert agg_type in ['attention', 'mean']
+        self.agg_type = agg_type
+        if agg_type == 'attention':
+            self.attn = nn.MultiheadAttention(
+                self.hidden_size, 4, dropout=0.1, bias=True,
+                add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
 
         # Load persistent network
         network_path = os.path.join(data_dir, 'persistent_network_2.csv')
@@ -145,8 +149,12 @@ class TimeSeriesLSTMNetwork(BaseModel):
             X_source = torch.cat(X_source_list, dim=0)
             # X_source.shape == [n_neighbors, seq_len, hidden_size]
 
-            X_out, _ = self.attn(X_key, X_source, X_source)
-            # X_out.shape == [1, seq_len, hidden_size]
+            if self.agg_type == 'attention':
+                X_out, _ = self.attn(X_key, X_source, X_source)
+                # X_out.shape == [1, seq_len, hidden_size]
+            elif self.agg_type == 'mean':
+                X_out = X_source.mean(dim=0).unsqueeze(0)
+                # X_out.shape == [1, seq_len, hidden_size]
 
             # Combine own embedding with neighbor embedding
             X_full = torch.cat([X_key, X_out], dim=-1)
@@ -211,9 +219,13 @@ class TimeSeriesLSTMNetwork(BaseModel):
                         n_hidden = torch.cat(n_hidden_list, dim=0)
                         # n_hidden.shape == [n_neighbors, 1, hidden_size]
 
-                        X_out, _ = self.attn(hidden_dict[key],
-                                             n_hidden, n_hidden)
-                        # X_out.shape == [1, 1, hidden_size]
+                        if self.agg_type == 'attention':
+                            X_out, _ = self.attn(hidden_dict[key],
+                                                 n_hidden, n_hidden)
+                            # X_out.shape == [1, 1, hidden_size]
+                        elif self.agg_type == 'mean':
+                            X_out = n_hidden.mean(dim=0).unsqueeze(0)
+                            # X_out.shape == [1, 1, hidden_size]
 
                     # If there are no neighbors, we simply append a zero vector
                     else:

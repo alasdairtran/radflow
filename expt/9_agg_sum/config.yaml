@@ -11,6 +11,7 @@ vocabulary:
   type: empty
 model:
   type: time_series_lstm_network
+  agg_type: mean
   evaluate_mode: false
   data_dir: "./data"
   decoder:
@@ -44,7 +45,7 @@ trainer:
     lr: 0.0001
     weight_decay: 0.0001
     warmup: 0.05
-    t_total: 51200 # 512 batches per epoch
+    t_total: 10240 # 512 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
       - - - project_in
@@ -57,7 +58,7 @@ trainer:
         - {}
       - - - ^fc
         - {}
-  num_epochs: 10
+  num_epochs: 20
   cuda_device: 0
   shuffle: false
   callbacks:
