@@ -11,11 +11,9 @@ from allennlp.data.fields import MetadataField
 from allennlp.data.instance import Instance
 from overrides import overrides
 
+from nos.utils import keystoint
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
-def keystoint(x):
-    return {int(k): v for k, v in x}
 
 
 @DatasetReader.register('vevo_network')

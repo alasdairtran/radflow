@@ -20,15 +20,12 @@ from tqdm import tqdm
 
 from nos.modules import Decoder
 from nos.modules.linear import GehringLinear
+from nos.utils import keystoint
 
 from .base import BaseModel
 from .metrics import get_smape
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
-def keystoint(x):
-    return {int(k): v for k, v in x}
 
 
 @Model.register('time_series_lstm_network')
