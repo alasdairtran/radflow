@@ -346,6 +346,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
                 smape_list.append(smape[0])
 
             out_dict['smape'] = smape_list
+            self.history['_n_samples'] = len(smape_list)
 
         return out_dict
 
