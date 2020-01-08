@@ -197,9 +197,16 @@ class TimeSeriesLSTMNetwork(BaseModel):
                 X_out, _ = self.attn(hidden_dict[key],
                                      n_hidden, n_hidden)
                 # X_out.shape == [1, 1, hidden_size]
+
+                X_full = torch.cat([hidden_dict[key], X_out], dim=-1)
+                # X_full.shape == [1, 1, 2 * hidden_size]
+
             elif self.agg_type == 'mean':
                 X_out = n_hidden.mean(dim=0).unsqueeze(0)
                 # X_out.shape == [1, 1, hidden_size]
+
+                X_full = torch.cat([hidden_dict[key], X_out], dim=-1)
+                # X_full.shape == [1, 1, 2 * hidden_size]
 
             elif self.agg_type == 'gcn':
                 # The central node is the first node. The rest are neighbors
@@ -233,15 +240,12 @@ class TimeSeriesLSTMNetwork(BaseModel):
                 # X_full.shape == [1, 1, hidden_size]
 
         # If there are no neighbors, we simply append a zero vector
-        else:
+        elif self.agg_type != 'gcn':
             X_out = hidden_dict[key].new_zeros(1, 1, self.hidden_size)
-
-        # Now we have both the hidden state of the central node,
-        # and of the neighboring nodes. Let's concatenate them
-        # and feed it through a fully-connected layer
-        if self.agg_type != 'gcn':
             X_full = torch.cat([hidden_dict[key], X_out], dim=-1)
             # X_full.shape == [1, 1, 2 * hidden_size]
+        else:
+            X_full = hidden_dict[key]
 
         return X_full
 
