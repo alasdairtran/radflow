@@ -150,7 +150,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
             neighbor_lens.append(len(sources))
             for s in sources:
                 if use_cache:
-                    s_series = self.cached_series[s][-1:]
+                    s_series = self.cached_series[s]
                 else:
                     s_series = self.series[s]
                     s_series = s_series[:-n_skips if n_skips > 0 else None]
@@ -164,6 +164,9 @@ class TimeSeriesLSTMNetwork(BaseModel):
         else:
             X_neighbors = self._forward_full(sources)
         # X_neighbors.shape == [batch_size * n_neighbors, seq_len, hidden_size]
+
+        if X.shape[1] == 1:
+            X_neighbors = X_neighbors[:, -1:]
 
         # Go through each element in the batch
         cursor = 0
@@ -291,7 +294,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
         out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
-        if splits[0] in ['valid', 'test']:
+        if splits[0] in ['test']:
             self._populate_cache(splits)
 
             pred_list, target_list = [], []
@@ -350,6 +353,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
                     # hidden_dict[key].shape == [1, hidden_size]
 
             # Second pass: aggregate effect from neighboring nodes
+            new_cached_series = {}
             for i in range(0, len(keys), batch_size):
                 batch_keys = keys[i:i+batch_size]
 
@@ -372,8 +376,10 @@ class TimeSeriesLSTMNetwork(BaseModel):
                 # Calculate the predicted view count
                 for i, key in enumerate(batch_keys):
                     pred = self.cached_series[key][-1:] * pct[i]
-                    self.cached_series[key] = torch.cat(
+                    new_cached_series[key] = torch.cat(
                         [self.cached_series[key], pred], dim=0)
+
+            self.cached_series = new_cached_series
 
     @classmethod
     def get_params(cls, vocab: Vocabulary, params: Params) -> Dict[str, Any]:
