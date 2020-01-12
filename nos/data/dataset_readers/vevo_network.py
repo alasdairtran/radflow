@@ -33,20 +33,31 @@ class VevovNetworkReader(DatasetReader):
         random.seed(1234)
         self.rs = np.random.RandomState(1234)
 
+        keys = sorted(self.series.keys())
+        self.rs.shuffle(keys)
+        keys = list(keys)
+        self.valid_keys = keys[:100]
+        self.train_keys = keys[100:]
+
     @overrides
     def _read(self, split: str):
         if split not in ['train', 'valid', 'test']:
             raise ValueError(f'Unknown split: {split}')
 
         if split == 'train':
-            keys = list(self.series.keys())
+            keys = sorted(self.train_keys)
             while True:
                 self.rs.shuffle(keys)
                 for key in keys:
                     yield self.series_to_instance(key, split)
 
-        else:
-            keys = list(self.series.keys())
+        elif split == 'valid':
+            keys = sorted(self.valid_keys)
+            for key in keys:
+                yield self.series_to_instance(key, split)
+
+        elif split == 'test':
+            keys = sorted(self.series.keys())
             for key in keys:
                 yield self.series_to_instance(key, split)
 

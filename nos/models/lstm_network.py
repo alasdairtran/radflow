@@ -256,9 +256,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
             'sample_size': p.new_tensor(B),
         }
 
-        if splits[0] == 'train':
-            n_skips = self.n_days * 2
-        elif splits[0] == 'valid':
+        if splits[0] in ['train', 'valid']:
             n_skips = self.n_days
         elif splits[0] == 'test':
             n_skips = 0
@@ -314,11 +312,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
             return
 
         hidden_dict = {}
-
-        if splits[0] == 'valid':
-            n_skips = self.n_days * 2
-        elif splits[0] == 'test':
-            n_skips = self.n_days
+        n_skips = self.n_days
 
         # Remove the final n_skips days from the input series since they are
         # what we want to predict. As we evaluate, series_dict will
