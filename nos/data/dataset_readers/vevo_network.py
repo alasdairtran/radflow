@@ -21,12 +21,10 @@ class VevovNetworkReader(DatasetReader):
     def __init__(self,
                  data_dir: str,
                  fp16: bool = True,
-                 evaluate_mode: bool = False,
                  lazy: bool = True) -> None:
         super().__init__(lazy)
         self.data_dir = data_dir
         self.dtype = np.float16 if fp16 else np.float32
-        self.evaluate_mode = evaluate_mode
 
         series_path = os.path.join(data_dir, 'vevo_series.json')
         with open(series_path) as f:
@@ -40,24 +38,23 @@ class VevovNetworkReader(DatasetReader):
         if split not in ['train', 'valid', 'test']:
             raise ValueError(f'Unknown split: {split}')
 
-        while True:
+        if split == 'train':
             keys = list(self.series.keys())
-            self.rs.shuffle(keys)
-
-            if split != 'train' and self.evaluate_mode:
+            while True:
+                self.rs.shuffle(keys)
                 for key in keys:
-                    yield self.series_to_instance(key)
-                    return
+                    yield self.series_to_instance(key, split)
 
+        else:
+            keys = list(self.series.keys())
             for key in keys:
-                yield self.series_to_instance(key)
+                yield self.series_to_instance(key, split)
 
-            if split != 'train':
-                break
 
-    def series_to_instance(self, key) -> Instance:
+    def series_to_instance(self, key, split) -> Instance:
         fields = {
             'keys': MetadataField(key),
+            'splits': MetadataField(split),
         }
 
         return Instance(fields)

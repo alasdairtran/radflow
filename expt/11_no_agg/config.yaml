@@ -3,7 +3,6 @@ dataset_reader:
   type: vevo_network
   data_dir: "./data"
   fp16: false
-  evaluate_mode: false
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -12,7 +11,6 @@ vocabulary:
 model:
   type: time_series_lstm_network
   agg_type: none
-  evaluate_mode: false
   data_dir: "./data"
   decoder:
     type: lstm_decoder
@@ -29,12 +27,12 @@ model:
     dilation: 1
 iterator:
   type: basic
-  batch_size: 64
+  batch_size: 512
   cache_instances: false
-  instances_per_epoch: 32768
+  instances_per_epoch: 2097152
 validation_iterator:
   type: basic
-  batch_size: 64
+  batch_size: 512
   cache_instances: false
 trainer:
   type: callback_apex
@@ -45,7 +43,7 @@ trainer:
     lr: 0.0001
     weight_decay: 0.0001
     warmup: 0.05
-    t_total: 10240 # 512 batches per epoch
+    t_total: 163840 # 4096 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
       - - - project_in
@@ -58,7 +56,7 @@ trainer:
         - {}
       - - - ^fc
         - {}
-  num_epochs: 20
+  num_epochs: 40
   cuda_device: 0
   shuffle: false
   callbacks:

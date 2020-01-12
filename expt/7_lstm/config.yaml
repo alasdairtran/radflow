@@ -10,7 +10,6 @@ vocabulary:
   type: empty
 model:
   type: time_series_lstm
-  data_dir: "./data"
   decoder:
     type: lstm_decoder
     rnn:
@@ -31,7 +30,7 @@ iterator:
   instances_per_epoch: 4194304
 validation_iterator:
   type: basic
-  batch_size: 64
+  batch_size: 512
   cache_instances: false
 trainer:
   type: callback_apex

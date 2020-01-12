@@ -22,22 +22,14 @@ CUDA_VISIBLE_DEVICES=0 nos evaluate expt/7_lstm/config.yaml -m expt/7_lstm/seria
 
 # Network baseline
 CUDA_VISIBLE_DEVICES=0 nos train expt/8_agg_attention/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/8_agg_attention/config.yaml \
-    -m expt/8_agg_attention/serialization/best.th \
-    --overrides '{"dataset_reader": {"evaluate_mode": true}, "model": {"evaluate_mode": true}}'
+CUDA_VISIBLE_DEVICES=0 nos evaluate expt/8_agg_attention/config.yaml -m expt/8_agg_attention/serialization/best.th
 
 CUDA_VISIBLE_DEVICES=0 nos train expt/9_agg_sum/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/9_agg_sum/config.yaml \
-    -m expt/9_agg_sum/serialization/best.th \
-    --overrides '{"dataset_reader": {"evaluate_mode": true}, "model": {"evaluate_mode": true}}'
+CUDA_VISIBLE_DEVICES=0 nos evaluate expt/9_agg_sum/config.yaml -m expt/9_agg_sum/serialization/best.th
 
 CUDA_VISIBLE_DEVICES=0 nos train expt/10_gcn/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/10_gcn/config.yaml \
-    -m expt/10_gcn/serialization/best.th \
-    --overrides '{"dataset_reader": {"evaluate_mode": true}, "model": {"evaluate_mode": true}}'
+CUDA_VISIBLE_DEVICES=0 nos evaluate expt/10_gcn/config.yaml -m expt/10_gcn/serialization/best.th
 
 CUDA_VISIBLE_DEVICES=0 nos train expt/11_no_agg/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/11_no_agg/config.yaml \
-    -m expt/11_no_agg/serialization/best.th \
-    --overrides '{"dataset_reader": {"evaluate_mode": true}, "model": {"evaluate_mode": true}}'
+CUDA_VISIBLE_DEVICES=0 nos evaluate expt/11_no_agg/config.yaml -m expt/11_no_agg/serialization/best.th
 ```

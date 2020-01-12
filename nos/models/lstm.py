@@ -34,7 +34,7 @@ class TimeSeriesLSTM(BaseModel):
         self.n_days = 7
         initializer(self)
 
-    def forward(self, series) -> Dict[str, Any]:
+    def forward(self, series, keys) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
         # its gradient.
         # torch.autograd.set_detect_anomaly(True)
@@ -75,6 +75,7 @@ class TimeSeriesLSTM(BaseModel):
 
         if not self.training:
             seed = series[:, :-self.n_days]
+
             seed[seed == 0] = 1
             # seed.shape == [batch_size, seq_len]
 
@@ -95,6 +96,7 @@ class TimeSeriesLSTM(BaseModel):
             pred_i = seed[:, -1] * pred_diff
 
             pred_list = [pred_i]
+
 
             for i in range(self.n_days - 1):
                 X = pred_diff.unsqueeze(1).unsqueeze(2)

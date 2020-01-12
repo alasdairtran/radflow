@@ -7,7 +7,7 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp.data.fields import ArrayField
+from allennlp.data.fields import ArrayField, MetadataField
 from allennlp.data.instance import Instance
 from overrides import overrides
 
@@ -38,23 +38,25 @@ class VevovReader(DatasetReader):
         if split not in ['train', 'valid', 'test']:
             raise ValueError(f'Unknown split: {split}')
 
-        while True:
-            keys = list(self.series.keys())
-            self.rs.shuffle(keys)
+        if split == 'train':
+            while True:
+                keys = list(self.series.keys())
+                self.rs.shuffle(keys)
+                for key in keys:
+                    series = np.array(self.series[key])
+                    series = series[:-7]
+                    yield self.series_to_instance(series)
+
+        else:
+            keys = sorted(self.series.keys())
             for key in keys:
                 series = np.array(self.series[key])
+                yield self.series_to_instance(series, key)
 
-                if split == 'train':
-                    series = series[:-7]
-
-                yield self.series_to_instance(series)
-
-            if split != 'train':
-                break
-
-    def series_to_instance(self, series) -> Instance:
+    def series_to_instance(self, series, key) -> Instance:
         fields = {
             'series': ArrayField(series, dtype=self.dtype),
+            'keys': MetadataField(key),
         }
 
         return Instance(fields)
