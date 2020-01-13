@@ -193,16 +193,22 @@ class TimeSeriesLSTMNetwork(BaseModel):
         # X_i.shape == [1, seq_len, hidden_size]
 
         if self.agg_type == 'attention':
-            X_out, _ = self.attn(X_i, X_neighbors_i, X_neighbors_i)
-            # X_out.shape == [1, seq_len, hidden_size]
+            if X_neighbors_i.shape == 0:
+                X_out = X_i.new_zeros(*X_i.shape)
+            else:
+                X_out, _ = self.attn(X_i, X_neighbors_i, X_neighbors_i)
+                # X_out.shape == [1, seq_len, hidden_size]
 
             # Combine own embedding with neighbor embedding
             X_full = torch.cat([X_i, X_out], dim=-1)
             # X_full.shape == [1, seq_len, 2 * hidden_size]
 
         elif self.agg_type == 'mean':
-            X_out = X_neighbors_i.mean(dim=0).unsqueeze(0)
-            # X_out.shape == [1, seq_len, hidden_size]
+            if X_neighbors_i.shape == 0:
+                X_out = X_i.new_zeros(*X_i.shape)
+            else:
+                X_out = X_neighbors_i.mean(dim=0).unsqueeze(0)
+                # X_out.shape == [1, seq_len, hidden_size]
 
             # Combine own embedding with neighbor embedding
             X_full = torch.cat([X_i, X_out], dim=-1)
