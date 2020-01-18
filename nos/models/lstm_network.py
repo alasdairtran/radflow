@@ -135,7 +135,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
         return X
 
     def _get_neighbour_embeds(self, X, keys, n_skips=None, forward_full=False,
-                              use_cache=False):
+                              use_cache=False, use_gt_day=None):
         if self.agg_type == 'none':
             return X
 
@@ -149,7 +149,11 @@ class TimeSeriesLSTMNetwork(BaseModel):
                 sources = []
             neighbor_lens.append(len(sources))
             for s in sources:
-                if use_cache:
+                if use_gt_day is not None:
+                    s_series = self.series[s]
+                    cutoff = -(self.n_days-use_gt_day) if use_gt_day < 7 else None
+                    s_series = s_series[:cutoff]
+                elif use_cache:
                     s_series = self.cached_series[s]
                 else:
                     s_series = self.series[s]
@@ -371,7 +375,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
                 # X.shape == [batch_size, 1, hidden_size]
 
                 X_full = self._get_neighbour_embeds(
-                    X, batch_keys, forward_full=True, use_cache=True)
+                    X, batch_keys, forward_full=True, use_cache=True, use_gt_day=day)
                 # X_full.shape == [batch_size, 1, hidden_size]
 
                 # This is our prediction, the percentage change from
