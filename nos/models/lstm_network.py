@@ -36,11 +36,13 @@ class TimeSeriesLSTMNetwork(BaseModel):
                  decoder: Decoder,
                  data_dir: str,
                  agg_type: str,
+                 peak: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
         self.mse = nn.MSELoss()
         self.hidden_size = decoder.get_output_dim()
+        self.peak = peak
 
         self.n_days = 7
         initializer(self)
@@ -142,6 +144,11 @@ class TimeSeriesLSTMNetwork(BaseModel):
         neighbor_lens = []
         source_list = []
 
+        if use_gt_day is not None and self.peak:
+            use_gt_day += 1
+        elif self.peak and n_skips is not None and n_skips > 0:
+            n_skips -= 1
+
         for key in keys:
             if key in self.sources:
                 sources = self.sources[key]
@@ -151,7 +158,8 @@ class TimeSeriesLSTMNetwork(BaseModel):
             for s in sources:
                 if use_gt_day is not None:
                     s_series = self.series[s]
-                    cutoff = -(self.n_days-use_gt_day) if use_gt_day < 7 else None
+                    cutoff = - \
+                        (self.n_days-use_gt_day) if use_gt_day < 7 else None
                     s_series = s_series[:cutoff]
                 elif use_cache:
                     s_series = self.cached_series[s]
@@ -163,8 +171,14 @@ class TimeSeriesLSTMNetwork(BaseModel):
         sources = torch.stack(source_list, dim=0)
         # sources.shape == [batch_size * n_neighbors, seq_len]
 
-        if not forward_full:
+        if not forward_full and not self.peak:
             X_neighbors, _ = self._forward(sources)
+        elif not forward_full and self.peak:
+            X_neighbors, _ = self._forward(sources)
+            X_neighbors = X_neighbors[:, 1:]
+        elif forward_full and self.peak:
+            X_neighbors = self._forward_full(sources)
+            X_neighbors = X_neighbors[:, 1:]
         else:
             X_neighbors = self._forward_full(sources)
         # X_neighbors.shape == [batch_size * n_neighbors, seq_len, hidden_size]
