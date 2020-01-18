@@ -37,17 +37,20 @@ class TimeSeriesLSTMNetwork(BaseModel):
                  data_dir: str,
                  agg_type: str,
                  peak: bool = False,
+                 diff_type: str = 'yesterday',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
         self.mse = nn.MSELoss()
         self.hidden_size = decoder.get_output_dim()
         self.peak = peak
+        self.diff_type = diff_type
 
         self.n_days = 7
         initializer(self)
 
         assert agg_type in ['attention', 'mean', 'sage', 'none']
+        assert diff_type in ['yesterday', 'last_week']
         self.agg_type = agg_type
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
@@ -108,7 +111,10 @@ class TimeSeriesLSTMNetwork(BaseModel):
         training_series[training_series == 0] = 1
 
         # Take the difference
-        diff = training_series[:, 1:] / training_series[:, :-1]
+        if self.diff_type == 'yesterday':
+            diff = training_series[:, 1:] / training_series[:, :-1]
+        elif self.diff_type == 'last_week':
+            diff = training_series[:, 7:] / training_series[:, :-7]
         targets = diff[:, 1:]
         inputs = diff[:, :-1]
 
@@ -127,7 +133,10 @@ class TimeSeriesLSTMNetwork(BaseModel):
         training_series[training_series == 0] = 1
 
         # Take the difference
-        inputs = training_series[:, 1:] / training_series[:, :-1]
+        if self.diff_type == 'yesterday':
+            inputs = training_series[:, 1:] / training_series[:, :-1]
+        elif self.diff_type == 'last_week':
+            inputs = training_series[:, 7:] / training_series[:, :-7]
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
