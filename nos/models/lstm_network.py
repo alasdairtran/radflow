@@ -310,7 +310,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
         preds = X_full.squeeze(-1)
         # preds.shape == [batch_size, seq_len]
 
-        if splits[0] in ['valid', 'test']:
+        if splits[0] in ['test']:
             preds = preds[-self.n_days:]
             targets = targets[-self.n_days:]
 
