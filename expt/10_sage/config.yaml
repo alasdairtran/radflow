@@ -10,7 +10,8 @@ vocabulary:
   type: empty
 model:
   type: time_series_lstm_network
-  agg_type: gcn
+  agg_type: sage
+  peak: true
   data_dir: "./data"
   decoder:
     type: lstm_decoder

@@ -16,7 +16,7 @@ from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
 from torch_geometric.data import Data
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import SAGEConv
 from tqdm import tqdm
 
 from nos.modules import Decoder
@@ -47,16 +47,16 @@ class TimeSeriesLSTMNetwork(BaseModel):
         self.n_days = 7
         initializer(self)
 
-        assert agg_type in ['attention', 'mean', 'gcn', 'none']
+        assert agg_type in ['attention', 'mean', 'sage', 'none']
         self.agg_type = agg_type
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
                 self.hidden_size, 4, dropout=0.1, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
-        elif agg_type == 'gcn':
-            self.conv1 = GCNConv(self.hidden_size, self.hidden_size)
+        elif agg_type == 'sage':
+            self.conv1 = SAGEConv(self.hidden_size, self.hidden_size)
 
-        if agg_type in ['gcn', 'none']:
+        if agg_type in ['sage', 'none']:
             self.fc = GehringLinear(self.hidden_size, 1)
         else:
             self.fc = GehringLinear(self.hidden_size * 2, 1)
@@ -232,7 +232,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
             X_full = torch.cat([X_i, X_out], dim=-1)
             # X_full.shape == [1, seq_len, 2 * hidden_size]
 
-        elif self.agg_type == 'gcn':
+        elif self.agg_type == 'sage':
             # The central node is the first node. The rest are neighbors
             feats = torch.cat([X_i, X_neighbors_i], dim=0)
             # feats.shape == [n_nodes, seq_len, hidden_size]
