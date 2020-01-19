@@ -182,6 +182,9 @@ class TimeSeriesLSTMNetwork(BaseModel):
 
         if not forward_full and not self.peak:
             X_neighbors, _ = self._forward(sources)
+        elif not forward_full and self.peak and n_skips == 0:
+            X_neighbors = self._forward_full(sources)
+            X_neighbors = X_neighbors[:, 1:]
         elif not forward_full and self.peak:
             X_neighbors, _ = self._forward(sources)
             X_neighbors = X_neighbors[:, 1:]
