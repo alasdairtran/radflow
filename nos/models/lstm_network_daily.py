@@ -290,9 +290,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
         # targets.shape == [batch_size, seq_len]
 
         X_full_list = []
-        # Ignore the first week to save memory
-        targets = targets[:, 7:]
-        for day in range(7, X.shape[1]):
+        for day in range(X.shape[1]):
             X_i = X[:, day: day+1]
             X_full_list.append(self._get_neighbour_embeds(X_i, keys, day))
             # X_full.shape == [batch_size, seq_len, out_hidden_size]
