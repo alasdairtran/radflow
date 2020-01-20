@@ -17,24 +17,21 @@ def make_boxplots():
     with open('expt/11_no_agg/serialization/evaluate-metrics.json') as f:
         smape['LSTM'] = json.load(f)['smape']
 
-    with open('expt/9_agg_mean/serialization/evaluate-metrics.json') as f:
+    with open('expt/12_peak/serialization/evaluate-metrics.json') as f:
         smape['mean'] = json.load(f)['smape']
 
-    with open('expt/8_agg_attention/serialization/evaluate-metrics.json') as f:
-        smape['attn'] = json.load(f)['smape']
-
-    with open('expt/10_gcn/serialization/evaluate-metrics.json') as f:
-        smape['gcn'] = json.load(f)['smape']
+    with open('expt/10_sage/serialization/evaluate-metrics.json') as f:
+        smape['sage'] = json.load(f)['smape']
 
     smapes = [smape['naive'], smape['SN'], smape['LSTM'],
-              smape['mean'], smape['attn'], smape['gcn']]
+              smape['mean'], smape['sage']]
 
     fig = plt.figure(figsize=(8, 6))
     ax = plt.subplot(1, 1, 1)
     ax.boxplot(smapes, showfliers=False, meanline=True,
                showmeans=True, widths=0.7)
     ax.set_xticklabels(
-        ['Naive', 'Seasonal', 'No Agg', 'Mean', 'Attn', 'GCN'])
+        ['Naive', 'Seasonal', 'No Agg', 'Mean', 'Sage'])
     ax.set_ylabel('SMAPE')
 
     means = [np.mean(x) for x in smapes]
