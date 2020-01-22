@@ -382,7 +382,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
                 # X.shape == [batch_size, 1, hidden_size]
 
                 X_full = self._get_neighbour_embeds(
-                    X, batch_keys, day=day+56)
+                    X, batch_keys, day=day+54)
                 # X_full.shape == [batch_size, 1, hidden_size]
 
                 # This is our prediction, the percentage change from
