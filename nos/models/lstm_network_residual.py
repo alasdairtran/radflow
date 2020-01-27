@@ -16,8 +16,7 @@ from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
 from torch_geometric.data import Data
-from torch_geometric.nn import (ARMAConv, DNAConv, HypergraphConv, SAGEConv,
-                                SGConv)
+from torch_geometric.nn import SAGEConv
 from tqdm import tqdm
 
 from nos.modules import Decoder
@@ -30,8 +29,8 @@ from .metrics import get_smape
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register('time_series_lstm_network_daily')
-class TimeSeriesLSTMNetworkDaily(BaseModel):
+@Model.register('time_series_lstm_network_resdiual')
+class TimeSeriesLSTMNetworkResidual(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  decoder: Decoder,
@@ -52,8 +51,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
         self.n_days = 7
         initializer(self)
 
-        assert agg_type in ['attention', 'mean', 'dna', 'hyper',
-                            'sage', 'arma', 'sc', 'none']
+        assert agg_type in ['attention', 'mean', 'sage', 'none']
         assert diff_type in ['yesterday', 'last_week']
         self.agg_type = agg_type
         if agg_type == 'attention':
@@ -62,17 +60,8 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
         elif agg_type == 'sage':
             self.conv1 = SAGEConv(self.hidden_size, self.hidden_size)
-        elif agg_type == 'arma':
-            self.conv1 = ARMAConv(self.hidden_size, self.hidden_size)
-        elif agg_type == 'sc':
-            self.conv1 = SGConv(self.hidden_size, self.hidden_size)
-        elif agg_type == 'dna':
-            self.conv1 = DNAConv(self.hidden_size)
-        elif agg_type == 'hyper':
-            self.conv1 = HypergraphConv(
-                self.hidden_size, self.hidden_size, use_attention=False)
 
-        if agg_type in ['sage', 'arma', 'dna', 'hyper', 'sc', 'none']:
+        if agg_type in ['sage', 'none']:
             self.fc = GehringLinear(self.hidden_size, 1)
         else:
             self.fc = GehringLinear(self.hidden_size * 2, 1)
@@ -231,7 +220,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
             X_full = torch.cat([X_i, X_out], dim=-1)
             # X_full.shape == [1, seq_len, 2 * hidden_size]
 
-        elif self.agg_type in ['sage', 'arma', 'sc', 'dna', 'hyper']:
+        elif self.agg_type == 'sage':
             # The central node is the first node. The rest are neighbors
             feats = torch.cat([X_i, X_neighbors_i], dim=0)
             # feats.shape == [n_nodes, seq_len, hidden_size]

@@ -17,21 +17,33 @@ def make_boxplots():
     with open('expt/11_no_agg/serialization/evaluate-metrics.json') as f:
         smape['LSTM'] = json.load(f)['smape']
 
-    with open('expt/12_peak/serialization/evaluate-metrics.json') as f:
-        smape['mean'] = json.load(f)['smape']
+    with open('expt/12_peek/serialization/evaluate-metrics.json') as f:
+        smape['static_mean'] = json.load(f)['smape']
 
-    with open('expt/10_sage/serialization/evaluate-metrics.json') as f:
-        smape['sage'] = json.load(f)['smape']
+    with open('expt/16_peek_daily/serialization/evaluate-metrics.json') as f:
+        smape['dynamic_mean'] = json.load(f)['smape']
+
+    with open('expt/18_peek_daily_attn/serialization/evaluate-metrics.json') as f:
+        smape['dynamic_attn'] = json.load(f)['smape']
+
+    with open('expt/17_peek_daily_sage/serialization/evaluate-metrics.json') as f:
+        smape['dynamic_sage'] = json.load(f)['smape']
 
     smapes = [smape['naive'], smape['SN'], smape['LSTM'],
-              smape['mean'], smape['sage']]
+              smape['static_mean'], smape['dynamic_mean'],
+              smape['dynamic_attn'],
+              smape['dynamic_sage']
+              ]
 
-    fig = plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
     ax.boxplot(smapes, showfliers=False, meanline=True,
                showmeans=True, widths=0.7)
     ax.set_xticklabels(
-        ['Naive', 'Seasonal', 'No Agg', 'Mean', 'Sage'])
+        ['Naive', 'Seasonal', 'Baseline', 'Static Mean', 'Dynamic Mean',
+         'Dynamic Attn',
+         'Dynamic Sage',
+         ])
     ax.set_ylabel('SMAPE')
 
     means = [np.mean(x) for x in smapes]
