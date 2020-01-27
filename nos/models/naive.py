@@ -84,6 +84,51 @@ class NaiveSeasonalModel(BaseModel):
         return out_dict
 
 
+@Model.register('naive_seasonal_diff')
+class NaiveSeasonalDiffModel(BaseModel):
+    def __init__(self,
+                 vocab: Vocabulary):
+        self.n_days = 7
+        super().__init__(vocab)
+
+    def forward(self, series, keys) -> Dict[str, Any]:
+        B = series.shape[0]
+        # series.shape == [batch_size, seq_len]
+
+        self.history['_n_batches'] += 1
+        self.history['_n_samples'] += B
+
+        out_dict = {
+            'loss': None,
+            'sample_size': torch.tensor(B).to(series.device),
+        }
+
+        if not self.training:
+            # Ignore last 7 days
+            training_series = series[:, :-self.n_days]
+
+            # Compute the percentage change from last week
+            diffs = training_series[:, -7:] / training_series[:, -8:-1]
+
+            targets = series[:, -self.n_days:]
+            # targets.shape == [batch_size, n_days]
+
+            preds = series.new_zeros(*targets.shape)
+
+            # Predict the last n_days using pct change from the week before
+            curr = training_series[:, -1]
+            for i in range(preds.shape[1]):
+                preds[:, i] = curr * diffs[:, i]
+                curr = preds[:, i]
+
+            smape, _ = get_smape(targets, preds)
+            # smape.shape == [batch_size]
+
+            out_dict['smape'] = smape
+
+        return out_dict
+
+
 @Model.register('naive_rolling_average')
 class NaiveRollingAverageModel(BaseModel):
     def __init__(self,

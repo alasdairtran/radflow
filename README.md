@@ -16,6 +16,7 @@ python setup.py develop
 CUDA_VISIBLE_DEVICES=0 nos evaluate expt/1_naive_previous_day/config.yaml
 CUDA_VISIBLE_DEVICES=0 nos evaluate expt/2_naive_seasonal/config.yaml
 CUDA_VISIBLE_DEVICES=0 nos evaluate expt/3_naive_rolling/config.yaml
+CUDA_VISIBLE_DEVICES=0 nos evaluate expt/4_naive_seasonal_diff/config.yaml
 
 # LSTM baseline
 CUDA_VISIBLE_DEVICES=0 nos train expt/7_lstm/config.yaml -f
