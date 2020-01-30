@@ -29,7 +29,7 @@ from .metrics import get_smape
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register('time_series_lstm_network_resdiual')
+@Model.register('time_series_lstm_network_residual')
 class TimeSeriesLSTMNetworkResidual(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
@@ -37,22 +37,16 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
                  data_dir: str,
                  agg_type: str,
                  peak: bool = False,
-                 diff_type: str = 'yesterday',
-                 max_neighbors: int = 20,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
         self.mse = nn.MSELoss()
         self.hidden_size = decoder.get_output_dim()
         self.peak = peak
-        self.diff_type = diff_type
-        self.max_neighbors = max_neighbors
-
         self.n_days = 7
         initializer(self)
 
         assert agg_type in ['attention', 'mean', 'sage', 'none']
-        assert diff_type in ['yesterday', 'last_week']
         self.agg_type = agg_type
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
@@ -81,9 +75,9 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
         edge_indices = network_df[['source', 'target']].to_numpy()
         edge_indices = torch.tensor(edge_indices.transpose()).cuda()
 
-        source_path = os.path.join(data_dir, 'snapshots.json')
+        source_path = os.path.join(data_dir, 'adjacency_list.json')
         with open(source_path) as f:
-            self.snapshots = json.load(f, object_pairs_hook=keystoint)
+            self.sources = json.load(f, object_pairs_hook=keystoint)
 
         self.network = Data(x=node_features,
                             edge_index=edge_indices)
@@ -113,10 +107,9 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
         training_series[training_series == 0] = 1
 
         # Take the difference
-        if self.diff_type == 'yesterday':
-            diff = training_series[:, 1:] / training_series[:, :-1]
-        elif self.diff_type == 'last_week':
-            diff = training_series[:, 7:] / training_series[:, :-7]
+        baselines = training_series[:, :-7] / training_series[:, 6:-1]
+        diff = training_series[:, 7:] / training_series[:, :-7]
+        diff = diff - baselines
         targets = diff[:, 1:]
         inputs = diff[:, :-1]
 
@@ -135,10 +128,11 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
         training_series[training_series == 0] = 1
 
         # Take the difference
-        if self.diff_type == 'yesterday':
-            inputs = training_series[:, 1:] / training_series[:, :-1]
-        elif self.diff_type == 'last_week':
-            inputs = training_series[:, 7:] / training_series[:, :-7]
+        baselines = training_series[:, :-7] / training_series[:, 6:-1]
+        diff = training_series[:, 7:] / training_series[:, :-7]
+        diff = diff - baselines
+        targets = diff[:, 1:]
+        inputs = diff[:, :-1]
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
@@ -147,32 +141,58 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, day=None):
+    def _get_neighbour_embeds(self, X, keys, n_skips=None, forward_full=False,
+                              use_cache=False, use_gt_day=None):
         if self.agg_type == 'none':
             return X
 
         neighbor_lens = []
         source_list = []
 
+        if use_gt_day is not None and self.peak:
+            use_gt_day += 1
+        elif self.peak and n_skips is not None and n_skips > 0:
+            n_skips -= 1
+
         for key in keys:
-            if key in self.snapshots[day]:
-                # Keep only the top 20 neighbours
-                sources = self.snapshots[day][key][:self.max_neighbors]
+            if key in self.sources:
+                sources = self.sources[key]
             else:
                 sources = []
             neighbor_lens.append(len(sources))
             for s in sources:
-                s_series = self.series[s]
-                s_series = s_series[:day+3]
-                assert len(s_series) == day + 3
+                if use_gt_day is not None:
+                    s_series = self.series[s]
+                    cutoff = - \
+                        (self.n_days-use_gt_day) if use_gt_day < 7 else None
+                    s_series = s_series[:cutoff]
+                elif use_cache:
+                    s_series = self.cached_series[s]
+                else:
+                    s_series = self.series[s]
+                    s_series = s_series[:-n_skips if n_skips > 0 else None]
                 source_list.append(s_series)
 
         sources = torch.stack(source_list, dim=0)
         # sources.shape == [batch_size * n_neighbors, seq_len]
 
-        X_neighbors = self._forward_full(sources)
-        X_neighbors = X_neighbors[:, -1:]
+        if not forward_full and not self.peak:
+            X_neighbors, _ = self._forward(sources)
+        elif not forward_full and self.peak and n_skips == 0:
+            X_neighbors = self._forward_full(sources)
+            X_neighbors = X_neighbors[:, 1:]
+        elif not forward_full and self.peak:
+            X_neighbors, _ = self._forward(sources)
+            X_neighbors = X_neighbors[:, 1:]
+        elif forward_full and self.peak:
+            X_neighbors = self._forward_full(sources)
+            X_neighbors = X_neighbors[:, 1:]
+        else:
+            X_neighbors = self._forward_full(sources)
         # X_neighbors.shape == [batch_size * n_neighbors, seq_len, hidden_size]
+
+        if X.shape[1] == 1:
+            X_neighbors = X_neighbors[:, -1:]
 
         # Go through each element in the batch
         cursor = 0
@@ -210,7 +230,7 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
             # X_full.shape == [1, seq_len, 2 * hidden_size]
 
         elif self.agg_type == 'mean':
-            if X_neighbors_i.shape[0] == 0:
+            if X_neighbors_i.shape == 0:
                 X_out = X_i.new_zeros(*X_i.shape)
             else:
                 X_out = X_neighbors_i.mean(dim=0).unsqueeze(0)
@@ -289,13 +309,8 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
         # X.shape == [batch_size, seq_len, hidden_size]
         # targets.shape == [batch_size, seq_len]
 
-        X_full_list = []
-        for day in range(X.shape[1]):
-            X_i = X[:, day: day+1]
-            X_full_list.append(self._get_neighbour_embeds(X_i, keys, day))
-            # X_full.shape == [batch_size, seq_len, out_hidden_size]
-
-        X_full = torch.cat(X_full_list, dim=1)
+        X_full = self._get_neighbour_embeds(X, keys, n_skips)
+        # X_full.shape == [batch_size, seq_len, out_hidden_size]
 
         X_full = self.fc(X_full)
         # X_full.shape == [batch_size, seq_len, 1]
@@ -382,7 +397,7 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
                 # X.shape == [batch_size, 1, hidden_size]
 
                 X_full = self._get_neighbour_embeds(
-                    X, batch_keys, day=day+54)
+                    X, batch_keys, forward_full=True, use_cache=True, use_gt_day=day)
                 # X_full.shape == [batch_size, 1, hidden_size]
 
                 # This is our prediction, the percentage change from
@@ -392,7 +407,9 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
 
                 # Calculate the predicted view count
                 for i, key in enumerate(batch_keys):
-                    pred = self.cached_series[key][-1:] * pct[i]
+                    baseline = self.cached_series[key][-7] / \
+                        self.cached_series[key][-1]
+                    pred = self.cached_series[key][-1:] * (pct[i] + baseline)
                     new_cached_series[key] = torch.cat(
                         [self.cached_series[key], pred], dim=0)
 
