@@ -21,6 +21,7 @@ from tqdm import tqdm
 
 from nos.modules import Decoder
 from nos.modules.linear import GehringLinear
+from nos.modules.losses import SmoothSMAPELoss
 from nos.utils import keystoint
 
 from .base import BaseModel
@@ -37,10 +38,10 @@ class TimeSeriesLSTMNetworkLog(BaseModel):
                  data_dir: str,
                  agg_type: str,
                  peak: bool = False,
+                 loss: str = 'mae',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
-        self.loss = nn.L1Loss()
         self.hidden_size = decoder.get_output_dim()
         self.peak = peak
 
@@ -48,6 +49,7 @@ class TimeSeriesLSTMNetworkLog(BaseModel):
         initializer(self)
 
         assert agg_type in ['attention', 'mean', 'sage', 'none']
+        assert loss in ['mae', 'smape']
         self.agg_type = agg_type
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
@@ -60,6 +62,11 @@ class TimeSeriesLSTMNetworkLog(BaseModel):
             self.fc = GehringLinear(self.hidden_size, 1)
         else:
             self.fc = GehringLinear(self.hidden_size * 2, 1)
+
+        if loss == 'mae':
+            self.loss = nn.L1Loss()
+        elif loss == 'smape':
+            self.loss = SmoothSMAPELoss()
 
         # Load persistent network
         network_path = os.path.join(data_dir, 'persistent_network_2.csv')
