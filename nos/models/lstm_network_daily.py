@@ -72,10 +72,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
             self.conv1 = HypergraphConv(
                 self.hidden_size, self.hidden_size, use_attention=False)
 
-        if agg_type in ['sage', 'arma', 'dna', 'hyper', 'sc', 'none']:
-            self.fc = GehringLinear(self.hidden_size, 1)
-        else:
-            self.fc = GehringLinear(self.hidden_size * 2, 1)
+        self.fc = GehringLinear(self.hidden_size * 2, 1)
 
         # Load persistent network
         network_path = os.path.join(data_dir, 'persistent_network_2.csv')
@@ -260,6 +257,9 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
 
             X_full = X_full[:1]
             # X_full.shape == [1, seq_len, hidden_size]
+
+            X_full = torch.cat([X_i, X_full], dim=-1)
+            # X_full.shape == [1, seq_len, 2 * hidden_size]
 
         return X_full
 

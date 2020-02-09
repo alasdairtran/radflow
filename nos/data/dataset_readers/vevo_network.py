@@ -39,6 +39,9 @@ class VevovNetworkReader(DatasetReader):
         self.valid_keys = keys[:100]
         self.train_keys = keys[100:]
 
+        # Check for reproducibility
+        assert sum(self.valid_keys) == 2939816
+
     @overrides
     def _read(self, split: str):
         if split not in ['train', 'valid', 'test']:
@@ -60,7 +63,6 @@ class VevovNetworkReader(DatasetReader):
             keys = sorted(self.series.keys())
             for key in keys:
                 yield self.series_to_instance(key, split)
-
 
     def series_to_instance(self, key, split) -> Instance:
         fields = {

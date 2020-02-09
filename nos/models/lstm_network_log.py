@@ -404,7 +404,7 @@ class TimeSeriesLSTMNetworkLog(BaseModel):
                 # Calculate the predicted view count
                 for i, key in enumerate(batch_keys):
                     pred = torch.clamp(torch.round(
-                        torch.exp(log_pred) - 1), min=0)
+                        torch.exp(log_pred[i:i+1]) - 1), min=0)
                     new_cached_series[key] = torch.cat(
                         [self.cached_series[key], pred], dim=0)
 

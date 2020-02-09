@@ -29,8 +29,8 @@ from .metrics import get_smape
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register('time_series_lstm_network_residual')
-class TimeSeriesLSTMNetworkResidual(BaseModel):
+@Model.register('time_series_lstm_network_log_diff')
+class TimeSeriesLSTMNetworkLogDiff(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  decoder: Decoder,
@@ -43,6 +43,7 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
         self.mse = nn.MSELoss()
         self.hidden_size = decoder.get_output_dim()
         self.peak = peak
+
         self.n_days = 7
         initializer(self)
 
@@ -103,14 +104,11 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
 
-        training_series = series.clone().detach()
-        training_series[training_series == 0] = 1
+        training_series = torch.log1p(series)
 
         # Take the difference
-        baselines = training_series[:, :-7] / training_series[:, 6:-1]
-        diff = training_series[:, 7:] / training_series[:, :-7]
-        target_diff = diff - baselines
-        targets = target_diff[:, 1:]
+        diff = training_series[:, 1:] / training_series[:, :-1]
+        targets = diff[:, 1:]
         inputs = diff[:, :-1]
 
         X = inputs.unsqueeze(-1)
@@ -124,8 +122,7 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
 
-        training_series = series.clone().detach()
-        training_series[training_series == 0] = 1
+        training_series = torch.log1p(series)
 
         # Take the difference
         inputs = training_series[:, 1:] / training_series[:, :-1]
@@ -403,9 +400,8 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
 
                 # Calculate the predicted view count
                 for i, key in enumerate(batch_keys):
-                    baseline = self.cached_series[key][-7] / \
-                        self.cached_series[key][-1]
-                    pred = self.cached_series[key][-1:] * (pct[i] + baseline)
+                    pred = torch.log1p(self.cached_series[key][-1:]) * pct[i]
+                    pred = torch.exp(pred) - 1
                     new_cached_series[key] = torch.cat(
                         [self.cached_series[key], pred], dim=0)
 

@@ -29,24 +29,28 @@ from .metrics import get_smape
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register('time_series_lstm_network_residual')
-class TimeSeriesLSTMNetworkResidual(BaseModel):
+@Model.register('time_series_lstm_network_p1')
+class TimeSeriesLSTMNetworkP1(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  decoder: Decoder,
                  data_dir: str,
                  agg_type: str,
                  peak: bool = False,
+                 diff_type: str = 'yesterday',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
         self.mse = nn.MSELoss()
         self.hidden_size = decoder.get_output_dim()
         self.peak = peak
+        self.diff_type = diff_type
+
         self.n_days = 7
         initializer(self)
 
         assert agg_type in ['attention', 'mean', 'sage', 'none']
+        assert diff_type in ['yesterday', 'last_week']
         self.agg_type = agg_type
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
@@ -103,14 +107,14 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
 
-        training_series = series.clone().detach()
-        training_series[training_series == 0] = 1
+        training_series = series + 1
 
         # Take the difference
-        baselines = training_series[:, :-7] / training_series[:, 6:-1]
-        diff = training_series[:, 7:] / training_series[:, :-7]
-        target_diff = diff - baselines
-        targets = target_diff[:, 1:]
+        if self.diff_type == 'yesterday':
+            diff = training_series[:, 1:] / training_series[:, :-1]
+        elif self.diff_type == 'last_week':
+            diff = training_series[:, 7:] / training_series[:, :-7]
+        targets = diff[:, 1:]
         inputs = diff[:, :-1]
 
         X = inputs.unsqueeze(-1)
@@ -124,11 +128,13 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
 
-        training_series = series.clone().detach()
-        training_series[training_series == 0] = 1
+        training_series = series + 1
 
         # Take the difference
-        inputs = training_series[:, 1:] / training_series[:, :-1]
+        if self.diff_type == 'yesterday':
+            inputs = training_series[:, 1:] / training_series[:, :-1]
+        elif self.diff_type == 'last_week':
+            inputs = training_series[:, 7:] / training_series[:, :-7]
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
@@ -403,9 +409,7 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
 
                 # Calculate the predicted view count
                 for i, key in enumerate(batch_keys):
-                    baseline = self.cached_series[key][-7] / \
-                        self.cached_series[key][-1]
-                    pred = self.cached_series[key][-1:] * (pct[i] + baseline)
+                    pred = (self.cached_series[key][-1:] + 1) * pct[i] - 1
                     new_cached_series[key] = torch.cat(
                         [self.cached_series[key], pred], dim=0)
 

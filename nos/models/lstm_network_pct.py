@@ -29,8 +29,8 @@ from .metrics import get_smape
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register('time_series_lstm_network_residual')
-class TimeSeriesLSTMNetworkResidual(BaseModel):
+@Model.register('time_series_lstm_network_pct')
+class TimeSeriesLSTMNetworkPCT(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  decoder: Decoder,
@@ -43,6 +43,7 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
         self.mse = nn.MSELoss()
         self.hidden_size = decoder.get_output_dim()
         self.peak = peak
+
         self.n_days = 7
         initializer(self)
 
@@ -107,10 +108,10 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
         training_series[training_series == 0] = 1
 
         # Take the difference
-        baselines = training_series[:, :-7] / training_series[:, 6:-1]
-        diff = training_series[:, 7:] / training_series[:, :-7]
-        target_diff = diff - baselines
-        targets = target_diff[:, 1:]
+        diff = training_series[:, 1:] / training_series[:, :-1]
+        baselines = diff[:, :-7]
+        diff = diff[:, 7:] - baselines
+        targets = diff[:, 1:]
         inputs = diff[:, :-1]
 
         X = inputs.unsqueeze(-1)
@@ -129,6 +130,8 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
 
         # Take the difference
         inputs = training_series[:, 1:] / training_series[:, :-1]
+        baselines = inputs[:, :-7]
+        inputs = inputs[:, 7:] - baselines
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
@@ -403,9 +406,7 @@ class TimeSeriesLSTMNetworkResidual(BaseModel):
 
                 # Calculate the predicted view count
                 for i, key in enumerate(batch_keys):
-                    baseline = self.cached_series[key][-7] / \
-                        self.cached_series[key][-1]
-                    pred = self.cached_series[key][-1:] * (pct[i] + baseline)
+                    pred = self.cached_series[key][-1:] * pct[i]
                     new_cached_series[key] = torch.cat(
                         [self.cached_series[key], pred], dim=0)
 
