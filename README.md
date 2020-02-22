@@ -7,6 +7,21 @@ Network of sequences
 ```sh
 # Install package and dependencies
 python setup.py develop
+
+# Download wiki traffic data from Kaggle. Extract the archive
+cd data/wiki && unzip wiki.zip
+unzip key_1.csv.zip
+unzip key_2.csv.zip
+unzip train_1.csv.zip
+unzip train_2.csv.zip
+unzip sample_submission_1.csv.zip
+unzip sample_submission_2.csv.zip
+rm -rfv *.zip
+
+mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
+
+# Scrape all page revisions from wiki
+python scripts/get_wiki.py
 ```
 
 ## Training
