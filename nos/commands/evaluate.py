@@ -66,6 +66,8 @@ def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='',
     logger.info("Metrics:")
     for key, metric in metrics.items():
         if isinstance(metric, list):
+            if key not in ['smape']:
+                continue
             metric_array = np.array(metric)
             logger.info(f"{key}_min: {np.amin(metric_array)}")
             logger.info(f"{key}_q1: {np.quantile(metric_array, 0.25)}")
@@ -113,12 +115,16 @@ def evaluate(model: Model,
         total_weight = 0.0
 
         smape = []
+        daily_smape = []
+        keys = []
         for batch in generator_tqdm:
             batch_count += 1
             batch = nn_util.move_to_device(batch, cuda_device)
             output_dict = model(**batch)
             loss = output_dict.get("loss")
             smape += output_dict['smape']
+            daily_smape += output_dict['daily_smape']
+            keys += output_dict['keys']
 
             metrics = model.get_metrics()
 
@@ -145,6 +151,8 @@ def evaluate(model: Model,
 
         final_metrics = model.get_metrics(reset=True)
         final_metrics['smape'] = smape
+        final_metrics['daily_smape'] = daily_smape
+        final_metrics['keys'] = keys
         if loss_count > 0:
             # Sanity check
             # if loss_count != batch_count:
