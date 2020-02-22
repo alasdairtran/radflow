@@ -12,3 +12,4 @@ from .lstm_network_weighted import TimeSeriesLSTMNetworkWeighted
 from .naive import (NaivePreviousDayModel, NaiveRollingAverageModel,
                     NaiveSeasonalDiffModel, NaiveSeasonalModel)
 from .transformer import TimeSeriesTransformer
+from .wiki_lstm_network import WikiTimeSeriesLSTMNetworkDaily
