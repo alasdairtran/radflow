@@ -71,15 +71,26 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
         elif agg_type == 'sage':
             self.conv1 = SAGEConv(self.hidden_size, self.hidden_size)
+            if self.n_hops == 2:
+                self.conv2 = SAGEConv(self.hidden_size, self.hidden_size)
         elif agg_type == 'arma':
             self.conv1 = ARMAConv(self.hidden_size, self.hidden_size)
+            if self.n_hops == 2:
+                self.conv2 = ARMAConv(self.hidden_size, self.hidden_size)
         elif agg_type == 'sc':
             self.conv1 = SGConv(self.hidden_size, self.hidden_size)
+            if self.n_hops == 2:
+                self.conv2 = SGConv(self.hidden_size, self.hidden_size)
         elif agg_type == 'dna':
             self.conv1 = DNAConv(self.hidden_size)
+            if self.n_hops == 2:
+                self.conv2 = DNAConv(self.hidden_size)
         elif agg_type == 'hyper':
             self.conv1 = HypergraphConv(
                 self.hidden_size, self.hidden_size, use_attention=False)
+            if self.n_hops == 2:
+                self.conv2 = HypergraphConv(
+                    self.hidden_size, self.hidden_size, use_attention=False)
 
         self.fc = GehringLinear(self.hidden_size * 2, 1)
 
@@ -111,6 +122,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
+        self.register_buffer('_float', torch.FloatTensor(1))
 
         self.cached_series = {}
         self.non_missing = {}
@@ -195,6 +207,95 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
         return X
 
     def _get_neighbour_embeds(self, X, keys, day=None):
+        if self.n_hops == 1:
+            return self._get_one_hop_neighbour_embeds(X, keys, day)
+        elif self.n_hops == 2:
+            return self._get_two_hop_neighbour_embeds(X, keys, day)
+
+    def _get_two_hop_neighbour_embeds(self, X, keys, day=None):
+        if self.agg_type == 'none':
+            return X
+
+        neighbor_lens = []
+        source_list = []
+
+        source_2_list_list = []
+        neighbor_2_len_list = []
+        neighbor_2_hop_lens = []
+
+        for key in keys:
+            neighbour_2_len = []
+            source_2_list = []
+            if key in self.snapshots[day]:
+                # Keep only the top 20 neighbours
+                sources = self.snapshots[day][key][:self.max_neighbors]
+                for s in sources:
+                    if s in self.snapshots[day]:
+                        sources_2 = self.snapshots[day][s][:self.max_neighbors]
+                    else:
+                        sources_2 = []
+                    neighbour_2_len.append(len(sources_2))
+                    for t in sources_2:
+                        t_series = self.series[t]
+                        t_series = t_series[:day+3]
+                        assert len(t_series) == day + 3
+                        source_2_list.append(t_series)
+                if source_2_list:
+                    sources_2 = torch.stack(source_2_list, dim=0)
+                else:
+                    sources_2 = self._float.new_zeros(0, day + 3)
+
+            else:
+                sources = []
+            neighbor_lens.append(len(sources))
+            source_2_list_list.append(sources_2)
+            neighbor_2_len_list.append(neighbour_2_len)
+            neighbor_2_hop_lens.append(sum(neighbour_2_len))
+            for s in sources:
+                s_series = self.series[s]
+                s_series = s_series[:day+3]
+                assert len(s_series) == day + 3
+                source_list.append(s_series)
+
+        sources = torch.stack(source_list, dim=0)
+        # sources.shape == [batch_size * n_neighbors, seq_len]
+
+        sources_2 = torch.cat(source_2_list_list, dim=0)
+        # sources_2.shape == [batch_size * n_neighbors^2, seq_len]
+
+        X_neighbors = self._forward_full(sources)
+        X_neighbors = X_neighbors[:, -1:]
+        # X_neighbors.shape == [batch_size * n_neighbors, seq_len, hidden_size]
+
+        X_neighbors_2 = self._forward_full(sources_2)
+        X_neighbors_2 = X_neighbors_2[:, -1:]
+        # X_neighbors.shape == [batch_size * n_neighbors^2, seq_len, hidden_size]
+
+        # Go through each element in the batch
+        cursor = 0
+        cursor_2 = 0
+        X_full_list = []
+        for n_neighbors, X_i, n_2_hop_neighbors, neighbour_2_len in zip(neighbor_lens, X, neighbor_2_hop_lens, neighbor_2_len_list):
+            X_neighbors_i = X_neighbors[cursor:cursor + n_neighbors]
+            # X_neighbors_i == [n_neighbors, seq_len, hidden_size]
+
+            X_neighbors_2_i = X_neighbors_2[cursor_2:cursor_2 +
+                                            n_2_hop_neighbors]
+            # X_neighbors_i == [n_neighbors, seq_len, hidden_size]
+
+            X_full = self._aggregate_2(
+                X_neighbors_i, X_i, X_neighbors_2_i, neighbour_2_len)
+            X_full_list.append(X_full)
+
+            cursor += n_neighbors
+            cursor_2 += n_2_hop_neighbors
+
+        X_full = torch.cat(X_full_list, dim=0)
+        # X_full.shape [batch_size, seq_len, hidden_size]
+
+        return X_full
+
+    def _get_one_hop_neighbour_embeds(self, X, keys, day=None):
         if self.agg_type == 'none':
             return X
 
@@ -235,6 +336,67 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
 
         X_full = torch.cat(X_full_list, dim=0)
         # X_full.shape [batch_size, seq_len, hidden_size]
+
+        return X_full
+
+    def _aggregate_2(self, X_neighbors_i, X_i, X_neighbors_2_i, neighbour_2_len):
+        # X_neighbors_i.shape = [n_neighbors, seq_len, hidden_size]
+        # X_i.shape == [seq_len, hidden_size]
+
+        X_i = X_i.unsqueeze(0)
+        # X_i.shape == [1, seq_len, hidden_size]
+
+        if self.agg_type in ['sage', 'arma', 'sc', 'dna', 'hyper']:
+            # The central node is the first node. The rest are neighbors
+            feats = torch.cat([X_i, X_neighbors_i, X_neighbors_2_i], dim=0)
+            # feats.shape == [n_nodes, seq_len, hidden_size]
+
+            N, S, H = feats.shape
+            feats = feats.transpose(0, 1).reshape(S * N, H)
+            # feats.shape == [seq_len * n_nodes, hidden_size]
+
+            assert S == 1
+
+            # Number of 1-hop neighbours
+            N1 = X_neighbors_i.shape[0]
+
+            # We add self-loops as well to make life easier
+            source_idx = torch.arange(0, N1 + 1)
+            source_idx = source_idx.to(self._long.device)
+            # source_idx.shape == [seq_len * n_neighbors]
+
+            target_idx = self._long.new_zeros(N1 + 1)
+
+            cursor = N1 + 1
+            for i, len_2 in enumerate(neighbour_2_len):
+                target = self._long.new_full((len_2, ), i + 1)
+                source = torch.arange(cursor, cursor + len_2)
+                source = source.to(self._long.device)
+
+                target_idx = torch.cat([target_idx, target], dim=0)
+                source_idx = torch.cat([source_idx, source], dim=0)
+
+                cursor += len_2
+
+            assert cursor == N
+
+            edge_list = [source_idx, target_idx]
+            edge_index = torch.stack(edge_list, dim=0)
+
+            X_full = self.conv1(feats, edge_index)
+            # X_full.shape == [seq_len * n_nodes, hidden_size]
+
+            X_full = self.conv2(X_full, edge_index)
+            # X_full.shape == [seq_len * n_nodes, hidden_size]
+
+            X_full = X_full.reshape(S, N, H).transpose(0, 1)
+            # X_full.shape == [n_nodes, seq_len, hidden_size]
+
+            X_full = X_full[:1]
+            # X_full.shape == [1, seq_len, hidden_size]
+
+            X_full = torch.cat([X_i, X_full], dim=-1)
+            # X_full.shape == [1, seq_len, 2 * hidden_size]
 
         return X_full
 

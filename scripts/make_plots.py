@@ -111,10 +111,65 @@ def make_partial_info_plots():
     fig.savefig('figures/partial_info.png')
 
 
+def make_partial_edge_plots():
+    smape = {}
+
+    with open('expt/missing/08_sage_60/serialization/evaluate-metrics.json') as f:
+        smape['1_hop_00'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/1_hop_20/serialization/evaluate-metrics.json') as f:
+        smape['1_hop_80'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/1_hop_40/serialization/evaluate-metrics.json') as f:
+        smape['1_hop_60'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/1_hop_60/serialization/evaluate-metrics.json') as f:
+        smape['1_hop_40'] = json.load(f)['smape']
+
+    # with open('expt/missing/07_no_agg_60/serialization/evaluate-metrics.json') as f:
+    #     smape['2_hop_00'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/2_hop_20/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_80'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/2_hop_40/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_60'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/2_hop_60/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_40'] = json.load(f)['smape']
+
+    one_hop_smapes = [smape['1_hop_00'], smape['1_hop_40'],
+                      smape['1_hop_60'], smape['1_hop_80']]
+    two_hop_smapes = [smape['2_hop_40'], smape['2_hop_60'],
+                      smape['2_hop_80']]
+
+    one_hop_means = [np.median(x) for x in one_hop_smapes]
+    two_hop_smapes = [np.nan] + [np.median(x) for x in two_hop_smapes]
+    # one_hop_means = [np.quantile(x, 0.25) for x in one_hop_smapes]
+    # two_hop_smapes = [np.quantile(x, 0.25) for x in two_hop_smapes]
+
+    xs = [0, 0.4, 0.6, 0.8]
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = plt.subplot(1, 1, 1)
+    ax.errorbar(xs, one_hop_means, marker='o')
+    ax.errorbar(xs, two_hop_smapes, marker='x')
+
+    ax.set_ylabel('Median SMAPE')
+    ax.set_xlabel('% missing edges')
+    ax.legend(['One Hop', 'Two Hops'])
+    ax.set_title('Effect of node aggregation on missing edges')
+
+    fig.tight_layout()
+    plt.show()
+    fig.savefig('figures/partial_edges.png')
+
+
 def main():
     os.makedirs('figures', exist_ok=True)
-    make_boxplots()
-    make_partial_info_plots()
+    # make_boxplots()
+    # make_partial_info_plots()
+    make_partial_edge_plots()
 
 
 if __name__ == '__main__':
