@@ -40,8 +40,10 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
                  peak: bool = False,
                  diff_type: str = 'yesterday',
                  missing_p: float = 0.0,
+                 missing_edge_p: float = 0.0,
                  optimize_non_missing: bool = False,
                  max_neighbors: int = 20,
+                 n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
@@ -50,9 +52,11 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
         self.peak = peak
         self.diff_type = diff_type
         self.max_neighbors = max_neighbors
+        self.n_hops = n_hops
 
         self.n_days = 7
         self.missing_p = missing_p
+        self.missing_edge_p = missing_edge_p
         self.optimize_non_missing = optimize_non_missing
         self.rs = np.random.RandomState(1234)
         initializer(self)
@@ -131,6 +135,19 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
                 non_missing_idx = non_missing_idx[2:]
                 self.non_missing[k] = non_missing_idx
             self.series[k] = p.new_tensor(v_array)
+
+        # Delete edges
+        if self.missing_edge_p > 0:
+            for day, snapshot in self.snapshots.items():
+                for key, neighbours in snapshot.items():
+                    neigh_array = np.asarray(neighbours)
+                    n_neighbours = len(neighbours)
+                    n_deletions = int(n_neighbours * self.missing_edge_p)
+                    indices = self.rs.choice(np.arange(n_neighbours),
+                                             replace=False,
+                                             size=n_deletions)
+                    neigh_array = neigh_array[indices]
+                    snapshot[key] = neigh_array.tolist()
 
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
