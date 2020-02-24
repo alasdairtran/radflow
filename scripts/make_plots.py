@@ -54,12 +54,67 @@ def make_boxplots():
 
     fig.tight_layout()
     plt.show()
-    fig.savefig('smape.png')
+    fig.savefig('figures/smape.png')
+
+
+def make_partial_info_plots():
+    smape = {}
+
+    with open('expt/missing/01_no_agg_20/serialization/evaluate-metrics.json') as f:
+        smape['no_agg_20'] = json.load(f)['smape']
+
+    with open('expt/missing/02_sage_20/serialization/evaluate-metrics.json') as f:
+        smape['sage_20'] = json.load(f)['smape']
+
+    with open('expt/missing/03_no_agg_40/serialization/evaluate-metrics.json') as f:
+        smape['no_agg_40'] = json.load(f)['smape']
+
+    with open('expt/missing/04_sage_40/serialization/evaluate-metrics.json') as f:
+        smape['sage_40'] = json.load(f)['smape']
+
+    with open('expt/missing/05_no_agg_00/serialization/evaluate-metrics.json') as f:
+        smape['no_agg_00'] = json.load(f)['smape']
+
+    with open('expt/missing/06_sage_00/serialization/evaluate-metrics.json') as f:
+        smape['sage_00'] = json.load(f)['smape']
+
+    with open('expt/missing/07_no_agg_60/serialization/evaluate-metrics.json') as f:
+        smape['no_agg_60'] = json.load(f)['smape']
+
+    with open('expt/missing/08_sage_60/serialization/evaluate-metrics.json') as f:
+        smape['sage_60'] = json.load(f)['smape']
+
+    no_agg_smapes = [smape['no_agg_00'], smape['no_agg_20'],
+                     smape['no_agg_40'], smape['no_agg_60']]
+    sage_smapes = [smape['sage_00'], smape['sage_20'],
+                   smape['sage_40'], smape['sage_60']]
+
+    no_agg_means = [np.median(x) for x in no_agg_smapes]
+    sage_means = [np.median(x) for x in sage_smapes]
+    # no_agg_means = [np.quantile(x, 0.25) for x in no_agg_smapes]
+    # sage_means = [np.quantile(x, 0.25) for x in sage_smapes]
+
+    xs = [0, 0.2, 0.4, 0.6]
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = plt.subplot(1, 1, 1)
+    ax.errorbar(xs, no_agg_means, marker='o')
+    ax.errorbar(xs, sage_means, marker='x')
+
+    ax.set_ylabel('Median SMAPE')
+    ax.set_xlabel('% missing views')
+    ax.legend(['No aggregation', 'GraphSage'])
+    ax.set_title('Effect of node aggregation on missing data')
+
+    fig.tight_layout()
+    plt.show()
+    fig.savefig('figures/partial_info.png')
 
 
 def main():
     os.makedirs('figures', exist_ok=True)
     make_boxplots()
+    make_partial_info_plots()
 
 
 if __name__ == '__main__':
