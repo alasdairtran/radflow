@@ -121,6 +121,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
 
         p = next(self.parameters())
 
+        logger.info('Initializing series')
         for k, v in self.series.items():
             v_array = np.asarray(v)
             if self.missing_p > 0:
@@ -138,7 +139,8 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
 
         # Delete edges
         if self.missing_edge_p > 0:
-            for day, snapshot in self.snapshots.items():
+            logger.info(f'Deleting random edges with p, {self.missing_edge_p}')
+            for day, snapshot in tqdm(self.snapshots.items()):
                 for key, neighbours in snapshot.items():
                     neigh_array = np.asarray(neighbours)
                     n_neighbours = len(neighbours)
@@ -148,6 +150,8 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
                                              size=n_deletions)
                     neigh_array = neigh_array[indices]
                     snapshot[key] = neigh_array.tolist()
+
+        logger.info('Done initialization')
 
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
