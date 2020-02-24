@@ -38,6 +38,8 @@ class TimeSeriesLSTMNetwork(BaseModel):
                  agg_type: str,
                  peak: bool = False,
                  diff_type: str = 'yesterday',
+                 missing_p: float = 0.0,
+                 optimize_non_missing: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
@@ -47,6 +49,9 @@ class TimeSeriesLSTMNetwork(BaseModel):
         self.diff_type = diff_type
 
         self.n_days = 7
+        self.missing_p = missing_p
+        self.optimize_non_missing = optimize_non_missing
+        self.rs = np.random.RandomState(1234)
         initializer(self)
 
         assert agg_type in ['attention', 'mean', 'sage', 'none']
@@ -94,6 +99,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
         self.register_buffer('_long', torch.LongTensor(1))
 
         self.cached_series = {}
+        self.non_missing = {}
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
@@ -102,7 +108,19 @@ class TimeSeriesLSTMNetwork(BaseModel):
         p = next(self.parameters())
 
         for k, v in self.series.items():
-            self.series[k] = p.new_tensor(v)
+            v_array = np.asarray(v)
+            if self.missing_p > 0:
+                size = v_array.size - self.n_days
+                start = 2 if self.optimize_non_missing else 1
+                indices = self.rs.choice(np.arange(start, size), replace=False,
+                                         size=int(size * self.missing_p))
+                prev_indices = indices - 1
+                v_array[indices] = v_array[prev_indices]
+                non_missing_idx = np.ones(size, dtype=bool)
+                non_missing_idx[indices] = False
+                non_missing_idx = non_missing_idx[2:]
+                self.non_missing[k] = non_missing_idx
+            self.series[k] = p.new_tensor(v_array)
 
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
@@ -325,6 +343,15 @@ class TimeSeriesLSTMNetwork(BaseModel):
         if splits[0] in ['test']:
             preds = preds[-self.n_days:]
             targets = targets[-self.n_days:]
+
+        if self.training and self.optimize_non_missing:
+            new_pred_list = []
+            new_target_list = []
+            for i, key in enumerate(keys):
+                new_pred_list.append(preds[i][self.non_missing[key]])
+                new_target_list.append(targets[i][self.non_missing[key]])
+            preds = torch.stack(new_pred_list, dim=0)
+            targets = torch.stack(new_target_list, dim=0)
 
         loss = self.mse(preds, targets)
         out_dict['loss'] = loss
