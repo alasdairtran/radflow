@@ -126,8 +126,8 @@ def make_partial_edge_plots():
     with open('expt/missing_edges/1_hop_60/serialization/evaluate-metrics.json') as f:
         smape['1_hop_40'] = json.load(f)['smape']
 
-    # with open('expt/missing/07_no_agg_60/serialization/evaluate-metrics.json') as f:
-    #     smape['2_hop_00'] = json.load(f)['smape']
+    with open('expt/missing_edges/1_hop_80/serialization/evaluate-metrics.json') as f:
+        smape['1_hop_20'] = json.load(f)['smape']
 
     with open('expt/missing_edges/2_hop_20/serialization/evaluate-metrics.json') as f:
         smape['2_hop_80'] = json.load(f)['smape']
@@ -138,17 +138,23 @@ def make_partial_edge_plots():
     with open('expt/missing_edges/2_hop_60/serialization/evaluate-metrics.json') as f:
         smape['2_hop_40'] = json.load(f)['smape']
 
-    one_hop_smapes = [smape['1_hop_00'], smape['1_hop_40'],
+    with open('expt/missing_edges/2_hop_80/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_20'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/2_hop_00/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_00'] = json.load(f)['smape']
+
+    one_hop_smapes = [smape['1_hop_00'], smape['1_hop_20'], smape['1_hop_40'],
                       smape['1_hop_60'], smape['1_hop_80']]
-    two_hop_smapes = [smape['2_hop_40'], smape['2_hop_60'],
-                      smape['2_hop_80']]
+    two_hop_smapes = [smape['2_hop_00'], smape['2_hop_20'], smape['2_hop_40'],
+                      smape['2_hop_60'], smape['2_hop_80']]
 
     one_hop_means = [np.median(x) for x in one_hop_smapes]
-    two_hop_smapes = [np.nan] + [np.median(x) for x in two_hop_smapes]
+    two_hop_smapes = [np.median(x) for x in two_hop_smapes]
     # one_hop_means = [np.quantile(x, 0.25) for x in one_hop_smapes]
     # two_hop_smapes = [np.quantile(x, 0.25) for x in two_hop_smapes]
 
-    xs = [0, 0.4, 0.6, 0.8]
+    xs = [0, 0.2, 0.4, 0.6, 0.8]
 
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
