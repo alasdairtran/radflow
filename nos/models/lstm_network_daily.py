@@ -386,6 +386,9 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
             X_full = self.conv1(feats, edge_index)
             # X_full.shape == [seq_len * n_nodes, hidden_size]
 
+            X_full = F.relu(X_full)
+            X_full = F.dropout(X_full, training=self.training)
+
             X_full = self.conv2(X_full, edge_index)
             # X_full.shape == [seq_len * n_nodes, hidden_size]
 
