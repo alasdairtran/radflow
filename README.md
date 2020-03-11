@@ -22,6 +22,9 @@ mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
 
 # Scrape all page revisions from wiki
 python scripts/get_wiki.py
+
+# Download wiki dump
+python scripts/download_wikidump.py
 ```
 
 ## Training
