@@ -5,8 +5,13 @@ Network of sequences
 ## Getting Started
 
 ```sh
-# Install package and dependencies
-python setup.py develop
+conda env create -f conda.yaml
+conda activate nos
+python -m ipykernel install --user --name nos --display-name "nos"
+cd lib/apex
+git submodule init && git submodule update .
+pip install -v --no-cache-dir --global-option="--pyprof" --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+cd ../.. && python setup.py develop
 
 # Download wiki traffic data from Kaggle. Extract the archive
 cd data/wiki && unzip wiki.zip
