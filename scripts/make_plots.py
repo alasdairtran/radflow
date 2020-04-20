@@ -131,6 +131,7 @@ def setBoxColors(bp):
 #     setp(bp['fliers'][3], color='red')
     setp(bp['medians'][1], color='red')
 
+
 def make_partial_info_boxplots():
     smape = {}
 
@@ -161,38 +162,37 @@ def make_partial_info_boxplots():
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
     bp = ax.boxplot([smape['no_agg_00'], smape['sage_00']],
-                positions = [1, 2],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[1, 2],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     bp = ax.boxplot([smape['no_agg_20'], smape['sage_20']],
-                positions = [4, 5],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[4, 5],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     bp = ax.boxplot([smape['no_agg_40'], smape['sage_40']],
-                positions = [7, 8],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[7, 8],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     bp = ax.boxplot([smape['no_agg_60'], smape['sage_60']],
-                positions = [10, 11],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[10, 11],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     ax.set_xticklabels(['0', '0.2', '0.4', '0.6'])
     ax.set_xticks([1.5, 4.5, 7.5, 10.5])
 
-    hB, = plt.plot([1,1],'b-')
-    hR, = plt.plot([1,1],'r-')
-    plt.legend((hB, hR),('No Aggregation', 'GraphSage'))
+    hB, = plt.plot([1, 1], 'b-')
+    hR, = plt.plot([1, 1], 'r-')
+    plt.legend((hB, hR), ('No Aggregation', 'GraphSage'))
     hB.set_visible(False)
     hR.set_visible(False)
-
 
     ax.set_ylabel('SMAPE')
     ax.set_xlabel('% missing views')
@@ -201,7 +201,6 @@ def make_partial_info_boxplots():
     fig.tight_layout()
     plt.show()
     fig.savefig('figures/partial_info_boxes.png')
-
 
 
 def make_partial_edge_plots():
@@ -237,12 +236,30 @@ def make_partial_edge_plots():
     with open('expt/missing_edges/2_hop_00/serialization/evaluate-metrics.json') as f:
         smape['2_hop_00'] = json.load(f)['smape']
 
+    with open('expt/missing_edges/2_hop_20_skip/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_80_skip'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/2_hop_40_skip/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_60_skip'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/2_hop_60_skip/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_40_skip'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/2_hop_80_skip/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_20_skip'] = json.load(f)['smape']
+
+    with open('expt/missing_edges/2_hop_00_skip/serialization/evaluate-metrics.json') as f:
+        smape['2_hop_00_skip'] = json.load(f)['smape']
+
     one_hop_smapes = [smape['1_hop_00'], smape['1_hop_20'], smape['1_hop_40'],
                       smape['1_hop_60'], smape['1_hop_80']]
-    two_hop_smapes = [smape['2_hop_00'], smape['2_hop_20'], smape['2_hop_40'],
-                      smape['2_hop_60'], smape['2_hop_80']]
+    both_hop_smapes = [smape['2_hop_20'], smape['2_hop_40'],
+                       smape['2_hop_60'], smape['2_hop_80']]
+    two_hop_smapes = [smape['2_hop_00_skip'], smape['2_hop_20_skip'], smape['2_hop_40_skip'],
+                      smape['2_hop_60_skip'], smape['2_hop_80_skip']]
 
     one_hop_means = [np.median(x) for x in one_hop_smapes]
+    both_hop_smapes = [7.5] + [np.median(x) for x in both_hop_smapes]
     two_hop_smapes = [np.median(x) for x in two_hop_smapes]
     # one_hop_means = [np.quantile(x, 0.25) for x in one_hop_smapes]
     # two_hop_smapes = [np.quantile(x, 0.25) for x in two_hop_smapes]
@@ -252,16 +269,18 @@ def make_partial_edge_plots():
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
     ax.errorbar(xs, one_hop_means, marker='o')
+    ax.errorbar(xs, both_hop_smapes, marker='.')
     ax.errorbar(xs, two_hop_smapes, marker='x')
 
     ax.set_ylabel('Median SMAPE')
     ax.set_xlabel('% missing edges')
-    ax.legend(['One Hop', 'Two Hops'])
+    ax.legend(['One Hop', 'Both Hops', 'Two Hops'])
     ax.set_title('Effect of node aggregation on missing edges')
 
     fig.tight_layout()
     plt.show()
     fig.savefig('figures/partial_edges.png')
+
 
 def make_partial_edge_boxplots():
     smape = {}
@@ -300,41 +319,41 @@ def make_partial_edge_boxplots():
     ax = plt.subplot(1, 1, 1)
 
     bp = ax.boxplot([smape['1_hop_00'], smape['2_hop_00']],
-                positions = [1, 2],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[1, 2],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     bp = ax.boxplot([smape['1_hop_20'], smape['2_hop_20']],
-                positions = [4, 5],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[4, 5],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     bp = ax.boxplot([smape['1_hop_40'], smape['2_hop_40']],
-                positions = [7, 8],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[7, 8],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     bp = ax.boxplot([smape['1_hop_60'], smape['2_hop_60']],
-                positions = [10, 11],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[10, 11],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     bp = ax.boxplot([smape['1_hop_80'], smape['2_hop_80']],
-                positions = [13, 14],
-               showfliers=False, meanline=True,
-               showmeans=True, widths=0.6)
+                    positions=[13, 14],
+                    showfliers=False, meanline=True,
+                    showmeans=True, widths=0.6)
     setBoxColors(bp)
 
     ax.set_xticklabels(['0', '0.2', '0.4', '0.6', '0.8'])
     ax.set_xticks([1.5, 4.5, 7.5, 10.5, 13.5])
 
-    hB, = plt.plot([1,1],'b-')
-    hR, = plt.plot([1,1],'r-')
-    plt.legend((hB, hR),('1 Hop', '2 Hops'))
+    hB, = plt.plot([1, 1], 'b-')
+    hR, = plt.plot([1, 1], 'r-')
+    plt.legend((hB, hR), ('1 Hop', '2 Hops'))
     hB.set_visible(False)
     hR.set_visible(False)
 
@@ -388,9 +407,9 @@ def main():
     # make_boxplots()
     # make_partial_info_plots()
     # make_partial_info_boxplots()
-    # make_partial_edge_plots()
+    make_partial_edge_plots()
     # make_partial_edge_boxplots()
-    make_neighbour_boxplots()
+    # make_neighbour_boxplots()
 
 
 if __name__ == '__main__':

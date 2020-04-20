@@ -43,6 +43,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
                  missing_edge_p: float = 0.0,
                  optimize_non_missing: bool = False,
                  max_neighbors: int = 20,
+                 skip_middle: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -53,6 +54,7 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
         self.diff_type = diff_type
         self.max_neighbors = max_neighbors
         self.n_hops = n_hops
+        self.skip_middle = False
 
         self.n_days = 7
         self.missing_p = missing_p
@@ -71,24 +73,24 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
         elif agg_type == 'sage':
             self.conv1 = SAGEConv(self.hidden_size, self.hidden_size)
-            if self.n_hops == 2:
+            if self.n_hops == 2 and not self.skip_middle:
                 self.conv2 = SAGEConv(self.hidden_size, self.hidden_size)
         elif agg_type == 'arma':
             self.conv1 = ARMAConv(self.hidden_size, self.hidden_size)
-            if self.n_hops == 2:
+            if self.n_hops == 2 and not self.skip_middle:
                 self.conv2 = ARMAConv(self.hidden_size, self.hidden_size)
         elif agg_type == 'sc':
             self.conv1 = SGConv(self.hidden_size, self.hidden_size)
-            if self.n_hops == 2:
+            if self.n_hops == 2 and not self.skip_middle:
                 self.conv2 = SGConv(self.hidden_size, self.hidden_size)
         elif agg_type == 'dna':
             self.conv1 = DNAConv(self.hidden_size)
-            if self.n_hops == 2:
+            if self.n_hops == 2 and not self.skip_middle:
                 self.conv2 = DNAConv(self.hidden_size)
         elif agg_type == 'hyper':
             self.conv1 = HypergraphConv(
                 self.hidden_size, self.hidden_size, use_attention=False)
-            if self.n_hops == 2:
+            if self.n_hops == 2 and not self.skip_middle:
                 self.conv2 = HypergraphConv(
                     self.hidden_size, self.hidden_size, use_attention=False)
 
@@ -359,13 +361,16 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
 
             # Number of 1-hop neighbours
             N1 = X_neighbors_i.shape[0]
+            if not self.skip_middle:
+                # We add self-loops as well to make life easier
+                source_idx = torch.arange(0, N1 + 1)
+                source_idx = source_idx.to(self._long.device)
+                # source_idx.shape == [seq_len * n_neighbors]
 
-            # We add self-loops as well to make life easier
-            source_idx = torch.arange(0, N1 + 1)
-            source_idx = source_idx.to(self._long.device)
-            # source_idx.shape == [seq_len * n_neighbors]
-
-            target_idx = self._long.new_zeros(N1 + 1)
+                target_idx = self._long.new_zeros(N1 + 1)
+            else:
+                target_idx = self._long.new_tensor([])
+                source_idx = self._long.new_tensor([])
 
             cursor = N1 + 1
             for i, len_2 in enumerate(neighbour_2_len):
@@ -389,8 +394,9 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
             X_full = F.relu(X_full)
             X_full = F.dropout(X_full, training=self.training)
 
-            X_full = self.conv2(X_full, edge_index)
-            # X_full.shape == [seq_len * n_nodes, hidden_size]
+            if not self.skip_middle:
+                X_full = self.conv2(X_full, edge_index)
+                # X_full.shape == [seq_len * n_nodes, hidden_size]
 
             X_full = X_full.reshape(S, N, H).transpose(0, 1)
             # X_full.shape == [n_nodes, seq_len, hidden_size]
