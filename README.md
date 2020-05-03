@@ -12,6 +12,11 @@ cd lib/apex
 git submodule init && git submodule update .
 pip install -v --no-cache-dir --global-option="--pyprof" --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 cd ../.. && python setup.py develop
+pip install torch-scatter==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
+pip install torch-sparse==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
+pip install torch-cluster==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
+pip install torch-spline-conv==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
+pip install torch-geometric
 
 # Download wiki traffic data from Kaggle. Extract the archive
 cd data/wiki && unzip wiki.zip
@@ -30,6 +35,13 @@ python scripts/get_wiki.py
 
 # Download wiki dump
 python scripts/download_wikidump.py
+
+# With wiki dump, we get 668 files. Each file has on average 290M lines.
+# If we use a single thread (no parallelization), it takes between 3-7 hours
+# to go through each file. I've gone through 16 files and go 6800 articles.
+python scripts/extract_graph.py --start 0 --end 270
+python scripts/extract_graph.py --host dijkstra --start 270 --end 540
+python scripts/extract_graph.py --host dijkstra --start 540 --end 668 --n_jobs 18
 ```
 
 ## Training
