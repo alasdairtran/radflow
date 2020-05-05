@@ -1,3 +1,4 @@
+import ast
 import html
 import json
 import os
@@ -201,19 +202,70 @@ def construct_graph(id2title, title2id, f_edges):
     # nx.write_gpickle(G, graph_path, pickle.HIGHEST_PROTOCOL)
 
 
+START = datetime(2011, 12, 1)
+
+
+def compress_dates(pairs):
+    new_pairs = []
+    if isinstance(pairs[0], str):
+        pairs = [pairs]
+
+    for pair in pairs:
+        # Number of days since 2011-12-01
+        start, end = pair
+        start = datetime.strptime(start[:10], '%Y-%m-%d')
+        end = datetime.strptime(end[:10], '%Y-%m-%d')
+
+        start = (start - START).days
+        end = (end - START).days
+
+        if end < 0:
+            continue
+        elif start < 0:
+            start = 0
+
+        end = min(end, 3400)
+
+        new_pairs.append((start, end))
+
+    return new_pairs
+
+
+def compress_edges(fin, fout):
+    for line in tqdm(fin):
+        parts = line.split()
+        from_id = parts[0]
+        to_id = parts[1]
+        ts = ast.literal_eval(' '.join(parts[2:]))['ts']
+
+        attr = {
+            'ts': compress_dates(ts)
+        }
+
+        if not attr['ts']:
+            continue
+
+        fout.write(f'{from_id} {to_id} {str(attr)}\n')
+
+
 def main():
     os.makedirs('data/wiki', exist_ok=True)
     index_path = os.path.join('data/wiki', 'title_index.pkl')
     if not os.path.exists(index_path):
         extract_edges(index_path)
 
-    with open(index_path, 'rb') as f:
-        title2id, id2title = pickle.load(f)
-
     edge_path = os.path.join('data/wiki', 'edges.txt')
     if not os.path.exists(edge_path):
+        with open(index_path, 'rb') as f:
+            title2id, id2title = pickle.load(f)
         with open(edge_path, 'a') as f_edges:
             construct_graph(id2title, title2id, f_edges)
+
+    compressed_edge_path = os.path.join('data/wiki', 'edges_int.txt')
+    if not os.path.exists(compressed_edge_path):
+        with open(edge_path) as fin:
+            with open(compressed_edge_path, 'a') as fout:
+                compress_edges(fin, fout)
 
 
 if __name__ == '__main__':
