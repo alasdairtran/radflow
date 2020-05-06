@@ -1,8 +1,8 @@
 #!/bin/bash
-#PBS -l ncpus=2
+#PBS -l ncpus=4
 #PBS -l walltime=48:00:00
-#PBS -l mem=8GB
-#PBS -l jobfs=10MB
+#PBS -l mem=16GB
+#PBS -l jobfs=20MB
 #PBS -P v89
 #PBS -q normal
 #PBS -l other=gdata1
@@ -16,7 +16,7 @@
 source $HOME/.bashrc
 conda activate nos
 cd /g/data/v89/at3219/projects/nos
-DUMP=/g/data/v89/at3219/wikidump2
-OUT=/g/data/v89/at3219/projects/nos/results3
+DUMP=/g/data/v89/at3219/wikidump
+OUT=/g/data/v89/at3219/projects/nos/results
 
-python scripts/extract_graph.py -i $ORDER -d $DUMP -o $OUT
+python scripts/extract_graph.py -s $SPLIT -d $DUMP -o $OUT -n 4

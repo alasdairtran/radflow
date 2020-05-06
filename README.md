@@ -39,9 +39,7 @@ python scripts/download_wikidump.py
 # With wiki dump, we get 668 files. Each file has on average 290M lines.
 # If we use a single thread (no parallelization), it takes between 3-7 hours
 # to go through each file. I've gone through 16 files and go 6800 articles.
-python scripts/extract_graph.py --start 0 --end 270
-python scripts/extract_graph.py --host dijkstra --start 270 --end 540
-python scripts/extract_graph.py --host dijkstra --start 540 --end 668 --n_jobs 18
+python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 39 --total 336 --split 0
 ```
 
 ## Training

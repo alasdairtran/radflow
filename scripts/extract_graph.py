@@ -5,25 +5,29 @@ Usage:
 
 Options:
     -p --ptvsd PORT     Enable debug mode with ptvsd on PORT, e.g. 5678.
-    -h --host HOST      MongoDB host [default: localhost].
-    -i --order ORDER    Order.
+    -h --host HOST      MongoDB host.
+    -s --split SPLIT    Order.
     -d --dump DUMP      Dump dir.
-    -o --out OUT        Output dir.
+    -n --n-jobs INT     Number of jobs [default: 39].
+    -t --total INT      Total number of jobs.
 
 """
 import bz2
 import fileinput
+import html
 import json
 import os
+import random
 import re
 import time
 from datetime import datetime
 from glob import glob
-from multiprocessing import Manager
 
+import bs4
 import ptvsd
 import pymongo
 import pytz
+import requests
 from bs4 import BeautifulSoup
 from bz2file import BZ2File
 from docopt import docopt
@@ -51,6 +55,7 @@ def get_new_page():
         'redirect': None,
         'links': {},
         'categories': {},
+        'cats': [],
     }
 
 
@@ -64,40 +69,119 @@ def get_new_revision_page():
     }
 
 
-def process_revision(revision, page):
+def get_prefixes():
+    res = requests.get(
+        'https://meta.wikimedia.org/wiki/Template:List_of_language_names_ordered_by_code')
+    soup = bs4.BeautifulSoup(res.content, 'html.parser')
+    table = soup.find('table', class_='wikitable').find('tbody')
+    codes = set()
+    for tr in table.find_all('tr')[1:]:
+        if tr.find('td'):
+            code = tr.find('td').text.strip()
+            codes.add(code)
+
+    namespaces = set(['User', 'User talk', 'File', 'File talk',
+                      'MediaWiki', 'MediaWiki talk', 'Template', 'Template talk',
+                      'Help', 'Help talk', 'Draft', 'Draft talk',
+                      'TimedText', 'TimedText talk', 'Module', 'Module talk',
+                      'Image', 'Image talk', 'Talk', 'Media', 'Special',
+                      'Wiktionary', 'Wiktionary talk', 'Category talk',
+                      'Wikipedia', 'WP', 'Wikipedia talk', 'Portal talk'])
+
+    lower_namespaces = set([n.lower() for n in namespaces])
+
+    prefixes = codes | namespaces | lower_namespaces
+    prefixes = set([p + ':' for p in prefixes])
+
+    return prefixes
+
+
+def clean_up_page(page):
+    # Remove any links that are present for less than 12 hours.
+    delete_keys = set()
+    for k, v in page['links'].items():
+        for i in reversed(range(len(v['t']))):
+            ts = v['t'][i]
+            if 'e' not in ts:
+                continue
+            start = ts['s']
+            end = ts['e']
+            diff = end - start if end > start else start - end
+            if diff.days == 0 and diff.seconds < 43200:  # 12 hours
+                del v['t'][i]
+
+        if not v['t']:
+            delete_keys.add(k)
+
+    for k in delete_keys:
+        del page['links'][k]
+
+    # Remove any categories that are present for less than 12 hours.
+    delete_cats = set()
+    for k, v in page['categories'].items():
+        for i in reversed(range(len(v['t']))):
+            ts = v['t'][i]
+            if 'e' not in ts:
+                page['cats'].append(k)
+                continue
+            start = ts['s']
+            end = ts['e']
+            diff = end - start if end > start else start - end
+            if diff.days == 0 and diff.seconds < 43200:  # 12 hours
+                del v['t'][i]
+
+        if not v['t']:
+            delete_cats.add(k)
+
+    for k in delete_cats:
+        del page['categories'][k]
+
+    page['cats'] = sorted(page['cats'])
+
+
+def process_revision(revision, page, prefixes):
     # We store only the links to save on memory
     # Each line automatically ends with \n so so need to separate out the lines
     content = ''.join(revision['text'])
     matches = re.findall(r'\[\[(.+?)\]\]', content)
-    links = page['links']
     current_links = set()
     for i, match in enumerate(matches):
-        link = match.split('|')[0]
+        link = html.unescape(match.split('|')[0])
+
+        # See https://en.wikipedia.org/wiki/Help:Colon_trick
+        if link.startswith(':'):
+            link = link[1:]
+
+        has_prefix = False
+        for prefix in prefixes:
+            if link.startswith(prefix):
+                has_prefix = True
+                break
+        if has_prefix:
+            continue
 
         # First time seeing the link
-        if link not in links:
-            links[link] = [{
-                'link': link,
-                'start': revision['timestamp'],
-                'order': i}
-            ]
+        if link not in page['links']:
+            page['links'][link] = {
+                'n': link,
+                't': [{'i': i, 's': revision['timestamp']}],
+            }
 
         # If the link already exists and but has been cut off, then start a
         # new connection
-        elif 'end' in links[link][-1]:
+        elif 'e' in page['links'][link]['t'][-1]:
             # Avoid noise such as vandalism
-            now = datetime.strptime(
-                revision['timestamp'], '%Y-%m-%dT%H:%M:%S%z')
-            prev = datetime.strptime(
-                links[link][-1]['end'], '%Y-%m-%dT%H:%M:%S%z')
+            now = revision['timestamp']
+            prev = page['links'][link]['t'][-1]['e']
 
-            if (now - prev).days == 0:
-                del links[link][-1]['end']
+            # Very rarely, the next start time might be a few milliseconds
+            # behind the previous end time!
+            if (now - prev).days == 0 or (prev - now).days == 0:
+                del page['links'][link]['t'][-1]['e']
             else:
-                links[link].append({
-                    'link': link,
-                    'start': revision['timestamp'],
-                    'order': i,
+                page['links'][link]['t'].append({
+                    'i': i,
+                    's': revision['timestamp'],
                 })
 
         # Else the link already exists but no end date yet. No need to do
@@ -105,42 +189,42 @@ def process_revision(revision, page):
         current_links.add(link)
 
     # Now check if any edges have been removed
-    for k, v in links.items():
-        if k not in current_links and 'end' not in v[-1]:
-            v[-1]['end'] = revision['timestamp']
+    for k, v in page['links'].items():
+        if k not in current_links and 'e' not in v['t'][-1]:
+            v['t'][-1]['e'] = revision['timestamp']
 
     # We now do the same thing with categories
     categories = page['categories']
     for cat in revision['categories']:
         # First time seeing the category
         if cat not in categories:
-            categories[cat] = [{'cat': cat, 'start': revision['timestamp']}]
+            categories[cat] = {
+                'cat': cat,
+                't': [{'s': revision['timestamp']}],
+            }
 
         # If the category already exists and but has been cut off, then start a
         # new connection
-        elif 'end' in categories[cat][-1]:
+        elif 'e' in categories[cat]['t'][-1]:
             # Avoid noise such as vandalism
-            now = datetime.strptime(
-                revision['timestamp'], '%Y-%m-%dT%H:%M:%S%z')
-            prev = datetime.strptime(
-                categories[cat][-1]['end'], '%Y-%m-%dT%H:%M:%S%z')
+            now = revision['timestamp']
+            prev = categories[cat]['t'][-1]['e']
 
-            if (now - prev).days == 0:
-                del categories[cat][-1]['end']
+            if (now - prev).days == 0 or (prev - now).days == 0:
+                del categories[cat]['t'][-1]['e']
             else:
-                categories[cat].append({
-                    'cat': cat, 'start': revision['timestamp']})
+                categories[cat]['t'].append({'s': revision['timestamp']})
 
         # Else the category already exists but no end date yet. No need to do
         # anything.
 
     # Now check if any edges have been removed
     for k, v in categories.items():
-        if k not in revision['categories'] and 'end' not in v[-1]:
-            v[-1]['end'] = revision['timestamp']
+        if k not in revision['categories'] and 'e' not in v['t'][-1]:
+            v['t'][-1]['e'] = revision['timestamp']
 
 
-def pages_from(f):
+def pages_from(f, db, prefixes):
     """
     Scans input extracting pages.
     :return: (id, revid, title, namespace key, page), page is a list of lines.
@@ -155,20 +239,29 @@ def pages_from(f):
     ignore_page = False
 
     for line in f:
+        # Quick short circuit. I had a bottleneck before, which could come
+        # either from the tag regex search, or the conversion from bytes to str
+        # I wasted so many days of compute time on this. Should've done some
+        # profiling right from the beginning :-/
+        # Each dump file should only take 1 hour on average to go through on one CPU.
+        # Even the largest dump file only takes 5h, the second largest 2h.
+        if not isinstance(line, str) and b'<' not in line and ignore_page:
+            continue
+
         # Convert bytes to str if neccessary
-        if not isinstance(line, str):
-            line = line.decode('utf-8')
+        line = line.decode('utf-8')
 
         # If a tag is definitely not in this line
         # faster than doing re.search()
-        if '<' not in line and not ignore_page:
+        if '<' not in line:
             if in_text:
                 rev_page['text'].append(line)
                 # extract categories
                 if line.lstrip().startswith('[[Category:'):
                     mCat = catRE.search(line)
                     if mCat:
-                        rev_page['categories'].add(mCat.group(1))
+                        rev_page['categories'].add(
+                            html.unescape(mCat.group(1)))
             continue
 
         # If we're here, the line potentially contains a tag
@@ -201,6 +294,7 @@ def pages_from(f):
 
         elif tag == '/page':
             if page['_id'] is not None and not ignore_page:
+                clean_up_page(page)
                 yield page
 
             page = get_new_page()
@@ -219,7 +313,7 @@ def pages_from(f):
 
         # End of a revision
         elif tag == '/revision':
-            process_revision(rev_page, page)
+            process_revision(rev_page, page, prefixes)
 
             rev_page = get_new_revision_page()
             in_rev = False
@@ -227,24 +321,24 @@ def pages_from(f):
         elif in_page and not in_rev:
             if tag == 'id' and not page['_id']:
                 page['_id'] = int(m.group(3))
-
                 # Check if we've already processed this page
-                # result = db.pages.find_one(
-                #     {'_id': page['_id']}, projection=['_id'])
-                # if result is not None:
-                #     ignore_page = True
+                result = db.pages.find_one(
+                    {'_id': page['_id']}, projection=['_id'])
+                if result is not None:
+                    ignore_page = True
 
             elif tag == 'title' and not page['title']:
-                page['title'] = m.group(3)
+                page['title'] = html.unescape(m.group(3))
 
             elif tag == 'ns' and not page['ns']:
                 page['ns'] = m.group(3)
-                if page['ns'] != '0':
+                # 0 is Main, 14 is Category, 100 is Portal
+                if page['ns'] not in ['0', '14', '100']:
                     ignore_page = True
 
             elif tag == 'redirect':
                 soup = BeautifulSoup(line, 'html.parser')
-                page['redirect'] = soup.redirect['title']
+                page['redirect'] = html.unescape(soup.redirect['title'])
 
         elif in_page and in_rev:
             # There could also be id inside contributor tag
@@ -255,9 +349,8 @@ def pages_from(f):
                 rev_page['parent_id'] = int(m.group(3))
 
             elif tag == 'timestamp' and not rev_page['timestamp']:
-                rev_page['timestamp'] = m.group(3)
-                # rev_page['timestamp'] = datetime.strptime(
-                #     m.group(3), '%Y-%m-%dT%H:%M:%S%z')
+                rev_page['timestamp'] = datetime.strptime(
+                    m.group(3), '%Y-%m-%dT%H:%M:%S%z')
 
             elif tag == 'text':
                 # self closing
@@ -281,90 +374,90 @@ def pages_from(f):
             # Ignore all other tags, e.g. <contributor>, <comment>, <format>, <sha1>
 
 
-def process_path(path, result_dir):
-    # client = MongoClient(host=host, port=27017)
-    # db = client.wiki
+def convert_to_datetime_str(page):
+    for key in ['links', 'categories']:
+        for obj in page[key]:
+            for ts in obj['t']:
+                ts['s'] = ts['s'].strftime('%Y-%m-%dT%H:%M:%S%z')
+                if 'e' in ts:
+                    ts['e'] = ts['e'].strftime('%Y-%m-%dT%H:%M:%S%z')
+
+
+def process_path(path, host, prefixes):
+    time.sleep(random.uniform(1, 5))
+    client = MongoClient(host=host, port=27017)
+    db = client.wiki
+
     filename = os.path.basename(path)
-    print(f'Reading {filename}')
 
-    # file = fileinput.FileInput(path, openhook=fileinput.hook_compressed)
-    # result = db.archives.find_one({'_id': filename}, projection=['_id'])
-    # if result is not None:
-    #     return
+    result = db.archives.find_one({'_id': filename}, projection=['_id'])
+    if result is not None:
+        return
 
-    # with open(path, 'rb') as f:
-    #     data = f.read()
-
-    # logger.info('Decompressing...', end=' ')
-    # s = time.time()
-    # data = bz2.decompress(data)
-    # e = time.time() - s
-    # logger.info(f'{e/60:.1} minutes')
     start_time = time.time()
-    result_path = f'{result_dir}/{filename}.jsonl'
-    if os.path.exists(result_path):
-        os.remove(result_path)
-    assert not os.path.exists(result_path)
-
     with BZ2File(path) as fin:
-        with open(result_path, 'a') as fout:
-            for page in pages_from(fin):
-                # Reshape data because keys in mongo can't contain special chars
+        for i, page in enumerate(pages_from(fin, db, prefixes)):
+            # Reshape data because keys in mongo can't contain special chars
+            page['links'] = [v for k, v in page['links'].items()]
+            page['categories'] = [v for k, v in page['categories'].items()]
 
-                page['links'] = [v for k, v in page['links'].items()]
-                page['categories'] = [v for k, v in page['categories'].items()]
+            # Insert page into database. We've already checked that it's not
+            # in the database before.
+            try:
+                db.pages.insert_one(page)
+            except pymongo.errors.DocumentTooLarge:
+                convert_to_datetime_str(page)
+                with open('extract_graph.err', 'a') as fout:
+                    fout.write(f'{json.dumps(page)}\n')
 
-                # Insert page into database. We've already checked that it's not
-                # in the database before.
-                # db.pages.insert_one(page)
-
-                fout.write(f'{json.dumps(page)}\n')
-
-    # db.archives.insert_one({
-    #     '_id': filename,
-    #     'elapsed': time.time() - start_time,
-    #     'finished': datetime.now(pytz.utc),
-    # })
-
-    with open(f'{result_dir}/archives.jsonl', 'a') as f:
-        out = {
-            '_id': filename,
-            'elapsed': time.time() - start_time,
-            'finished': str(datetime.now(pytz.utc)),
-        }
-        f.write(f'{json.dumps(out)}\n')
-
-    # client.close()
+    db.archives.insert_one({
+        '_id': filename,
+        'elapsed': (time.time() - start_time) / 3600,
+        'finished': datetime.now(pytz.utc),
+        'size': os.stat(path).st_size / 1000000000,
+        'n_articles': i,
+    })
+    client.close()
 
 
-def extract_wiki_graph(host, order, dump_dir, result_dir):
-    # client = MongoClient(host=host, port=27017)
-    # db = client.wiki
+def extract_wiki_graph(host, split, n_jobs, total, dump_dir):
+    client = MongoClient(host=host, port=27017)
+    db = client.wiki
 
-    # Only need to do this once. It's safe to run this multiple times. Mongo
-    # will simply ignore the command if the index already exists. Index name is
-    # ....
-    # db.pages.create_index([
-    #     ('cats', pymongo.ASCENDING),
-    #     ('title', pymongo.ASCENDING),
-    # ])
+    # Only need to do this once. It's safe to run this multiple times.
+    # Mongo will simply ignore the command if the index already exists.
+    # Index name is ....
+    db.pages.create_index([
+        ('ns', pymongo.ASCENDING),
+    ])
 
-    # db.revisions.create_index([
-    #     ('timestamp', pymongo.DESCENDING),
-    # ])
-    # client.close()
+    db.pages.create_index([
+        ('cats', pymongo.ASCENDING),
+    ])
+
+    db.pages.create_index([
+        ('title', pymongo.ASCENDING),
+    ])
+
+    client.close()
 
     paths = glob(f'{dump_dir}/*.bz2')
-    paths.sort(key=os.path.getmtime)
+    paths.sort()
+    # Shuffling ensures equal distribution among machines. In turns out that
+    # if we sort the dumps, the first half takes 37h, while the second half
+    # takes 22h using 39 cores.
+    random.Random(2318).shuffle(paths)
 
-    start = order * 2
-    end = start + 2
+    if split is not None:
+        start = split * total
+        end = start + total
+        paths = paths[start:end]
 
-    paths = paths[start:end]
+    prefixes = get_prefixes()
 
-    with Parallel(n_jobs=2, backend='loky') as parallel:
-        parallel(delayed(process_path)(path, result_dir)
-                 for i, path in enumerate(paths))
+    with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
+        parallel(delayed(process_path)(path, host, prefixes.copy())
+                 for i, path in tqdm(enumerate(paths)))
 
 
 def validate(args):
@@ -373,10 +466,11 @@ def validate(args):
             for k, v in args.items()}
     schema = Schema({
         'ptvsd': Or(None, And(Use(int), lambda port: 1 <= port <= 65535)),
-        'host': str,
-        'order': Use(int),
         'dump': os.path.exists,
-        'out': os.path.exists,
+        'host': Or(None, str),
+        'split': Or(None, Use(int)),
+        'n_jobs': Use(int),
+        'total': Or(None, Use(int)),
     })
     args = schema.validate(args)
     return args
@@ -391,8 +485,8 @@ def main():
         ptvsd.enable_attach(address)
         ptvsd.wait_for_attach()
 
-    extract_wiki_graph(args['host'], args['order'],
-                       args['dump'], args['out'])
+    extract_wiki_graph(args['host'], args['split'],
+                       args['n_jobs'], args['total'], args['dump'])
 
 
 if __name__ == '__main__':
