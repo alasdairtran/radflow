@@ -6,7 +6,7 @@ Usage:
 Options:
     -p --ptvsd PORT     Enable debug mode with ptvsd on PORT, e.g. 5678.
     -h --host HOST      MongoDB host.
-    -n --n-jobs INT     Number of jobs [default: 36].
+    -n --n-jobs INT     Number of jobs [default: 24].
     -t --traffic PATH   Path to traffic [default: data/wiki/traffic].
 
 """
@@ -36,6 +36,7 @@ from pymongo import MongoClient
 from schema import And, Or, Schema, Use
 from tqdm import tqdm
 
+import redis
 import tiledb
 from nos.utils import setup_logger
 
@@ -44,8 +45,10 @@ logger = setup_logger()
 PATTERN = re.compile(r'[0-9]+')
 
 
-def extract_line(fin, db, traffic_path, path, n_days, is_bz2):
+def extract_line(fin, traffic_path, path, n_days, is_bz2):
     page_views = np.full((17035758, n_days), -1, dtype=np.int32)
+
+    r = redis.Redis(host='localhost', port=6379, db=0)
 
     for line in fin:
         # All English wikipedia articles start with en.z
@@ -63,8 +66,9 @@ def extract_line(fin, db, traffic_path, path, n_days, is_bz2):
         _, o_title, _, hourly_counts = line.strip().split(' ')
         title = html.unescape(o_title)
         title = title.replace('_', ' ')
-        p = db.pages.find_one({'title': title}, projection=['i'])
-        if not p:
+        # p = db.pages.find_one({'title': title}, projection=['i'])
+        i = r.get(title)
+        if i is None:
             continue
 
         # query = {'p': p['_id'], 'y': year, 'm': month}
@@ -86,7 +90,7 @@ def extract_line(fin, db, traffic_path, path, n_days, is_bz2):
             views[day] = sum([int(n) for n in numbers])
 
         # views = np.array(views, dtype=np.uint32)
-        page_views[p['i']] = views
+        page_views[int(i)] = views
         # db.monthlyTraffic.insert_one({
         #     'p': p['_id'],
         #     'y': year,
@@ -97,28 +101,37 @@ def extract_line(fin, db, traffic_path, path, n_days, is_bz2):
     return page_views
 
 
-# def get_id_maps(db, index_path):
-#     id2title = {}
-#     title2id = {}
-#     logger.info('Building title-id index map')
+def get_id_maps(db, index_path):
+    # Simple looping through mongo takes 2.5m. Also adding it to redis takes
+    # another 25m.
+    id2title = {}
+    title2id = {}
+    logger.info('Building title-id index map')
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    r.flushall()
 
-#     for p in tqdm(db.pages.find({}, projection=['i', 'title'])):
-#         title = p['title']
-#         title2id[title] = p['_id']
-#         id2title[p['_id']] = title
+    with open(index_path, 'a') as f:
+        for p in tqdm(db.pages.find({}, projection=['i', 'title'])):
+            title = p['title']
+            title2id[title] = p['i']
+            id2title[p['i']] = title
+            i = p['i']
+            r.mset({title: i})
+            title = title.replace("\\", "\\\\").replace('"', '\\"')
+            f.write(f'SET "{title}" {i}\n')
 
-#     # Statistics: 1,7035,758 unique titles/IDs.
-#     logger.info(f"Number of IDs: {len(id2title)}")
-#     logger.info(f"Number of Titles: {len(title2id)}")
-#     with open(index_path, 'wb') as f:
-#         pickle.dump([title2id, id2title], f)
+    # Statistics: 1,7035,758 unique titles/IDs.
+    logger.info(f"Number of IDs: {len(id2title)}")
+    logger.info(f"Number of Titles: {len(title2id)}")
+    # with open(index_path, 'wb') as f:
+    #     pickle.dump([title2id, id2title], f)
 
 
 def get_traffic(path, host, traffic_path, i):
     time.sleep(random.uniform(1, 5))
 
-    client = MongoClient(host=host, port=27017)
-    db = client.wiki
+    # client = MongoClient(host=host, port=27017)
+    # db = client.wiki
 
     filename = os.path.basename(path)
     parts = filename.split('.')[0].split('-')
@@ -135,16 +148,18 @@ def get_traffic(path, host, traffic_path, i):
     if path.endswith('.bz2'):
         with BZ2File(path) as fin:
             page_views = extract_line(
-                fin, db, traffic_path, path, n_days, True)
+                fin, traffic_path, path, n_days, True)
     else:
         with open(path) as fin:
             page_views = extract_line(
-                fin, db, traffic_path, path, n_days, False)
+                fin, traffic_path, path, n_days, False)
 
+    batch = 100000
     with tiledb.DenseArray(traffic_path, mode='w') as A:
-        A[:, start:end] = page_views
+        for i in range(0, 17035758, batch):
+            A[i:i+batch, start:end] = page_views[i:i+batch]
 
-    client.close()
+    # client.close()
 
 
 def create_traffic_tile(traffic_path):
@@ -158,7 +173,7 @@ def create_traffic_tile(traffic_path):
     logger.info(f'No of days: {(end - start).days + 1}')  # 2984
 
     dom = tiledb.Domain(tiledb.Dim(name='i', domain=(0, 17035757), tile=1, dtype=np.uint32),
-                        tiledb.Dim(name="t", domain=(0, 2983), tile=2984, dtype=np.uint32))
+                        tiledb.Dim(name="t", domain=(0, 2983), tile=366, dtype=np.uint32))
 
     # The array will be dense with a single attribute "v" so each (i,j) cell can store an integer.
     schema = tiledb.ArraySchema(domain=dom, sparse=False,
@@ -173,19 +188,25 @@ def get_all_traffic(host, n_jobs, traffic_path):
     paths = glob('/data4/u4921817/nos/data/pagecounts/pagecounts-2019*')
     paths.sort()
 
-    # client = MongoClient(host=host, port=27017)
-    # db = client.wiki
+    client = MongoClient(host=host, port=27017)
+    db = client.wiki
     # db.monthlyTraffic.create_index([
     #     ('p', pymongo.ASCENDING),
     #     ('y', pymongo.ASCENDING),
     #     ('m', pymongo.ASCENDING),
     # ], unique=True)
 
-    # index_path = os.path.join('data/wiki', 'graph_ids.pkl')
-    # if not os.path.exists(index_path):
-    #     get_id_maps(db, index_path)
+    index_path = os.path.join('data/wiki', 'graph_ids.txt')
+    if not os.path.exists(index_path):
+        get_id_maps(db, index_path)
+    # To mass insert this into redis later
+    # cat data/wiki/graph_ids.txt | redis-cli --pipe
 
-    # client.close()
+    client.close()
+
+    # logger.info('Loading cached index')
+    # with open(index_path, 'rb') as f:
+    #     title2id, _ = pickle.load(f)
 
     create_traffic_tile(traffic_path)
 

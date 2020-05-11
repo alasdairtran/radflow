@@ -17,6 +17,8 @@ dependencies:
   - pytorch=1.4.0
   - python=3.7.4
   - pyyaml=5.1.2
+  - redis=5.0.3
+  - redis-py=3.5.0
   - tiledb-py
   - torchvision=0.5.0
   - pip:
