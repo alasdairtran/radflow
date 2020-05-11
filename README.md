@@ -40,6 +40,8 @@ python scripts/download_wikidump.py
 # If we use a single thread (no parallelization), it takes between 3-7 hours
 # to go through each file. I've gone through 16 files and go 6800 articles.
 python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 39 --total 336 --split 0
+python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host localhost --n-jobs 39 --total 336 --split 1
+python scripts/extract_graph.py --reindex
 ```
 
 ## Training

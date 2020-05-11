@@ -10,6 +10,7 @@ Options:
     -d --dump DUMP      Dump dir.
     -n --n-jobs INT     Number of jobs [default: 39].
     -t --total INT      Total number of jobs.
+    --reindex           Reindex the page ID.
 
 """
 import bz2
@@ -420,6 +421,20 @@ def process_path(path, host, prefixes):
     client.close()
 
 
+def reindex(host):
+    client = MongoClient(host=host, port=27017)
+    db = client.wiki
+    db.pages.create_index([
+        ('i', pymongo.ASCENDING),
+    ])
+
+    count = 0
+    logger.info('Reindexing page IDs')
+    for p in tqdm(db.pages.find({}, projection=['_id']).sort('_id', pymongo.ASCENDING)):
+        db.pages.update_one({'_id': p['_id']}, {'$set': {'i': count}})
+        count += 1
+
+
 def extract_wiki_graph(host, split, n_jobs, total, dump_dir):
     client = MongoClient(host=host, port=27017)
     db = client.wiki
@@ -466,11 +481,12 @@ def validate(args):
             for k, v in args.items()}
     schema = Schema({
         'ptvsd': Or(None, And(Use(int), lambda port: 1 <= port <= 65535)),
-        'dump': os.path.exists,
+        'dump': Or(None, os.path.exists),
         'host': Or(None, str),
         'split': Or(None, Use(int)),
         'n_jobs': Use(int),
         'total': Or(None, Use(int)),
+        'reindex': bool,
     })
     args = schema.validate(args)
     return args
@@ -485,8 +501,12 @@ def main():
         ptvsd.enable_attach(address)
         ptvsd.wait_for_attach()
 
-    extract_wiki_graph(args['host'], args['split'],
-                       args['n_jobs'], args['total'], args['dump'])
+    if args['dump']:
+        extract_wiki_graph(args['host'], args['split'],
+                           args['n_jobs'], args['total'], args['dump'])
+
+    if args['reindex']:
+        reindex(args['host'])
 
 
 if __name__ == '__main__':
