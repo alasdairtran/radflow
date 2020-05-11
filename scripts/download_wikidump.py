@@ -55,7 +55,7 @@ def download_pagecounts():
     data_dir = '/data4/u4921817/nos/data/pagecounts'
     os.makedirs(data_dir, exist_ok=True)
 
-    while t <= end:
+    while t < end:
         if t.year == 2016 and t.month in [7, 8, 9]:
             url = f'https://dumps.wikimedia.org/other/pagecounts-ez/merged/pagecounts-{t.year}-{t.month:02}.bz2'
         else:

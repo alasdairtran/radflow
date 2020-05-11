@@ -18,6 +18,7 @@ import fileinput
 import html
 import json
 import os
+import pickle
 import random
 import re
 import time
@@ -421,12 +422,108 @@ def process_path(path, host, prefixes):
     client.close()
 
 
+def resolve_ambiguity(db, title, id1, id2, title2id, id2title):
+    url1 = f'https://en.wikipedia.org/w/api.php?action=query&prop=info&pageids={id1}&inprop=url&format=json'
+    url2 = f'https://en.wikipedia.org/w/api.php?action=query&prop=info&pageids={id2}&inprop=url&format=json'
+    res1 = requests.get(url1).json()['query']['pages'][str(id1)]
+    res2 = requests.get(url2).json()['query']['pages'][str(id2)]
+
+    if 'missing' in res1:
+        title2 = res2['title']
+        logger.info(f"Title: {title} -> {title2}, remove {id1}, keep {id2}")
+        db.pages.delete_one({'_id': id1})
+        db.pages.update_one({'_id': id2}, {'$set': {'title': title2}})
+        del id2title[id1]
+        del title2id[title]
+        title2id[title2] = id2
+        id2title[id2] = title2
+
+    elif 'missing' in res2:
+        title1 = res1['title']
+        logger.info(f"Title: {title} -> {title1}, remove {id2}, keep {id1}")
+        db.pages.delete_one({'_id': id2})
+        db.pages.update_one({'_id': id1}, {'$set': {'title': title1}})
+        del title2id[title]
+        title2id[title1] = id1
+        id2title[id1] = title1
+
+    else:
+        title1 = res1['title']
+        title2 = res2['title']
+
+        logger.info(f"Title: {title} -> {title1}, keep {id1}")
+        logger.info(f"Title: {title} -> {title2}, keep {id2}")
+
+        assert title1 != title2 and title in [title1, title2]
+
+        db.pages.update_one({'_id': id1}, {'$set': {'title': title1}})
+        db.pages.update_one({'_id': id2}, {'$set': {'title': title2}})
+
+        title2id[title1] = id1
+        title2id[title2] = id2
+
+        id2title[id1] = title1
+        id2title[id2] = title2
+
+def fix_duplicates(db, index_path):
+    id2title = {}
+    title2id = {}
+
+    # Note that these articles have the same title but different page IDs
+    # Title: Anjan Chowdhury -> Anjan Chowdhury, remove 21606610, keep 62911656
+    # Title: You Si-kun -> Yu Shyi-kun, keep 349072
+    # Title: You Si-kun -> You Si-kun, keep 62998113
+    # Title: James Coyne -> James Elliott Coyne, keep 520170
+    # Title: James Coyne -> James Coyne, keep 62999621
+    # Title: Amanieu VI -> Amanieu V d'Albret, keep 10037159
+    # Title: Amanieu VI -> Amanieu VI, keep 63000573
+    # Title: Amanieu VIII -> Amanieu VII d'Albret, keep 10037418
+    # Title: Amanieu VIII -> Amanieu VIII, keep 63000585
+    # Title: Bernard Ezi IV -> Bernard Ezi II d'Albret, keep 10038254
+    # Title: Bernard Ezi IV -> Bernard Ezi IV, keep 63000589
+    # Title: Arnaud Amanieu, Lord of Albret -> Arnaud Amanieu d'Albret, keep 10038002
+    # Title: Arnaud Amanieu, Lord of Albret -> Arnaud Amanieu, Lord of Albret, keep 63000655
+    # Title: James Elliott Coyne -> James Elliott Coyne, remove 1217332, keep 520170
+    # Title: Air New Zealand Flight 901 -> Air New Zealand Flight 901, keep 62998459
+    # Title: Air New Zealand Flight 901 -> Mount Erebus disaster, keep 1158000
+    # Title: FIVB Senior World and Continental Rankings -> FIVB Senior World and Continental Rankings, keep 63000600
+    # Title: FIVB Senior World and Continental Rankings -> FIVB Senior World Rankings, keep 1463363
+    # Title: Mount Erebus disaster -> Mount Erebus disaster, remove 2224953, keep 1158000
+    # Title: Daily Mashriq -> Daily Mashriq, remove 63000119, keep 4737576
+    # Title: Zeewijk -> Zeewijk, keep 63000552
+    # Zeewijk -> Zeewijk (1725), keep 5931503
+    # Title: XMultiply -> XMultiply, keep 62998806
+    # Title: XMultiply -> X Multiply, keep 5103829
+
+    logger.info('Building title-id index map')
+    for p in tqdm(db.pages.find({}, projection=['_id', 'title'])):
+        title = p['title']
+        if title in title2id and title2id[title] != p['_id']:
+            resolve_ambiguity(db, title, title2id[title], p['_id'],
+                              title2id, id2title)
+        else:
+            title2id[title] = p['_id']
+            assert p['_id'] not in title2id
+            id2title[p['_id']] = title
+
+    # Statistics: 1,7035,758 unique titles/IDs.
+    logger.info(f"Number of IDs: {len(id2title)}")
+    logger.info(f"Number of Titles: {len(title2id)}")
+    with open(index_path, 'wb') as f:
+        pickle.dump([title2id, id2title], f)
+
+
 def reindex(host):
+
     client = MongoClient(host=host, port=27017)
     db = client.wiki
     db.pages.create_index([
         ('i', pymongo.ASCENDING),
     ])
+
+    index_path = os.path.join('data/wiki', 'title_index.pkl')
+    if not os.path.exists(index_path):
+        fix_duplicates(db, index_path)
 
     count = 0
     logger.info('Reindexing page IDs')
