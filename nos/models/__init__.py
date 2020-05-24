@@ -9,6 +9,7 @@ from .lstm_network_pct import TimeSeriesLSTMNetworkPCT
 from .lstm_network_residual import TimeSeriesLSTMNetworkResidual
 from .lstm_network_tags import TimeSeriesLSTMNetworkTags
 from .lstm_network_weighted import TimeSeriesLSTMNetworkWeighted
+from .lstm_network_wiki import TimeSeriesLSTMNetworkWiki
 from .naive import (NaivePreviousDayModel, NaiveRollingAverageModel,
                     NaiveSeasonalDiffModel, NaiveSeasonalModel)
 from .transformer import TimeSeriesTransformer

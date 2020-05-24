@@ -1,3 +1,6 @@
+import pickle
+
+import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
 
@@ -46,6 +49,12 @@ def get_stats(G):
     avg_in_degree = sum(in_degrees) / len(in_degrees)
     print(f'Average in-degree of nodes with edges:', avg_in_degree)
 
+    out_degrees = []
+    for n, deg in G.out_degree(None, weight=None):
+        out_degrees.append(deg)
+    avg_out_degree = sum(out_degrees) / len(out_degrees)
+    print(f'Average out-degree of nodes with edges:', avg_out_degree)
+
     in_degrees = []
     for n, deg in G.in_degree(None, weight=None):
         if deg > 0:
@@ -72,8 +81,45 @@ def get_stats(G):
     avg_in_degree = sum(in_degrees) / len(in_degrees)
     print(f'Average 2-hop in-degree of nodes with incoming edges:', avg_in_degree)
 
-    e = eccentricity(G)
-    print(f'Diameter:', max(e.values()))
+    # e = eccentricity(G)
+    # print(f'Diameter:', max(e.values()))
+
+
+def plot_degree_dist(G, topic):
+    outs = sorted([d for n, d in G.out_degree()], reverse=True)
+    ins = sorted([d for n, d in G.in_degree()], reverse=True)
+
+    fig = plt.figure(figsize=(20, 6))
+
+    ax = plt.subplot(1, 2, 1)
+    ax.hist(outs, bins=100)
+    ax.set_title(f"{topic} Out-degree Histogram")
+    ax.set_ylabel("Count")
+    ax.set_xlabel("Degree")
+
+    ax = plt.subplot(1, 2, 2)
+    ax.hist(ins, bins=100)
+    ax.set_title(f"{topic} In-degree Histogram")
+    ax.set_ylabel("Count")
+    ax.set_xlabel("Degree")
+
+    fig.savefig(f'{topic}_dist.png')
+
+
+def get_subwiki_stats(topic):
+    with open(f'data/wiki/subgraphs/{topic}.cleaned.pkl', 'rb') as f:
+        _, outlinks = pickle.load(f)
+
+    G = nx.DiGraph()
+    for source, targets in outlinks.items():
+        for target in targets:
+            G.add_edge(source, target)
+
+    print(f'{topic}')
+    get_stats(G)
+    print()
+
+    plot_degree_dist(G, topic)
 
 
 def get_vevo_stats():
@@ -86,6 +132,9 @@ def get_vevo_stats():
 
 def main():
     get_vevo_stats()
+    get_subwiki_stats('Programming languages')
+    get_subwiki_stats('Star Wars')
+    get_subwiki_stats('Graph theory')
 
 
 if __name__ == '__main__':

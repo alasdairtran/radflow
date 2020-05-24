@@ -5,7 +5,8 @@ Usage:
 
 Options:
     -p --ptvsd PORT     Enable debug mode with ptvsd on PORT, e.g. 5678.
-    -h --host HOST      MongoDB host.
+    -m --mongo HOST     MongoDB host [default: localhost].
+    -r --redis HOST     Redis host [default: localhost].
     -n --n-jobs INT     Number of jobs [default: 24].
     -t --traffic PATH   Path to traffic [default: data/wiki/traffic].
 
@@ -45,10 +46,10 @@ logger = setup_logger()
 PATTERN = re.compile(r'[0-9]+')
 
 
-def extract_line(fin, traffic_path, path, n_days, is_bz2):
+def extract_line(fin, traffic_path, path, n_days, redis_host, is_bz2):
     page_views = np.full((17035758, n_days), -1, dtype=np.int32)
 
-    r = redis.Redis(host='localhost', port=6379, db=0)
+    r = redis.Redis(host=redis_host, port=6379, db=0)
 
     for line in fin:
         # All English wikipedia articles start with en.z
@@ -127,7 +128,7 @@ def get_id_maps(db, index_path):
     #     pickle.dump([title2id, id2title], f)
 
 
-def get_traffic(path, host, traffic_path, i):
+def get_traffic(path, mongo_host, redis_host, traffic_path, i):
     time.sleep(random.uniform(1, 5))
 
     # client = MongoClient(host=host, port=27017)
@@ -148,16 +149,20 @@ def get_traffic(path, host, traffic_path, i):
     if path.endswith('.bz2'):
         with BZ2File(path) as fin:
             page_views = extract_line(
-                fin, traffic_path, path, n_days, True)
+                fin, traffic_path, path, n_days, redis_host, True)
     else:
         with open(path) as fin:
             page_views = extract_line(
-                fin, traffic_path, path, n_days, False)
+                fin, traffic_path, path, n_days, redis_host, False)
 
-    batch = 100000
-    with tiledb.DenseArray(traffic_path, mode='w') as A:
-        for i in range(0, 17035758, batch):
-            A[i:i+batch, start:end] = page_views[i:i+batch]
+    os.makedirs('data/wiki/serialized_traffic', exist_ok=True)
+    out_path = f'data/wiki/serialized_traffic/{parts[1]}_{parts[2]}.npy'
+    np.save(out_path, page_views)
+
+    # batch = 100000
+    # with tiledb.DenseArray(traffic_path, mode='w') as A:
+    #     for i in range(0, 17035758, batch):
+    #         A[i:i+batch, start:end] = page_views[i:i+batch]
 
     # client.close()
 
@@ -184,11 +189,11 @@ def create_traffic_tile(traffic_path):
     tiledb.DenseArray.create(traffic_path, schema)
 
 
-def get_all_traffic(host, n_jobs, traffic_path):
+def get_all_traffic(mongo_host, redis_host, n_jobs, traffic_path):
     paths = glob('/data4/u4921817/nos/data/pagecounts/pagecounts-2019*')
     paths.sort()
 
-    client = MongoClient(host=host, port=27017)
+    client = MongoClient(host=mongo_host, port=27017)
     db = client.wiki
     # db.monthlyTraffic.create_index([
     #     ('p', pymongo.ASCENDING),
@@ -213,7 +218,7 @@ def get_all_traffic(host, n_jobs, traffic_path):
     # This takes 1.5 hours
     logger.info('Extracting traffic counts')
     with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
-        parallel(delayed(get_traffic)(path, host, traffic_path, i)
+        parallel(delayed(get_traffic)(path, mongo_host, redis_host, traffic_path, i)
                  for i, path in tqdm(enumerate(paths)))
 
 
@@ -224,7 +229,8 @@ def validate(args):
     schema = Schema({
         'ptvsd': Or(None, And(Use(int), lambda port: 1 <= port <= 65535)),
         'n_jobs': Use(int),
-        'host': Or(None, str),
+        'mongo': Or(None, str),
+        'redis': Or(None, str),
         'traffic': str,
     })
     args = schema.validate(args)
@@ -240,7 +246,8 @@ def main():
         ptvsd.enable_attach(address)
         ptvsd.wait_for_attach()
 
-    get_all_traffic(args['host'], args['n_jobs'], args['traffic'])
+    get_all_traffic(args['mongo'], args['redis'],
+                    args['n_jobs'], args['traffic'])
 
 
 if __name__ == '__main__':

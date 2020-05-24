@@ -42,6 +42,8 @@ python scripts/download_wikidump.py
 python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 39 --total 336 --split 0
 python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host localhost --n-jobs 39 --total 336 --split 1
 python scripts/extract_graph.py --reindex
+
+git clone --recurse-submodules -j8 https://github.com/RedisGraph/RedisGraph.git
 ```
 
 ## Training

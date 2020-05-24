@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict
 
+import numpy as np
 import torch
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
@@ -13,9 +14,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 @Model.register('naive_previous_day')
 class NaivePreviousDayModel(BaseModel):
-    def __init__(self,
-                 vocab: Vocabulary):
-        self.n_days = 7
+    def __init__(self, vocab: Vocabulary, n_days=7):
+        self.n_days = n_days
         super().__init__(vocab)
 
     def forward(self, series, keys) -> Dict[str, Any]:
@@ -41,19 +41,20 @@ class NaivePreviousDayModel(BaseModel):
             targets = series[:, -self.n_days:]
             # targets.shape == [batch_size, n_days]
 
-            smape, _ = get_smape(targets, preds)
+            smape, daily_smapes = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
             out_dict['smape'] = smape
+            out_dict['daily_smape'] = daily_smapes
+            out_dict['keys'] = keys
 
         return out_dict
 
 
 @Model.register('naive_seasonal')
 class NaiveSeasonalModel(BaseModel):
-    def __init__(self,
-                 vocab: Vocabulary):
-        self.n_days = 7
+    def __init__(self, vocab: Vocabulary, n_days=7):
+        self.n_days = n_days
         super().__init__(vocab)
 
     def forward(self, series, keys) -> Dict[str, Any]:
@@ -70,16 +71,21 @@ class NaiveSeasonalModel(BaseModel):
 
         if not self.training:
             # Predict the last n_days using the week before
-            preds = series[:, -self.n_days*2:-self.n_days]
-            # previous.shape == [batch_size, n_days]
+            preds = series[:, -(self.n_days+7):-self.n_days]
+            # preds.shape == [batch_size, 7]
+
+            preds = preds.repeat(1, self.n_days // 7 + 1)[:, :self.n_days]
+            # preds.shape == [batch_size, n_days]
 
             targets = series[:, -self.n_days:]
             # targets.shape == [batch_size, n_days]
 
-            smape, _ = get_smape(targets, preds)
+            smape, daily_smapes = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
             out_dict['smape'] = smape
+            out_dict['daily_smape'] = daily_smapes
+            out_dict['keys'] = keys
 
         return out_dict
 
@@ -131,9 +137,8 @@ class NaiveSeasonalDiffModel(BaseModel):
 
 @Model.register('naive_rolling_average')
 class NaiveRollingAverageModel(BaseModel):
-    def __init__(self,
-                 vocab: Vocabulary):
-        self.n_days = 7
+    def __init__(self, vocab: Vocabulary, n_days=7):
+        self.n_days = n_days
         super().__init__(vocab)
 
     def forward(self, series, keys) -> Dict[str, Any]:

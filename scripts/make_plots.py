@@ -402,14 +402,96 @@ def make_neighbour_boxplots():
     fig.savefig('figures/neighbour_smape.png')
 
 
+def make_subwiki_boxplots(topic):
+    smape = {}
+
+    with open(f'expt/subwiki/{topic}/3_naive_previous_day/serialization/evaluate-metrics.json') as f:
+        smape['naive'] = json.load(f)['smape']
+
+    with open(f'expt/subwiki/{topic}/4_naive_seasonal/serialization/evaluate-metrics.json') as f:
+        smape['SN'] = json.load(f)['smape']
+
+    with open(f'expt/subwiki/{topic}/1_no_graph/serialization/evaluate-metrics.json') as f:
+        smape['LSTM'] = json.load(f)['smape']
+
+    with open(f'expt/subwiki/{topic}/2_graph/serialization/evaluate-metrics.json') as f:
+        smape['GraphSage'] = json.load(f)['smape']
+
+    smapes = [smape['naive'], smape['SN'], smape['LSTM'],
+              smape['GraphSage']]
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = plt.subplot(1, 1, 1)
+    ax.boxplot(smapes, showfliers=False, meanline=True,
+               showmeans=True, widths=0.7)
+    ax.set_xticklabels(
+        ['Naive', 'Seasonal', 'LSTM', 'GraphSage'])
+    ax.set_ylabel('SMAPE')
+    ax.set_title(f'{topic}')
+
+    means = [np.mean(x) for x in smapes]
+    pos = range(len(means))
+    for tick, label in zip(pos, ax.get_xticklabels()):
+        ax.text(pos[tick] + 0.85, means[tick] +
+                0.07, '{0:.3f}'.format(means[tick]))
+
+    fig.tight_layout()
+    plt.show()
+    fig.savefig(f'figures/smape_subwiki_{topic}.png')
+
+
+def make_subwiki_daily_smape(topic):
+    smape = {}
+
+    with open(f'expt/subwiki/{topic}/3_naive_previous_day/serialization/evaluate-metrics.json') as f:
+        smape['naive'] = json.load(f)['daily_smape']
+
+    with open(f'expt/subwiki/{topic}/4_naive_seasonal/serialization/evaluate-metrics.json') as f:
+        smape['SN'] = json.load(f)['daily_smape']
+
+    with open(f'expt/subwiki/{topic}/1_no_graph/serialization/evaluate-metrics.json') as f:
+        smape['LSTM'] = json.load(f)['daily_smape']
+
+    with open(f'expt/subwiki/{topic}/2_graph/serialization/evaluate-metrics.json') as f:
+        smape['GraphSage'] = json.load(f)['daily_smape']
+
+    series_naive = np.median(np.array(smape['naive']), axis=0)
+    series_sn = np.median(np.array(smape['SN']), axis=0)
+    series_lstm = np.median(np.array(smape['LSTM']), axis=0)
+    series_sage = np.median(np.array(smape['GraphSage']), axis=0)
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = plt.subplot(1, 1, 1)
+    ax.plot(series_naive, label='naive')
+    ax.plot(series_sn, label='seasonal')
+    ax.plot(series_lstm, label='lstm')
+    ax.plot(series_sage, label='graphsage')
+    ax.legend()
+
+    ax.set_ylabel('Meidan SMAPE')
+    ax.set_xlabel('testing day')
+    ax.set_title(f'{topic}')
+
+    fig.tight_layout()
+    plt.show()
+    fig.savefig(f'figures/smape_daily_subwiki_{topic}.png')
+
+
 def main():
     os.makedirs('figures', exist_ok=True)
     # make_boxplots()
     # make_partial_info_plots()
     # make_partial_info_boxplots()
-    make_partial_edge_plots()
+    # make_partial_edge_plots()
     # make_partial_edge_boxplots()
     # make_neighbour_boxplots()
+    make_subwiki_boxplots('programming')
+    make_subwiki_boxplots('graph_theory')
+    make_subwiki_boxplots('star_wars')
+
+    make_subwiki_daily_smape('programming')
+    make_subwiki_daily_smape('graph_theory')
+    make_subwiki_daily_smape('star_wars')
 
 
 if __name__ == '__main__':

@@ -152,6 +152,8 @@ def evaluate(model: Model,
         final_metrics = model.get_metrics(reset=True)
         final_metrics['smape'] = smape
         final_metrics['daily_smape'] = daily_smape
+
+        keys = [int(k) for k in keys]
         final_metrics['keys'] = keys
         if loss_count > 0:
             # Sanity check
