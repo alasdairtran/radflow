@@ -22,6 +22,7 @@ class SubWikiReader(DatasetReader):
     def __init__(self,
                  data_dir: str,
                  seed_word: str = 'Programming languages',
+                 remove_trends: bool = False,
                  fp16: bool = True,
                  lazy: bool = True) -> None:
         super().__init__(lazy)
@@ -30,6 +31,18 @@ class SubWikiReader(DatasetReader):
 
         with open(f'data/wiki/subgraphs/{seed_word}.series.pkl', 'rb') as f:
             self.series = pickle.load(f)
+
+        if remove_trends:
+            for k, v in self.series.items():
+                v_full = np.zeros(1 + 365 - 31 + 1)
+                v_full[1:366-31] = v[:-31]
+                v_full = v_full.reshape((1 + 365 - 31 + 1) // 7, 7)
+                avg_all = v_full.mean()
+                avg_week = v_full.mean(axis=0)
+                diff = avg_week - avg_all
+                diff = np.tile(diff, 53)
+                diff = diff[1:366]
+                self.series[k] = v - diff
 
         random.seed(1234)
         self.rs = np.random.RandomState(1234)

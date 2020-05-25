@@ -44,6 +44,7 @@ class TimeSeriesLSTMNetworkWiki(BaseModel):
                  missing_p: float = 0.0,
                  optimize_non_missing: bool = False,
                  max_neighbours: int = 8,
+                 remove_trends: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
@@ -52,6 +53,7 @@ class TimeSeriesLSTMNetworkWiki(BaseModel):
         self.peak = peak
         self.diff_type = diff_type
         self.max_neighbours = max_neighbours
+        self.remove_trends = remove_trends
 
         self.n_days = n_days
         self.missing_p = missing_p
@@ -91,6 +93,18 @@ class TimeSeriesLSTMNetworkWiki(BaseModel):
             return
 
         p = next(self.parameters())
+
+        if self.remove_trends:
+            for k, v in self.series.items():
+                v_full = np.zeros(1 + 365 - 31 + 1)
+                v_full[1:366-31] = v[:-31]
+                v_full = v_full.reshape((1 + 365 - 31 + 1) // 7, 7)
+                avg_all = v_full.mean()
+                avg_week = v_full.mean(axis=0)
+                diff = avg_week - avg_all
+                diff = np.tile(diff, 53)
+                diff = diff[1:366]
+                self.series[k] = v - diff
 
         for k, v in self.series.items():
             v_array = np.asarray(v)
@@ -425,7 +439,11 @@ class TimeSeriesLSTMNetworkWiki(BaseModel):
 
                 # Calculate the predicted view count
                 for i, key in enumerate(batch_keys):
-                    pred = self.cached_series[key][-1:] * pct[i]
+                    if self.diff_type == 'yesterday':
+                        pred = self.cached_series[key][-1:] * pct[i]
+                    elif self.diff_type == 'last_week':
+                        pred = self.cached_series[key][-7:] * pct[i]
+
                     new_cached_series[key] = torch.cat(
                         [self.cached_series[key], pred], dim=0)
 

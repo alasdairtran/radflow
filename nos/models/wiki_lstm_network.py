@@ -44,6 +44,7 @@ class WikiTimeSeriesLSTMNetworkDaily(BaseModel):
                  mongo_host: str = 'localhost',
                  mongo_port: int = 27017,
                  max_neighbors: int = 20,
+                 remove_trends: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = decoder
@@ -51,6 +52,7 @@ class WikiTimeSeriesLSTMNetworkDaily(BaseModel):
         self.hidden_size = decoder.get_output_dim()
         self.peak = peak
         self.max_neighbors = max_neighbors
+        self.remove_trends = remove_trends
 
         self.n_days = 7
         initializer(self)
@@ -115,6 +117,19 @@ class WikiTimeSeriesLSTMNetworkDaily(BaseModel):
             return
 
         p = next(self.parameters())
+
+        if self.remove_trends:
+            for k, v in self.series.items():
+                v_full = np.zeros(1 + 365 - 31 + 1)
+                v_full[1:366-31] = v[:-31]
+                v_full = v_full.reshape((1 + 365 - 31 + 1) // 7, 7)
+                avg_all = v_full.mean()
+                avg_week = v_full.mean(axis=0)
+                diff = avg_week - avg_all
+                diff = np.tile(diff, 53)
+                diff = diff[1:366]
+                v_new += v - diff
+                self.series[k] = v_new
 
         for k, v in self.series.items():
             self.series[k] = p.new_tensor(v)

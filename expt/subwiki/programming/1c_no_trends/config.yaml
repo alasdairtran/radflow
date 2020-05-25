@@ -10,9 +10,8 @@ vocabulary:
   type: empty
 model:
   type: time_series_lstm_network_wiki
-  agg_type: sage
-  n_days: 7
-  peak: true
+  agg_type: none
+  remove_trends: true
   data_dir: "./data"
   decoder:
     type: lstm_decoder
@@ -20,21 +19,21 @@ model:
       type: lstm
       batch_first: true
       stateful: true
-      num_layers: 2
+      num_layers: 8
       bias: True
       bidirectional: false
     decoder_input_dim: 1
-    hidden_size: 64
+    hidden_size: 128
     dropout: 0.1
     dilation: 1
 iterator:
   type: basic
-  batch_size: 256
+  batch_size: 512
   cache_instances: false
   instances_per_epoch: 2097152
 validation_iterator:
   type: basic
-  batch_size: 256
+  batch_size: 512
   cache_instances: false
 trainer:
   type: callback_apex
@@ -45,7 +44,7 @@ trainer:
     lr: 0.0001
     weight_decay: 0.0001
     warmup: 0.05
-    t_total: 81920 # 8192 batches per epoch
+    t_total: 40960 # 4096 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
       - - - project_in
