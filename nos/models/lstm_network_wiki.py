@@ -96,9 +96,11 @@ class TimeSeriesLSTMNetworkWiki(BaseModel):
 
         if self.remove_trends:
             for k, v in self.series.items():
-                v_full = np.zeros(1 + 365 - 31 + 1)
-                v_full[1:366-31] = v[:-31]
-                v_full = v_full.reshape((1 + 365 - 31 + 1) // 7, 7)
+                n_train = 1 + 365 - self.n_days
+                r = 0 if n_train % 7 == 0 else (7 - (n_train % 7))
+                v_full = np.zeros(n_train + r)
+                v_full[1:366-self.n_days] = v[:-self.n_days]
+                v_full = v_full.reshape((n_train + r) // 7, 7)
                 avg_all = v_full.mean()
                 avg_week = v_full.mean(axis=0)
                 diff = avg_week - avg_all
