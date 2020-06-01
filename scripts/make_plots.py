@@ -407,27 +407,27 @@ def make_neighbour_boxplots():
 def make_subwiki_boxplots(topic):
     smape = {}
 
-    with open(f'expt/subwiki/{topic}/3_naive_previous_day/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/nbeats/{topic}/1_previous_day/serialization/evaluate-metrics.json') as f:
         smape['naive'] = json.load(f)['smapes']
 
-    with open(f'expt/subwiki/{topic}/4_naive_seasonal/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/nbeats/{topic}/2_previous_week/serialization/evaluate-metrics.json') as f:
         smape['SN'] = json.load(f)['smapes']
 
-    with open(f'expt/subwiki/{topic}/1_no_graph/serialization/evaluate-metrics.json') as f:
-        smape['LSTM'] = json.load(f)['smapes']
+    with open(f'expt/nbeats/{topic}/3_no_graph/serialization/evaluate-metrics.json') as f:
+        smape['NBEATS'] = json.load(f)['smapes']
 
-    with open(f'expt/subwiki/{topic}/2_graph/serialization/evaluate-metrics.json') as f:
-        smape['GraphSage'] = json.load(f)['smapes']
+    with open(f'expt/nbeats/{topic}/4_sage/serialization/evaluate-metrics.json') as f:
+        smape['Agg'] = json.load(f)['smapes']
 
-    smapes = [smape['naive'], smape['SN'], smape['LSTM'],
-              smape['GraphSage']]
+    smapes = [smape['naive'], smape['SN'], smape['NBEATS'],
+              smape['Agg']]
 
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
     ax.boxplot(smapes, showfliers=False, meanline=True,
                showmeans=True, widths=0.7)
     ax.set_xticklabels(
-        ['Naive', 'Seasonal', 'LSTM', 'GraphSage'])
+        ['Naive', 'Seasonal', 'N-BEATS', 'Aggregation'])
     ax.set_ylabel('SMAPE')
     ax.set_title(f'{topic}')
 
@@ -502,16 +502,16 @@ def make_vevo_daily_smape():
 def make_subwiki_daily_smape(topic):
     smape = {}
 
-    with open(f'expt/subwiki/{topic}/3c_naive_no_trends/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/nbeats/{topic}/1_previous_day/serialization/evaluate-metrics.json') as f:
         smape['naive'] = json.load(f)['daily_errors']
 
-    with open(f'expt/subwiki/{topic}/4c_seasonal_no_trends/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/nbeats/{topic}/2_previous_week/serialization/evaluate-metrics.json') as f:
         smape['SN'] = json.load(f)['daily_errors']
 
-    with open(f'expt/subwiki/{topic}/1c_no_trends/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/nbeats/{topic}/3_no_graph/serialization/evaluate-metrics.json') as f:
         smape['LSTM'] = json.load(f)['daily_errors']
 
-    with open(f'expt/subwiki/{topic}/2c_graph_no_trend/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/nbeats/{topic}/4_sage/serialization/evaluate-metrics.json') as f:
         smape['GraphSage'] = json.load(f)['daily_errors']
 
     series_naive = np.median(np.array(smape['naive']), axis=0)
@@ -522,16 +522,16 @@ def make_subwiki_daily_smape(topic):
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
 
-    start = datetime(2019, 12, 2)
-    end = datetime(2020, 1, 1)
+    start = datetime(2019, 10, 28)
+    end = datetime(2019, 11, 27)
     days = mdates.drange(start, end, timedelta(days=1))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
 
     ax.plot(days, series_naive, label='naive')
     ax.plot(days, series_sn, label='seasonal')
-    ax.plot(days, series_lstm, label='lstm')
-    # ax.plot(series_sage, label='graphsage')
+    ax.plot(days, series_lstm, label='nbeats')
+    ax.plot(days, series_sage, label='nbeats + agg')
     ax.legend()
     fig.autofmt_xdate()
 
@@ -544,6 +544,66 @@ def make_subwiki_daily_smape(topic):
     fig.savefig(f'figures/smape_daily_subwiki_{topic}.png')
 
 
+def superimpose_preds(topic, short_topic):
+    with open(f'data/wiki/subgraphs/{topic}.series.pkl', 'rb') as f:
+        series = pickle.load(f)
+
+    folders = ['1_previous_day', '3_no_graph']
+    names = ['copy_day', 'nbeats']
+    preds = {}
+
+    for name, folder in zip(names, folders):
+        path = f'expt/nbeats/{short_topic}/{folder}/serialization/evaluate-metrics.json'
+        with open(path) as f:
+            o = json.load(f)
+            keys = o['keys']
+            preds[name] = o['preds']
+
+    # First average daily view count
+    views = np.zeros(365)
+    included_keys = []
+    for k, v in series.items():
+        if k in keys:
+            views += np.array(v)
+            included_keys.append(k)
+    views /= len(included_keys)
+
+    views_preds = {name: np.zeros(28) for name in names}
+    for i, key in enumerate(keys):
+        if key in included_keys:
+            for name in names:
+                key_pred = preds[name][i]
+                views_preds[name] += np.array(key_pred)
+
+    for name in names:
+        views_preds[name] /= len(included_keys)
+
+    fig = plt.figure(figsize=(20, 6))
+    ax = plt.subplot(1, 1, 1)
+
+    start = datetime(2019, 1, 1)
+    end = datetime(2020, 1, 1)
+    pred_start = datetime(2019, 12, 4)
+    days = mdates.drange(start, end, timedelta(days=1))
+    pred_days = mdates.drange(pred_start, end, timedelta(days=1))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=30))
+
+    ax.plot(days, views, label='ground truths')
+    for name in names:
+        ax.plot(pred_days, views_preds[name], label=name)
+
+    fig.autofmt_xdate()
+    ax.legend()
+
+    ax.set_title(f"{topic}: Predictions vs Ground-Truths")
+    ax.set_ylabel("Count")
+    # ax.set_xlabel("Day")
+
+    fig.savefig(f'figures/nbeats_superimposed_{topic}.png')
+    plt.show()
+
+
 def main():
     os.makedirs('figures', exist_ok=True)
     # make_boxplots()
@@ -552,14 +612,17 @@ def main():
     # make_partial_edge_plots()
     # make_partial_edge_boxplots()
     # make_neighbour_boxplots()
-    # make_subwiki_boxplots('programming')
+    make_subwiki_boxplots('programming')
     # make_subwiki_boxplots('graph_theory')
-    # make_subwiki_boxplots('star_wars')
+    make_subwiki_boxplots('star_wars')
 
     # make_subwiki_daily_smape('programming')
     # make_subwiki_daily_smape('graph_theory')
     # make_subwiki_daily_smape('star_wars')
-    make_vevo_daily_smape()
+    # make_vevo_daily_smape()
+
+    # superimpose_preds('Programming languages', 'programming')
+    # superimpose_preds('Star Wars', 'star_wars')
 
 
 if __name__ == '__main__':
