@@ -111,7 +111,7 @@ class TimeSeriesTransformer(BaseModel):
             smape, _ = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
-            out_dict['smape'] = smape
+            out_dict['smapes'] = smape
 
         return out_dict
 

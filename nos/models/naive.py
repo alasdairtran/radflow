@@ -44,7 +44,7 @@ class NaivePreviousDayModel(BaseModel):
             smape, daily_smapes = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
-            out_dict['smape'] = smape
+            out_dict['smapes'] = smape
             out_dict['daily_smape'] = daily_smapes
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
@@ -84,7 +84,7 @@ class NaiveSeasonalModel(BaseModel):
             smape, daily_smapes = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
-            out_dict['smape'] = smape
+            out_dict['smapes'] = smape
             out_dict['daily_smape'] = daily_smapes
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
@@ -132,7 +132,7 @@ class NaiveSeasonalDiffModel(BaseModel):
             smape, _ = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
-            out_dict['smape'] = smape
+            out_dict['smapes'] = smape
 
         return out_dict
 
@@ -171,6 +171,6 @@ class NaiveRollingAverageModel(BaseModel):
             smape, _ = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
-            out_dict['smape'] = smape
+            out_dict['smapes'] = smape
 
         return out_dict

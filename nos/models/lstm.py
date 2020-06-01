@@ -97,7 +97,6 @@ class TimeSeriesLSTM(BaseModel):
 
             pred_list = [pred_i]
 
-
             for i in range(self.n_days - 1):
                 X = pred_diff.unsqueeze(1).unsqueeze(2)
                 # X.shape == [batch_size, 1, 1]
@@ -114,7 +113,7 @@ class TimeSeriesLSTM(BaseModel):
             smape, _ = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
-            out_dict['smape'] = smape
+            out_dict['smapes'] = smape
 
         return out_dict
 

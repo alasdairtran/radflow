@@ -331,7 +331,7 @@ class TimeSeriesLSTMNetworkLogDiff(BaseModel):
             targets = torch.stack(target_list, dim=0)
             smape, _ = get_smape(targets, preds)
 
-            out_dict['smape'] = smape
+            out_dict['smapes'] = smape
 
         return out_dict
 

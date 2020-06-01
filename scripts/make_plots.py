@@ -12,25 +12,25 @@ def make_boxplots():
     smape = {}
 
     with open('expt/1_naive_previous_day/serialization/evaluate-metrics.json') as f:
-        smape['naive'] = json.load(f)['smape']
+        smape['naive'] = json.load(f)['smapes']
 
     with open('expt/2_naive_seasonal/serialization/evaluate-metrics.json') as f:
-        smape['SN'] = json.load(f)['smape']
+        smape['SN'] = json.load(f)['smapes']
 
     with open('expt/11_no_agg/serialization/evaluate-metrics.json') as f:
-        smape['LSTM'] = json.load(f)['smape']
+        smape['LSTM'] = json.load(f)['smapes']
 
     with open('expt/12_peek/serialization/evaluate-metrics.json') as f:
-        smape['static_mean'] = json.load(f)['smape']
+        smape['static_mean'] = json.load(f)['smapes']
 
     with open('expt/16_peek_daily/serialization/evaluate-metrics.json') as f:
-        smape['dynamic_mean'] = json.load(f)['smape']
+        smape['dynamic_mean'] = json.load(f)['smapes']
 
     with open('expt/18_peek_daily_attn/serialization/evaluate-metrics.json') as f:
-        smape['dynamic_attn'] = json.load(f)['smape']
+        smape['dynamic_attn'] = json.load(f)['smapes']
 
     with open('expt/17_peek_daily_sage/serialization/evaluate-metrics.json') as f:
-        smape['dynamic_sage'] = json.load(f)['smape']
+        smape['dynamic_sage'] = json.load(f)['smapes']
 
     smapes = [smape['naive'], smape['SN'], smape['LSTM'],
               smape['static_mean'], smape['dynamic_mean'],
@@ -64,28 +64,28 @@ def make_partial_info_plots():
     smape = {}
 
     with open('expt/missing/01_no_agg_20/serialization/evaluate-metrics.json') as f:
-        smape['no_agg_20'] = json.load(f)['smape']
+        smape['no_agg_20'] = json.load(f)['smapes']
 
     with open('expt/missing/02_sage_20/serialization/evaluate-metrics.json') as f:
-        smape['sage_20'] = json.load(f)['smape']
+        smape['sage_20'] = json.load(f)['smapes']
 
     with open('expt/missing/03_no_agg_40/serialization/evaluate-metrics.json') as f:
-        smape['no_agg_40'] = json.load(f)['smape']
+        smape['no_agg_40'] = json.load(f)['smapes']
 
     with open('expt/missing/04_sage_40/serialization/evaluate-metrics.json') as f:
-        smape['sage_40'] = json.load(f)['smape']
+        smape['sage_40'] = json.load(f)['smapes']
 
     with open('expt/missing/05_no_agg_00/serialization/evaluate-metrics.json') as f:
-        smape['no_agg_00'] = json.load(f)['smape']
+        smape['no_agg_00'] = json.load(f)['smapes']
 
     with open('expt/missing/06_sage_00/serialization/evaluate-metrics.json') as f:
-        smape['sage_00'] = json.load(f)['smape']
+        smape['sage_00'] = json.load(f)['smapes']
 
     with open('expt/missing/07_no_agg_60/serialization/evaluate-metrics.json') as f:
-        smape['no_agg_60'] = json.load(f)['smape']
+        smape['no_agg_60'] = json.load(f)['smapes']
 
     with open('expt/missing/08_sage_60/serialization/evaluate-metrics.json') as f:
-        smape['sage_60'] = json.load(f)['smape']
+        smape['sage_60'] = json.load(f)['smapes']
 
     no_agg_smapes = [smape['no_agg_00'], smape['no_agg_20'],
                      smape['no_agg_40'], smape['no_agg_60']]
@@ -138,28 +138,28 @@ def make_partial_info_boxplots():
     smape = {}
 
     with open('expt/missing/01_no_agg_20/serialization/evaluate-metrics.json') as f:
-        smape['no_agg_20'] = json.load(f)['smape']
+        smape['no_agg_20'] = json.load(f)['smapes']
 
     with open('expt/missing/02_sage_20/serialization/evaluate-metrics.json') as f:
-        smape['sage_20'] = json.load(f)['smape']
+        smape['sage_20'] = json.load(f)['smapes']
 
     with open('expt/missing/03_no_agg_40/serialization/evaluate-metrics.json') as f:
-        smape['no_agg_40'] = json.load(f)['smape']
+        smape['no_agg_40'] = json.load(f)['smapes']
 
     with open('expt/missing/04_sage_40/serialization/evaluate-metrics.json') as f:
-        smape['sage_40'] = json.load(f)['smape']
+        smape['sage_40'] = json.load(f)['smapes']
 
     with open('expt/missing/05_no_agg_00/serialization/evaluate-metrics.json') as f:
-        smape['no_agg_00'] = json.load(f)['smape']
+        smape['no_agg_00'] = json.load(f)['smapes']
 
     with open('expt/missing/06_sage_00/serialization/evaluate-metrics.json') as f:
-        smape['sage_00'] = json.load(f)['smape']
+        smape['sage_00'] = json.load(f)['smapes']
 
     with open('expt/missing/07_no_agg_60/serialization/evaluate-metrics.json') as f:
-        smape['no_agg_60'] = json.load(f)['smape']
+        smape['no_agg_60'] = json.load(f)['smapes']
 
     with open('expt/missing/08_sage_60/serialization/evaluate-metrics.json') as f:
-        smape['sage_60'] = json.load(f)['smape']
+        smape['sage_60'] = json.load(f)['smapes']
 
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
@@ -209,49 +209,49 @@ def make_partial_edge_plots():
     smape = {}
 
     with open('expt/missing/08_sage_60/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_00'] = json.load(f)['smape']
+        smape['1_hop_00'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/1_hop_20/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_80'] = json.load(f)['smape']
+        smape['1_hop_80'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/1_hop_40/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_60'] = json.load(f)['smape']
+        smape['1_hop_60'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/1_hop_60/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_40'] = json.load(f)['smape']
+        smape['1_hop_40'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/1_hop_80/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_20'] = json.load(f)['smape']
+        smape['1_hop_20'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_20/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_80'] = json.load(f)['smape']
+        smape['2_hop_80'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_40/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_60'] = json.load(f)['smape']
+        smape['2_hop_60'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_60/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_40'] = json.load(f)['smape']
+        smape['2_hop_40'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_80/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_20'] = json.load(f)['smape']
+        smape['2_hop_20'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_00/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_00'] = json.load(f)['smape']
+        smape['2_hop_00'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_20_skip/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_80_skip'] = json.load(f)['smape']
+        smape['2_hop_80_skip'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_40_skip/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_60_skip'] = json.load(f)['smape']
+        smape['2_hop_60_skip'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_60_skip/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_40_skip'] = json.load(f)['smape']
+        smape['2_hop_40_skip'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_80_skip/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_20_skip'] = json.load(f)['smape']
+        smape['2_hop_20_skip'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_00_skip/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_00_skip'] = json.load(f)['smape']
+        smape['2_hop_00_skip'] = json.load(f)['smapes']
 
     one_hop_smapes = [smape['1_hop_00'], smape['1_hop_20'], smape['1_hop_40'],
                       smape['1_hop_60'], smape['1_hop_80']]
@@ -288,34 +288,34 @@ def make_partial_edge_boxplots():
     smape = {}
 
     with open('expt/missing/08_sage_60/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_00'] = json.load(f)['smape']
+        smape['1_hop_00'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/1_hop_20/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_80'] = json.load(f)['smape']
+        smape['1_hop_80'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/1_hop_40/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_60'] = json.load(f)['smape']
+        smape['1_hop_60'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/1_hop_60/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_40'] = json.load(f)['smape']
+        smape['1_hop_40'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/1_hop_80/serialization/evaluate-metrics.json') as f:
-        smape['1_hop_20'] = json.load(f)['smape']
+        smape['1_hop_20'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_20/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_80'] = json.load(f)['smape']
+        smape['2_hop_80'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_40/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_60'] = json.load(f)['smape']
+        smape['2_hop_60'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_60/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_40'] = json.load(f)['smape']
+        smape['2_hop_40'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_80/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_20'] = json.load(f)['smape']
+        smape['2_hop_20'] = json.load(f)['smapes']
 
     with open('expt/missing_edges/2_hop_00/serialization/evaluate-metrics.json') as f:
-        smape['2_hop_00'] = json.load(f)['smape']
+        smape['2_hop_00'] = json.load(f)['smapes']
 
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
@@ -372,16 +372,16 @@ def make_neighbour_boxplots():
     smape = {}
 
     with open('expt/neighbour_size/2_top_1/serialization/evaluate-metrics.json') as f:
-        smape['Top 1'] = json.load(f)['smape']
+        smape['Top 1'] = json.load(f)['smapes']
 
     with open('expt/neighbour_size/3_top_5/serialization/evaluate-metrics.json') as f:
-        smape['Top 5'] = json.load(f)['smape']
+        smape['Top 5'] = json.load(f)['smapes']
 
     with open('expt/neighbour_size/4_top_10/serialization/evaluate-metrics.json') as f:
-        smape['Top 10'] = json.load(f)['smape']
+        smape['Top 10'] = json.load(f)['smapes']
 
     with open('expt/neighbour_size/1_top_20/serialization/evaluate-metrics.json') as f:
-        smape['Top 20'] = json.load(f)['smape']
+        smape['Top 20'] = json.load(f)['smapes']
 
     smapes = [smape['Top 1'], smape['Top 5'], smape['Top 10'], smape['Top 20']]
 
@@ -408,16 +408,16 @@ def make_subwiki_boxplots(topic):
     smape = {}
 
     with open(f'expt/subwiki/{topic}/3_naive_previous_day/serialization/evaluate-metrics.json') as f:
-        smape['naive'] = json.load(f)['smape']
+        smape['naive'] = json.load(f)['smapes']
 
     with open(f'expt/subwiki/{topic}/4_naive_seasonal/serialization/evaluate-metrics.json') as f:
-        smape['SN'] = json.load(f)['smape']
+        smape['SN'] = json.load(f)['smapes']
 
     with open(f'expt/subwiki/{topic}/1_no_graph/serialization/evaluate-metrics.json') as f:
-        smape['LSTM'] = json.load(f)['smape']
+        smape['LSTM'] = json.load(f)['smapes']
 
     with open(f'expt/subwiki/{topic}/2_graph/serialization/evaluate-metrics.json') as f:
-        smape['GraphSage'] = json.load(f)['smape']
+        smape['GraphSage'] = json.load(f)['smapes']
 
     smapes = [smape['naive'], smape['SN'], smape['LSTM'],
               smape['GraphSage']]
