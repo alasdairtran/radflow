@@ -1,6 +1,8 @@
 import json
 import os
+from datetime import datetime, timedelta
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.pyplot import setp
@@ -440,19 +442,76 @@ def make_subwiki_boxplots(topic):
     fig.savefig(f'figures/smape_subwiki_{topic}.png')
 
 
+def make_vevo_daily_smape():
+    smape = {}
+
+    with open('expt/1_naive_previous_day/serialization/evaluate-metrics.json') as f:
+        smape['naive'] = json.load(f)['daily_smape']
+
+    with open('expt/2_naive_seasonal/serialization/evaluate-metrics.json') as f:
+        smape['SN'] = json.load(f)['daily_smape']
+
+    with open('expt/11_no_agg/serialization/evaluate-metrics.json') as f:
+        smape['LSTM'] = json.load(f)['daily_smape']
+
+    # with open('expt/12_peek/serialization/evaluate-metrics.json') as f:
+    #     smape['static_mean'] = json.load(f)['daily_smape']
+
+    # with open('expt/16_peek_daily/serialization/evaluate-metrics.json') as f:
+    #     smape['dynamic_mean'] = json.load(f)['daily_smape']
+
+    # with open('expt/18_peek_daily_attn/serialization/evaluate-metrics.json') as f:
+    #     smape['dynamic_attn'] = json.load(f)['daily_smape']
+
+    with open('expt/17_peek_daily_sage/serialization/evaluate-metrics.json') as f:
+        smape['dynamic_sage'] = json.load(f)['daily_smape']
+
+    series_naive = np.median(np.array(smape['naive']), axis=0)
+    series_sn = np.median(np.array(smape['SN']), axis=0)
+    series_lstm = np.median(np.array(smape['LSTM']), axis=0)
+    series_sage = np.median(np.array(smape['dynamic_sage']), axis=0)
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = plt.subplot(1, 1, 1)
+
+    start = datetime(2018, 10, 27)
+    end = datetime(2018, 11, 3)
+    days = mdates.drange(start, end, timedelta(days=1))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
+
+    ax.plot(days, series_naive, label='naive')
+    ax.plot(days, series_sn, label='seasonal')
+    ax.plot(days, series_lstm, label='lstm')
+    ax.plot(days, series_sage, label='graphsage')
+    ax.legend()
+    fig.autofmt_xdate()
+
+    ax.set_ylabel('Deviation from Ground-Truth View Count')
+    ax.set_xlabel('testing day')
+    ax.set_title(f'VEVO test period')
+
+    ax.hlines(y=0, xmin=days[0], xmax=days[-1],
+              linewidth=1, linestyles='--', color='grey')
+
+    fig.tight_layout()
+    plt.show()
+    fig.savefig(f'figures/smape_daily_vevo.png')
+
+
 def make_subwiki_daily_smape(topic):
     smape = {}
 
-    with open(f'expt/subwiki/{topic}/3_naive_previous_day/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/subwiki/{topic}/3c_naive_no_trends/serialization/evaluate-metrics.json') as f:
         smape['naive'] = json.load(f)['daily_smape']
 
-    with open(f'expt/subwiki/{topic}/4_naive_seasonal/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/subwiki/{topic}/4c_seasonal_no_trends/serialization/evaluate-metrics.json') as f:
         smape['SN'] = json.load(f)['daily_smape']
 
-    with open(f'expt/subwiki/{topic}/1_no_graph/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/subwiki/{topic}/1c_no_trends/serialization/evaluate-metrics.json') as f:
         smape['LSTM'] = json.load(f)['daily_smape']
 
-    with open(f'expt/subwiki/{topic}/2_graph/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/subwiki/{topic}/2c_graph_no_trend/serialization/evaluate-metrics.json') as f:
         smape['GraphSage'] = json.load(f)['daily_smape']
 
     series_naive = np.median(np.array(smape['naive']), axis=0)
@@ -462,13 +521,21 @@ def make_subwiki_daily_smape(topic):
 
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
-    ax.plot(series_naive, label='naive')
-    ax.plot(series_sn, label='seasonal')
-    ax.plot(series_lstm, label='lstm')
-    ax.plot(series_sage, label='graphsage')
-    ax.legend()
 
-    ax.set_ylabel('Meidan SMAPE')
+    start = datetime(2019, 12, 2)
+    end = datetime(2020, 1, 1)
+    days = mdates.drange(start, end, timedelta(days=1))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+
+    ax.plot(days, series_naive, label='naive')
+    ax.plot(days, series_sn, label='seasonal')
+    ax.plot(days, series_lstm, label='lstm')
+    # ax.plot(series_sage, label='graphsage')
+    ax.legend()
+    fig.autofmt_xdate()
+
+    ax.set_ylabel('Deviation from Ground-Truth View Count')
     ax.set_xlabel('testing day')
     ax.set_title(f'{topic}')
 
@@ -485,13 +552,14 @@ def main():
     # make_partial_edge_plots()
     # make_partial_edge_boxplots()
     # make_neighbour_boxplots()
-    make_subwiki_boxplots('programming')
-    make_subwiki_boxplots('graph_theory')
-    make_subwiki_boxplots('star_wars')
+    # make_subwiki_boxplots('programming')
+    # make_subwiki_boxplots('graph_theory')
+    # make_subwiki_boxplots('star_wars')
 
-    make_subwiki_daily_smape('programming')
-    make_subwiki_daily_smape('graph_theory')
-    make_subwiki_daily_smape('star_wars')
+    # make_subwiki_daily_smape('programming')
+    # make_subwiki_daily_smape('graph_theory')
+    # make_subwiki_daily_smape('star_wars')
+    make_vevo_daily_smape()
 
 
 if __name__ == '__main__':

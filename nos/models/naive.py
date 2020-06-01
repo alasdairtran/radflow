@@ -47,6 +47,7 @@ class NaivePreviousDayModel(BaseModel):
             out_dict['smape'] = smape
             out_dict['daily_smape'] = daily_smapes
             out_dict['keys'] = keys
+            out_dict['preds'] = preds.cpu().numpy().tolist()
 
         return out_dict
 
@@ -86,6 +87,7 @@ class NaiveSeasonalModel(BaseModel):
             out_dict['smape'] = smape
             out_dict['daily_smape'] = daily_smapes
             out_dict['keys'] = keys
+            out_dict['preds'] = preds.cpu().numpy().tolist()
 
         return out_dict
 

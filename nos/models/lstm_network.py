@@ -371,6 +371,7 @@ class TimeSeriesLSTMNetwork(BaseModel):
 
             out_dict['smape'] = smape
             out_dict['daily_smape'] = daily_smapes
+            out_dict['preds'] = preds.cpu().numpy().tolist()
             out_dict['keys'] = keys
 
         return out_dict

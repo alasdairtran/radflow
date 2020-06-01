@@ -116,6 +116,7 @@ def evaluate(model: Model,
 
         smape = []
         daily_smape = []
+        preds = []
         keys = []
         for batch in generator_tqdm:
             batch_count += 1
@@ -125,6 +126,8 @@ def evaluate(model: Model,
             smape += output_dict['smape']
             daily_smape += output_dict['daily_smape']
             keys += output_dict['keys']
+            if 'preds' in output_dict:
+                preds += output_dict['preds']
 
             metrics = model.get_metrics()
 
@@ -152,6 +155,7 @@ def evaluate(model: Model,
         final_metrics = model.get_metrics(reset=True)
         final_metrics['smape'] = smape
         final_metrics['daily_smape'] = daily_smape
+        final_metrics['preds'] = preds
 
         keys = [int(k) for k in keys]
         final_metrics['keys'] = keys
