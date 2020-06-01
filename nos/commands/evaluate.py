@@ -115,7 +115,7 @@ def evaluate(model: Model,
         total_weight = 0.0
 
         smape = []
-        daily_smape = []
+        daily_errors = []
         preds = []
         keys = []
         for batch in generator_tqdm:
@@ -124,7 +124,7 @@ def evaluate(model: Model,
             output_dict = model(**batch)
             loss = output_dict.get("loss")
             smape += output_dict['smapes']
-            daily_smape += output_dict['daily_smape']
+            daily_errors += output_dict['daily_errors']
             keys += output_dict['keys']
             if 'preds' in output_dict:
                 preds += output_dict['preds']
@@ -154,7 +154,7 @@ def evaluate(model: Model,
 
         final_metrics = model.get_metrics(reset=True)
         final_metrics['smapes'] = smape
-        final_metrics['daily_smape'] = daily_smape
+        final_metrics['daily_errors'] = daily_errors
         final_metrics['preds'] = preds
 
         keys = [int(k) for k in keys]

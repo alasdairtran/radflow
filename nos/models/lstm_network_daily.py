@@ -551,11 +551,11 @@ class TimeSeriesLSTMNetworkDaily(BaseModel):
 
             preds = torch.stack(pred_list, dim=0)
             targets = torch.stack(target_list, dim=0)
-            smape, daily_smapes = get_smape(targets, preds)
+            smape, daily_errors = get_smape(targets, preds)
 
             out_dict['smapes'] = smape
             out_dict['keys'] = keys
-            out_dict['daily_smape'] = daily_smapes
+            out_dict['daily_errors'] = daily_errors
 
         return out_dict
 

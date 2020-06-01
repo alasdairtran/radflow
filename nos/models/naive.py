@@ -41,11 +41,11 @@ class NaivePreviousDayModel(BaseModel):
             targets = series[:, -self.n_days:]
             # targets.shape == [batch_size, n_days]
 
-            smape, daily_smapes = get_smape(targets, preds)
+            smape, daily_errors = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
             out_dict['smapes'] = smape
-            out_dict['daily_smape'] = daily_smapes
+            out_dict['daily_errors'] = daily_errors
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
 
@@ -81,11 +81,11 @@ class NaiveSeasonalModel(BaseModel):
             targets = series[:, -self.n_days:]
             # targets.shape == [batch_size, n_days]
 
-            smape, daily_smapes = get_smape(targets, preds)
+            smape, daily_errors = get_smape(targets, preds)
             # smape.shape == [batch_size]
 
             out_dict['smapes'] = smape
-            out_dict['daily_smape'] = daily_smapes
+            out_dict['daily_errors'] = daily_errors
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
 

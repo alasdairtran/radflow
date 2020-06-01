@@ -446,25 +446,25 @@ def make_vevo_daily_smape():
     smape = {}
 
     with open('expt/1_naive_previous_day/serialization/evaluate-metrics.json') as f:
-        smape['naive'] = json.load(f)['daily_smape']
+        smape['naive'] = json.load(f)['daily_errors']
 
     with open('expt/2_naive_seasonal/serialization/evaluate-metrics.json') as f:
-        smape['SN'] = json.load(f)['daily_smape']
+        smape['SN'] = json.load(f)['daily_errors']
 
     with open('expt/11_no_agg/serialization/evaluate-metrics.json') as f:
-        smape['LSTM'] = json.load(f)['daily_smape']
+        smape['LSTM'] = json.load(f)['daily_errors']
 
     # with open('expt/12_peek/serialization/evaluate-metrics.json') as f:
-    #     smape['static_mean'] = json.load(f)['daily_smape']
+    #     smape['static_mean'] = json.load(f)['daily_errors']
 
     # with open('expt/16_peek_daily/serialization/evaluate-metrics.json') as f:
-    #     smape['dynamic_mean'] = json.load(f)['daily_smape']
+    #     smape['dynamic_mean'] = json.load(f)['daily_errors']
 
     # with open('expt/18_peek_daily_attn/serialization/evaluate-metrics.json') as f:
-    #     smape['dynamic_attn'] = json.load(f)['daily_smape']
+    #     smape['dynamic_attn'] = json.load(f)['daily_errors']
 
     with open('expt/17_peek_daily_sage/serialization/evaluate-metrics.json') as f:
-        smape['dynamic_sage'] = json.load(f)['daily_smape']
+        smape['dynamic_sage'] = json.load(f)['daily_errors']
 
     series_naive = np.median(np.array(smape['naive']), axis=0)
     series_sn = np.median(np.array(smape['SN']), axis=0)
@@ -503,16 +503,16 @@ def make_subwiki_daily_smape(topic):
     smape = {}
 
     with open(f'expt/subwiki/{topic}/3c_naive_no_trends/serialization/evaluate-metrics.json') as f:
-        smape['naive'] = json.load(f)['daily_smape']
+        smape['naive'] = json.load(f)['daily_errors']
 
     with open(f'expt/subwiki/{topic}/4c_seasonal_no_trends/serialization/evaluate-metrics.json') as f:
-        smape['SN'] = json.load(f)['daily_smape']
+        smape['SN'] = json.load(f)['daily_errors']
 
     with open(f'expt/subwiki/{topic}/1c_no_trends/serialization/evaluate-metrics.json') as f:
-        smape['LSTM'] = json.load(f)['daily_smape']
+        smape['LSTM'] = json.load(f)['daily_errors']
 
     with open(f'expt/subwiki/{topic}/2c_graph_no_trend/serialization/evaluate-metrics.json') as f:
-        smape['GraphSage'] = json.load(f)['daily_smape']
+        smape['GraphSage'] = json.load(f)['daily_errors']
 
     series_naive = np.median(np.array(smape['naive']), axis=0)
     series_sn = np.median(np.array(smape['SN']), axis=0)
