@@ -102,13 +102,13 @@ def extract_line(fin, traffic_path, path, n_days, redis_host, is_bz2):
     return page_views
 
 
-def get_id_maps(db, index_path):
+def get_id_maps(db, redis_host, index_path):
     # Simple looping through mongo takes 2.5m. Also adding it to redis takes
     # another 25m.
     id2title = {}
     title2id = {}
     logger.info('Building title-id index map')
-    r = redis.Redis(host='localhost', port=6379, db=0)
+    r = redis.Redis(host=redis_host, port=6379, db=0)
     r.flushall()
 
     with open(index_path, 'a') as f:
@@ -129,8 +129,6 @@ def get_id_maps(db, index_path):
 
 
 def get_traffic(path, mongo_host, redis_host, traffic_path, i):
-    time.sleep(random.uniform(1, 5))
-
     # client = MongoClient(host=host, port=27017)
     # db = client.wiki
 
@@ -139,6 +137,14 @@ def get_traffic(path, mongo_host, redis_host, traffic_path, i):
     year = int(parts[1])
     month = int(parts[2])
     n_days = monthrange(year, month)[1]
+
+    os.makedirs('data/wiki/serialized_traffic', exist_ok=True)
+    out_path = f'data/wiki/serialized_traffic/{parts[1]}_{parts[2]}.npy'
+
+    if os.path.exists(out_path):
+        return
+
+    time.sleep(random.uniform(1, 5))
 
     origin = datetime(2011, 12, 1)
     first_date = datetime(year, month, 1)
@@ -155,8 +161,6 @@ def get_traffic(path, mongo_host, redis_host, traffic_path, i):
             page_views = extract_line(
                 fin, traffic_path, path, n_days, redis_host, False)
 
-    os.makedirs('data/wiki/serialized_traffic', exist_ok=True)
-    out_path = f'data/wiki/serialized_traffic/{parts[1]}_{parts[2]}.npy'
     np.save(out_path, page_views)
 
     # batch = 100000
@@ -190,8 +194,8 @@ def create_traffic_tile(traffic_path):
 
 
 def get_all_traffic(mongo_host, redis_host, n_jobs, traffic_path):
-    paths = glob('/data4/u4921817/nos/data/pagecounts/pagecounts-2019*')
-    paths.sort()
+    paths = glob('/data4/u4921817/nos/data/pagecounts/pagecounts*')
+    paths.sort(reverse=True)
 
     client = MongoClient(host=mongo_host, port=27017)
     db = client.wiki
@@ -203,7 +207,7 @@ def get_all_traffic(mongo_host, redis_host, n_jobs, traffic_path):
 
     index_path = os.path.join('data/wiki', 'graph_ids.txt')
     if not os.path.exists(index_path):
-        get_id_maps(db, index_path)
+        get_id_maps(db, redis_host, index_path)
     # To mass insert this into redis later
     # cat data/wiki/graph_ids.txt | redis-cli --pipe
 
@@ -213,7 +217,7 @@ def get_all_traffic(mongo_host, redis_host, n_jobs, traffic_path):
     # with open(index_path, 'rb') as f:
     #     title2id, _ = pickle.load(f)
 
-    create_traffic_tile(traffic_path)
+    # create_traffic_tile(traffic_path)
 
     # This takes 1.5 hours
     logger.info('Extracting traffic counts')

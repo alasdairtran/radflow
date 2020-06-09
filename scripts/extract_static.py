@@ -62,8 +62,9 @@ def extract_static_graph(mongo_host, redis_host, out_path):
 
     r = redis.Redis(host=redis_host, port=6379, db=0)
 
-    # Takes 10.5h to extract 17,035,758 nodes and 185,809,379 edges
-    origin = datetime(2019, 1, 1)
+    # Takes 10.5h to extract 17,035,758 nodes and 185,809,379 edges on 1 Jan 2019
+    # Takes 7.5h to extract edges on 1 Dec 2011.
+    origin = datetime(2011, 12, 1)
     with open(out_path, 'a') as f:
         for p in tqdm(db.pages.find({})):
             source = p['i']
@@ -137,11 +138,11 @@ def grow_from_seeds(seed_word, db, csr_matric, csc_matric):
 
 
 def extract_all(mongo_host, redis_host):
-    out_path = 'data/wiki/static_edge_list_2019.txt'
+    out_path = 'data/wiki/static_edge_list_2011.txt'
     if not os.path.exists(out_path):
         extract_static_graph(mongo_host, redis_host, out_path)
 
-    matrix_path = "data/wiki/static_edge_list_2019.npz"
+    matrix_path = "data/wiki/static_edge_list_2011.npz"
     if not os.path.exists(matrix_path):
         matrix = read_data_file_as_coo_matrix(out_path)  # 1.5GB!
         ss.save_npz(matrix_path, matrix)
@@ -151,7 +152,7 @@ def extract_all(mongo_host, redis_host):
 
     client = MongoClient(host='localhost', port=27017)
     db = client.wiki
-    grow_from_seeds('Programming languages', db, csr_matric, csc_matric)
+    # grow_from_seeds('Programming languages', db, csr_matric, csc_matric)
 
 
 def main():
