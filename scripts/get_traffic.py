@@ -7,14 +7,17 @@ Options:
     -p --ptvsd PORT     Enable debug mode with ptvsd on PORT, e.g. 5678.
     -m --mongo HOST     MongoDB host [default: localhost].
     -r --redis HOST     Redis host [default: localhost].
-    -n --n-jobs INT     Number of jobs [default: 24].
-    -t --traffic PATH   Path to traffic [default: data/wiki/traffic].
+    -n --n-jobs INT     Number of jobs [default: 50].
+    -b --batch INT      Batch nubmer [default: 0].
+    -t --total INT      Total number of batches [default: 1].
+    -f --traffic PATH   Path to traffic [default: data/wiki/traffic].
 
 """
 
 import bz2
 import fileinput
 import html
+import math
 import os
 import pickle
 import random
@@ -226,6 +229,133 @@ def get_all_traffic(mongo_host, redis_host, n_jobs, traffic_path):
                  for i, path in tqdm(enumerate(paths)))
 
 
+def get_traffic_for_page(o_title):
+    # Reproduce the data collection process
+    start = '2015070100'
+    end = '2020060900'
+    title = o_title.replace('/', r'%2F').replace('?', r'%3F')
+    domain = 'en.wikipedia.org'
+    source = 'all-access'
+    agent = 'user'
+    title = title.replace(' ', '_')
+    url = f'https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/{domain}/{source}/{agent}/{title}/daily/{start}/{end}'
+
+    # Rate limit 100 requests/second
+    while True:
+        response = requests.get(url).json()
+        if 'items' in response:
+            break
+        elif 'type' in response and 'request_rate_exceeded' in response['type']:
+            time.sleep(random.uniform(5, 10))
+            continue
+        else:
+            print(o_title, response)
+            return None
+
+    response = response['items']
+
+    if len(response) < 1:
+        return {}
+    first = response[0]['timestamp']
+    last = response[-1]['timestamp']
+
+    first = datetime.strptime(first, '%Y%m%d00')
+    last = datetime.strptime(last, '%Y%m%d00')
+
+    start_dt = datetime.strptime(start, '%Y%m%d00')
+    end_dt = datetime.strptime(end, '%Y%m%d00')
+
+    left_pad_size = (first - start_dt).days
+    series = [-1] * left_pad_size
+
+    current_ts = first - timedelta(days=1)
+
+    for o in response:
+        ts = datetime.strptime(o['timestamp'], '%Y%m%d00')
+        diff = (ts - current_ts).days
+        if diff > 1:
+            n_empty_days = diff - 1
+            for _ in range(n_empty_days):
+                series.append(-1)
+        else:
+            assert diff == 1
+
+        series.append(o['views'])
+        current_ts = ts
+
+    if end_dt != last:
+        n_empty_days = (end_dt - last).days
+        for _ in range(n_empty_days):
+            series.append(-1)
+    assert len(series) == 1806
+
+    output = {
+        'series': series,
+        'first_date': first,
+    }
+    return output
+
+
+def get_traffic_from_api(mongo_host, i, n_jobs, batch, total):
+    time.sleep(random.uniform(1, 30))
+    client = MongoClient(host=mongo_host, port=27017)
+    db = client.wiki
+
+    # Find the largest possible i (which is 17035757)
+    max_i = db.pages.find_one(sort=[("i", pymongo.DESCENDING)],
+                              projection=['i'])['i']
+
+    size = int(math.ceil(max_i / (n_jobs * total)))
+    batch_size = size * n_jobs
+    start = batch * batch_size + i * size
+    end = start + size
+
+    pages = db.pages.find({'i': {'$gte': start, '$lt': end}},
+                          projection=['i', 'title'])
+    for page in pages:
+        start_ts = time.time()
+        if db.traffic.find_one({'_id': page['i']}, projection=['_id']):
+            continue
+        s = get_traffic_for_page(page['title'])
+        if s is None:
+            # Ensure that we take at least 1 second to appease the server
+            elasped = time.time() - start_ts
+            if elasped < 1:
+                time.sleep(1 - elasped)
+            continue
+        elif not s:
+            series = []
+            t = None
+        else:
+            series = s['series']
+            t = s['first_date']
+
+        db.traffic.insert_one({
+            '_id': page['i'],
+            's': series,
+            't': t,
+        })
+
+        # Ensure that we take at least 1 second to appease the server
+        elasped = time.time() - start_ts
+        if elasped < 1:
+            time.sleep(1 - elasped)
+
+
+def get_all_traffic_from_api(mongo_host, n_jobs, batch, total):
+    client = MongoClient(host=mongo_host, port=27017)
+    db = client.wiki
+
+    db.traffic.create_index([
+        ('t', pymongo.DESCENDING),
+    ])
+
+    logger.info('Extracting traffic counts')
+    with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
+        parallel(delayed(get_traffic_from_api)(mongo_host, i, n_jobs, batch, total)
+                 for i in tqdm(range(n_jobs)))
+
+
 def validate(args):
     """Validate command line arguments."""
     args = {k.lstrip('-').lower().replace('-', '_'): v
@@ -233,6 +363,8 @@ def validate(args):
     schema = Schema({
         'ptvsd': Or(None, And(Use(int), lambda port: 1 <= port <= 65535)),
         'n_jobs': Use(int),
+        'batch': Use(int),
+        'total': Use(int),
         'mongo': Or(None, str),
         'redis': Or(None, str),
         'traffic': str,
@@ -250,8 +382,8 @@ def main():
         ptvsd.enable_attach(address)
         ptvsd.wait_for_attach()
 
-    get_all_traffic(args['mongo'], args['redis'],
-                    args['n_jobs'], args['traffic'])
+    get_all_traffic_from_api(args['mongo'], args['n_jobs'],
+                             args['batch'], args['total'])
 
 
 if __name__ == '__main__':

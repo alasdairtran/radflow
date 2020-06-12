@@ -44,6 +44,11 @@ python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host 
 python scripts/extract_graph.py --reindex
 
 git clone --recurse-submodules -j8 https://github.com/RedisGraph/RedisGraph.git
+
+python scripts/get_traffic.py -m dijkstra -b 0 -t 2 # cray
+python scripts/get_traffic.py -m dijkstra -b 1 -t 2 # braun
+
+python scripts/extract_static.py -r cray # dijsktra
 ```
 
 ## Training
