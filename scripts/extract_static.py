@@ -19,7 +19,7 @@ import re
 import sqlite3
 import time
 from calendar import monthrange
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from glob import glob
 
@@ -64,7 +64,7 @@ def extract_static_graph(mongo_host, redis_host, out_path):
 
     # Takes 10.5h to extract 17,035,758 nodes and 185,809,379 edges on 1 Jan 2019
     # Takes 7.5h to extract edges on 1 Dec 2011.
-    origin = datetime(2011, 12, 1)
+    origin = datetime(2015, 7, 1)
     with open(out_path, 'a') as f:
         for p in tqdm(db.pages.find({})):
             source = p['i']
@@ -90,42 +90,81 @@ def validate(args):
     return args
 
 
-def grow_from_seeds(seed_word, db, csr_matric, csc_matric):
+def get_seeds_from_title(title, db, csr_matric):
+    seeds = set()
+    p = db.pages.find_one({'title': title})
+    seeds.add(p['i'])
+    seeds = seeds | set(list(csr_matric.getrow(p['i']).nonzero()[1]))
+    return sorted(seeds)
+
+
+def get_seeds_from_cat(seed_word, db):
     seeds = []
     for p in db.pages.find({'cats': seed_word}, projection=['i']):
         seeds.append(p['i'])
+    return sorted(seeds)
+
+
+def grow_from_seeds(key, seeds, mongo_host, matrix_path):
+    client = MongoClient(host='localhost', port=27017)
+    db = client.wiki
+
+    matrix = ss.load_npz(matrix_path)
+    csr_matric = matrix.tocsr()  # 1.3GB!
+    csc_matric = matrix.tocsc()
+
+    output_path = f'data/wiki/subgraphs/{key}.pkl'
+    if os.path.exists(output_path):
+        return
 
     inlinks = {}
     outlinks = {}
+    series = {}
     counter = Counter()
+
+    logger.info(f'Building graph for {key}')
 
     for p in seeds:
         outlinks[p] = list(csr_matric.getrow(p).nonzero()[1])
         inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
 
-    for page in outlinks:
-        for link in outlinks[page]:
-            if link not in outlinks:
-                counter[link] += 1
+    for page in inlinks:
+        # for link in outlinks[page]:
+        #     if link not in outlinks:
+        #         counter[link] += 1
         for link in inlinks[page]:
             if link not in inlinks:
                 counter[link] += 1
 
-    # This takes 30m
-    for _ in tqdm(range(3000)):
-        p = counter.most_common()[0][0]
+    # This between 5-30 minutes
+    pbar = tqdm(total=10000)
+    pbar.update(len(seeds))
+    while len(inlinks) < 10000:
+        p = counter.most_common(1)[0][0]
         del counter[p]
-        assert p not in outlinks
+        assert p not in inlinks
+
+        page = db.pages.find_one({'i': int(p)}, projection=['title'])
+        if page['title'].startswith('List of'):
+            continue
+
+        s = get_traffic_for_page(page['title'])
+        if -1 in s:
+            continue
+
+        pbar.update(1)
 
         outlinks[p] = list(csr_matric.getrow(p).nonzero()[1])
         inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
+        series[p] = s
 
-        for link in outlinks[p]:
-            if link not in outlinks:
-                counter[link] += 1
+        # for link in outlinks[p]:
+        #     if link not in outlinks:
+        #         counter[link] += 1
         for link in inlinks[p]:
             if link not in inlinks:
                 counter[link] += 1
+    pbar.close()
 
     for link in inlinks:
         inlinks[link] = list(filter(lambda n: n in inlinks, inlinks[link]))
@@ -133,26 +172,194 @@ def grow_from_seeds(seed_word, db, csr_matric, csc_matric):
         outlinks[link] = list(filter(lambda n: n in outlinks, outlinks[link]))
 
     os.makedirs('data/wiki/subgraphs', exist_ok=True)
-    with open(f'data/wiki/subgraphs/{seed_word}.pkl', 'wb') as f:
-        pickle.dump([inlinks, outlinks])
+    with open(output_path, 'wb') as f:
+        pickle.dump([inlinks, outlinks, series], f)
+
+
+def get_subgraph_traffic_from_dump(topic):
+    series_path = f'data/wiki/subgraphs/{topic}.2011.series.pkl'
+    if os.path.exists(series_path):
+        return
+
+    with open(f'data/wiki/subgraphs/{topic}.pkl', 'rb') as f:
+        inlinks, outlinks = pickle.load(f)
+
+    paths = glob('data/wiki/serialized_traffic/*_*.npy')
+    paths.sort()
+
+    series = defaultdict(list)
+    missing = set()
+
+    # Extract time series
+    for path in tqdm(paths):
+        m = np.load(path)
+
+        for p in inlinks:
+            s = m[p]
+            if -1 in s:
+                missing.add(p)
+            else:
+                series[p] += s.tolist()
+
+    # Remove nodes with missing time series
+    for p in inlinks:
+        inlinks[p] = list(filter(lambda n: n not in missing, inlinks[p]))
+        outlinks[p] = list(filter(lambda n: n not in missing, outlinks[p]))
+    for p in missing:
+        del inlinks[p]
+        del outlinks[p]
+        if p in series:
+            del series[p]
+
+    # Count the number of days in 2017
+    total = {}
+    for k, v in series.items():
+        total[k] = sum(v[:(7 * 52 * 7)])
+
+    # Sort neighbours by traffic in 2017 (most view counts to least)
+    for k, v in inlinks.items():
+        inlinks[k] = sorted(v, reverse=True, key=lambda x: total[x])
+
+    with open(f'data/wiki/subgraphs/{topic}.2011.cleaned.pkl', 'wb') as f:
+        pickle.dump([inlinks, outlinks], f)
+
+    with open(series_path, 'wb') as f:
+        pickle.dump(series, f)
+
+
+def get_subgraph_traffic_from_api(topic, db):
+    series_path = f'data/wiki/subgraphs/{topic}.2015.series.pkl'
+    if os.path.exists(series_path):
+        return
+
+    with open(f'data/wiki/subgraphs/{topic}.pkl', 'rb') as f:
+        inlinks, outlinks = pickle.load(f)
+
+    series = defaultdict(list)
+    missing = set()
+
+    # Extract time series
+    logger.info(f'Getting time series for {topic}')
+    for p in tqdm(inlinks):
+        page = db.pages.find_one({'i': 496}, projection=['title'])
+        title = page['title']
+        s = get_traffic_for_page(title)
+        if -1 in s:
+            missing.add(p)
+        else:
+            series[p] = s
+
+    # Remove nodes with missing time series
+    for p in inlinks:
+        inlinks[p] = list(filter(lambda n: n not in missing, inlinks[p]))
+        outlinks[p] = list(filter(lambda n: n not in missing, outlinks[p]))
+    for p in missing:
+        del inlinks[p]
+        del outlinks[p]
+        if p in series:
+            del series[p]
+
+    # Count the number of days in 2017
+    total = {}
+    for k, v in series.items():
+        total[k] = sum(v[:(7 * 52 * 7)])
+
+    # Sort neighbours by traffic in 2017 (most view counts to least)
+    for k, v in inlinks.items():
+        inlinks[k] = sorted(v, reverse=True, key=lambda x: total[x])
+
+    with open(f'data/wiki/subgraphs/{topic}.2015.cleaned.pkl', 'wb') as f:
+        pickle.dump([inlinks, outlinks], f)
+
+    with open(series_path, 'wb') as f:
+        pickle.dump(series, f)
+
+
+def get_traffic_for_page(title):
+    # Reproduce the data collection process
+    start = '2015070100'
+    end = '2020060900'
+    title = title.replace('/', r'%2F')
+    domain = 'en.wikipedia.org'
+    source = 'all-access'
+    agent = 'user'
+    title = title.replace(' ', '_')
+    url = f'https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/{domain}/{source}/{agent}/{title}/daily/{start}/{end}'
+
+    # Rate limit 100 requests/second
+    response = requests.get(url).json()
+
+    if 'items' not in response:
+        print(response)
+        return []
+
+    response = response['items']
+
+    if len(response) < 1:
+        return [-1] * 1806
+    first = response[0]['timestamp']
+    last = response[-1]['timestamp']
+
+    first = datetime.strptime(first, '%Y%m%d00')
+    last = datetime.strptime(last, '%Y%m%d00')
+
+    start_dt = datetime.strptime(start, '%Y%m%d00')
+    end_dt = datetime.strptime(end, '%Y%m%d00')
+
+    left_pad_size = (first - start_dt).days
+    series = [-1] * left_pad_size
+
+    current_ts = first - timedelta(days=1)
+
+    for o in response:
+        ts = datetime.strptime(o['timestamp'], '%Y%m%d00')
+        diff = (ts - current_ts).days
+        if diff > 1:
+            n_empty_days = diff - 1
+            for _ in range(n_empty_days):
+                series.append(-1)
+        else:
+            assert diff == 1
+
+        series.append(o['views'])
+        current_ts = ts
+
+    if end_dt != last:
+        n_empty_days = (end_dt - last).days
+        for _ in range(n_empty_days):
+            series.append(-1)
+    assert len(series) == 1806
+
+    return series
 
 
 def extract_all(mongo_host, redis_host):
-    out_path = 'data/wiki/static_edge_list_2011.txt'
+    out_path = 'data/wiki/static_edge_list_2015.txt'
     if not os.path.exists(out_path):
         extract_static_graph(mongo_host, redis_host, out_path)
 
-    matrix_path = "data/wiki/static_edge_list_2011.npz"
+    matrix_path = "data/wiki/static_edge_list_2015.npz"
     if not os.path.exists(matrix_path):
         matrix = read_data_file_as_coo_matrix(out_path)  # 1.5GB!
         ss.save_npz(matrix_path, matrix)
     matrix = ss.load_npz(matrix_path)
     csr_matric = matrix.tocsr()  # 1.3GB!
-    csc_matric = matrix.tocsc()
 
     client = MongoClient(host='localhost', port=27017)
     db = client.wiki
-    # grow_from_seeds('Programming languages', db, csr_matric, csc_matric)
+
+    seeds = {}
+    seeds['programming'] = get_seeds_from_cat('Programming languages', db)
+    seeds['star_wars'] = get_seeds_from_title('Star Wars', db, csr_matric)
+    seeds['stats'] = get_seeds_from_title('Statistics', db, csr_matric)
+    seeds['flu'] = get_seeds_from_title('2009 swine flu pandemic',
+                                        db, csr_matric)
+
+    with Parallel(n_jobs=8, backend='loky') as parallel:
+        parallel(delayed(grow_from_seeds)(key, seeds, mongo_host, matrix_path)
+                 for key, seeds in seeds.items())
+
+    client.close()
 
 
 def main():
