@@ -105,7 +105,7 @@ def get_seeds_from_cat(seed_word, db):
     return sorted(seeds)
 
 
-def grow_from_seeds(key, seeds, mongo_host, matrix_path):
+def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
     client = MongoClient(host='localhost', port=27017)
     db = client.wiki
 
@@ -137,7 +137,7 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path):
                 counter[link] += 1
 
     # This between 5-30 minutes
-    pbar = tqdm(total=10000)
+    pbar = tqdm(total=10000, desc=key, position=i)
     pbar.update(len(seeds))
     while len(inlinks) < 10000:
         p = counter.most_common(1)[0][0]
@@ -356,8 +356,8 @@ def extract_all(mongo_host, redis_host):
                                         db, csr_matric)
 
     with Parallel(n_jobs=8, backend='loky') as parallel:
-        parallel(delayed(grow_from_seeds)(key, seeds, mongo_host, matrix_path)
-                 for key, seeds in seeds.items())
+        parallel(delayed(grow_from_seeds)(key, seeds, mongo_host, matrix_path, i)
+                 for i, (key, seeds) in enumerate(seeds.items()))
 
     client.close()
 
