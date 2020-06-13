@@ -21,15 +21,15 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class SubWikivNetworkReader(DatasetReader):
     def __init__(self,
                  data_dir: str,
-                 seed_word: str = 'Programming languages',
+                 seed_word: str = 'programming',
                  fp16: bool = True,
                  lazy: bool = True) -> None:
         super().__init__(lazy)
         self.data_dir = data_dir
         self.dtype = np.float16 if fp16 else np.float32
 
-        with open(f'data/wiki/subgraphs/{seed_word}.series.pkl', 'rb') as f:
-            self.series = pickle.load(f)
+        with open(f'data/wiki/subgraphs/{seed_word}.pkl', 'rb') as f:
+            _, _, self.series = pickle.load(f)
 
         random.seed(1234)
         self.rs = np.random.RandomState(1234)

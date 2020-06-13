@@ -36,7 +36,7 @@ class NaiveWiki(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  data_dir: str,
-                 seed_word: str = 'Programming languages',
+                 seed_word: str = 'programming',
                  method: str = 'previous_day',
                  forecast_length: int = 28,
                  backcast_length: int = 140,
@@ -53,11 +53,8 @@ class NaiveWiki(BaseModel):
 
         assert method in ['previous_day', 'previous_week']
 
-        with open(f'{data_dir}/{seed_word}.cleaned.pkl', 'rb') as f:
-            self.in_degrees, _ = pickle.load(f)
-
-        with open(f'{data_dir}/{seed_word}.series.pkl', 'rb') as f:
-            self.series = pickle.load(f)
+        with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
+            self.in_degrees, _, self.series = pickle.load(f)
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -161,7 +158,7 @@ class NBEATSWiki(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  data_dir: str,
-                 seed_word: str = 'Programming languages',
+                 seed_word: str = 'programming',
                  forecast_length: int = 28,
                  backcast_length: int = 140,
                  max_neighbours: int = 0,
@@ -182,11 +179,8 @@ class NBEATSWiki(BaseModel):
         self.diff = {}
         initializer(self)
 
-        with open(f'{data_dir}/{seed_word}.cleaned.pkl', 'rb') as f:
-            self.in_degrees, _ = pickle.load(f)
-
-        with open(f'{data_dir}/{seed_word}.series.pkl', 'rb') as f:
-            self.series = pickle.load(f)
+        with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
+            self.in_degrees, _, self.series = pickle.load(f)
 
         self.net = NBeatsNet(device=torch.device('cuda:0'),
                              stack_types=[NBeatsNet.GENERIC_BLOCK] * 16,
