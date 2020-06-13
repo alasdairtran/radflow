@@ -81,8 +81,8 @@ def download_pagecounts():
 
 
 def main():
-    # download_wiki()
-    download_pagecounts()
+    download_wiki()
+    # download_pagecounts()
 
 
 if __name__ == '__main__':

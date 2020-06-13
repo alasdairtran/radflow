@@ -124,7 +124,7 @@ def get_id_maps(db, redis_host, index_path):
             title = title.replace("\\", "\\\\").replace('"', '\\"')
             f.write(f'SET "{title}" {i}\n')
 
-    # Statistics: 1,7035,758 unique titles/IDs.
+    # Statistics: 17,035,758 unique titles/IDs.
     logger.info(f"Number of IDs: {len(id2title)}")
     logger.info(f"Number of Titles: {len(title2id)}")
     # with open(index_path, 'wb') as f:
@@ -343,13 +343,21 @@ def get_traffic_from_api(mongo_host, i, n_jobs, batch, total):
             time.sleep(1 - elasped)
 
 
-def get_all_traffic_from_api(mongo_host, n_jobs, batch, total):
+def get_all_traffic_from_api(mongo_host, redis_host, n_jobs, batch, total):
     client = MongoClient(host=mongo_host, port=27017)
     db = client.wiki
 
     db.traffic.create_index([
         ('t', pymongo.DESCENDING),
     ])
+
+    index_path = os.path.join('data/wiki', 'graph_ids.txt')
+    if not os.path.exists(index_path):
+        get_id_maps(db, redis_host, index_path)
+    # To mass insert this into redis later
+    # cat data/wiki/graph_ids.txt | redis-cli --pipe
+
+    client.close()
 
     logger.info('Extracting traffic counts')
     with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
@@ -383,7 +391,7 @@ def main():
         ptvsd.enable_attach(address)
         ptvsd.wait_for_attach()
 
-    get_all_traffic_from_api(args['mongo'], args['n_jobs'],
+    get_all_traffic_from_api(args['mongo'], args['redis'],  args['n_jobs'],
                              args['batch'], args['total'])
 
 
