@@ -233,7 +233,8 @@ def get_traffic_for_page(o_title):
     # Reproduce the data collection process
     start = '2015070100'
     end = '2020060900'
-    title = o_title.replace('/', r'%2F').replace('?', r'%3F')
+    title = o_title.replace('%', r'%25').replace(
+        '/', r'%2F').replace('?', r'%3F')
     domain = 'en.wikipedia.org'
     source = 'all-access'
     agent = 'user'
