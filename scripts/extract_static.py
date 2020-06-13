@@ -149,14 +149,14 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
             continue
 
         s = get_traffic_for_page(page['title'])
-        if -1 in s:
+        if s is None or -1 in s['series']:
             continue
 
         pbar.update(1)
 
         outlinks[p] = list(csr_matric.getrow(p).nonzero()[1])
         inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
-        series[p] = s
+        series[p] = s['series']
 
         # for link in outlinks[p]:
         #     if link not in outlinks:
@@ -227,59 +227,12 @@ def get_subgraph_traffic_from_dump(topic):
         pickle.dump(series, f)
 
 
-def get_subgraph_traffic_from_api(topic, db):
-    series_path = f'data/wiki/subgraphs/{topic}.2015.series.pkl'
-    if os.path.exists(series_path):
-        return
-
-    with open(f'data/wiki/subgraphs/{topic}.pkl', 'rb') as f:
-        inlinks, outlinks = pickle.load(f)
-
-    series = defaultdict(list)
-    missing = set()
-
-    # Extract time series
-    logger.info(f'Getting time series for {topic}')
-    for p in tqdm(inlinks):
-        page = db.pages.find_one({'i': 496}, projection=['title'])
-        title = page['title']
-        s = get_traffic_for_page(title)
-        if -1 in s:
-            missing.add(p)
-        else:
-            series[p] = s
-
-    # Remove nodes with missing time series
-    for p in inlinks:
-        inlinks[p] = list(filter(lambda n: n not in missing, inlinks[p]))
-        outlinks[p] = list(filter(lambda n: n not in missing, outlinks[p]))
-    for p in missing:
-        del inlinks[p]
-        del outlinks[p]
-        if p in series:
-            del series[p]
-
-    # Count the number of days in 2017
-    total = {}
-    for k, v in series.items():
-        total[k] = sum(v[:(7 * 52 * 7)])
-
-    # Sort neighbours by traffic in 2017 (most view counts to least)
-    for k, v in inlinks.items():
-        inlinks[k] = sorted(v, reverse=True, key=lambda x: total[x])
-
-    with open(f'data/wiki/subgraphs/{topic}.2015.cleaned.pkl', 'wb') as f:
-        pickle.dump([inlinks, outlinks], f)
-
-    with open(series_path, 'wb') as f:
-        pickle.dump(series, f)
-
-
-def get_traffic_for_page(title):
+def get_traffic_for_page(o_title):
     # Reproduce the data collection process
     start = '2015070100'
     end = '2020060900'
-    title = title.replace('/', r'%2F')
+    title = o_title.replace('%', r'%25').replace(
+        '/', r'%2F').replace('?', r'%3F')
     domain = 'en.wikipedia.org'
     source = 'all-access'
     agent = 'user'
@@ -287,16 +240,21 @@ def get_traffic_for_page(title):
     url = f'https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/{domain}/{source}/{agent}/{title}/daily/{start}/{end}'
 
     # Rate limit 100 requests/second
-    response = requests.get(url).json()
-
-    if 'items' not in response:
-        print(response)
-        return []
+    while True:
+        response = requests.get(url).json()
+        if 'items' in response:
+            break
+        elif 'type' in response and 'request_rate_exceeded' in response['type']:
+            time.sleep(random.uniform(5, 10))
+            continue
+        else:
+            print(o_title, response)
+            return None
 
     response = response['items']
 
     if len(response) < 1:
-        return [-1] * 1806
+        return {}
     first = response[0]['timestamp']
     last = response[-1]['timestamp']
 
@@ -330,7 +288,11 @@ def get_traffic_for_page(title):
             series.append(-1)
     assert len(series) == 1806
 
-    return series
+    output = {
+        'series': series,
+        'first_date': first,
+    }
+    return output
 
 
 def extract_all(mongo_host, redis_host):
