@@ -164,6 +164,10 @@ class NBEATSWiki(BaseModel):
                  max_neighbours: int = 0,
                  hidden_size: int = 128,
                  dropout: float = 0.2,
+                 n_stacks: int = 16,
+                 nb_blocks_per_stack: int = 1,
+                 thetas_dims: int = 128,
+                 share_weights_in_stack: bool = False,
                  attn: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -183,13 +187,13 @@ class NBEATSWiki(BaseModel):
             self.in_degrees, _, self.series = pickle.load(f)
 
         self.net = NBeatsNet(device=torch.device('cuda:0'),
-                             stack_types=[NBeatsNet.GENERIC_BLOCK] * 16,
-                             nb_blocks_per_stack=1,
+                             stack_types=[NBeatsNet.GENERIC_BLOCK] * n_stacks,
+                             nb_blocks_per_stack=nb_blocks_per_stack,
                              forecast_length=forecast_length,
                              backcast_length=backcast_length,
-                             thetas_dims=[128] * 16,
+                             thetas_dims=[thetas_dims] * n_stacks,
                              hidden_layer_units=hidden_size,
-                             share_weights_in_stack=False,
+                             share_weights_in_stack=share_weights_in_stack,
                              dropout=dropout,
                              max_neighbours=max_neighbours,
                              attn=attn,
@@ -202,14 +206,18 @@ class NBEATSWiki(BaseModel):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
             return
 
+        # Check how long the time series is
+        series_len = len(next(self.series.values()))
+        n_weeks = series_len // 7 + 1
+
         # Remove trends using the first year of data
-        train_len = 140
+        train_len = self.backcast_length
         for k, v in self.series.items():
             v_full = np.array(v[:train_len]).reshape(train_len // 7, 7)
             avg_all = v_full.mean()
             avg_week = v_full.mean(axis=0)
             diff = avg_week - avg_all
-            diff = np.tile(diff, 53 * 9)
+            diff = np.tile(diff, n_weeks)
             diff = diff[:len(v)]
             # self.series[k] = v - diff
             self.diff[k] = diff
