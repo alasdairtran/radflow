@@ -2,6 +2,7 @@
 .mypy_cache
 .pytest_cache
 .vscode
+.idea
 
 # Python
 __pycache__
