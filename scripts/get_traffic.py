@@ -243,7 +243,11 @@ def get_traffic_for_page(o_title):
 
     # Rate limit 100 requests/second
     while True:
-        response = requests.get(url).json()
+        try:
+            response = requests.get(url).json()
+        except requests.exceptions.ConnectionError:
+            time.sleep(random.uniform(5, 10))
+            continue
         if 'items' in response:
             break
         elif 'type' in response and 'request_rate_exceeded' in response['type']:
