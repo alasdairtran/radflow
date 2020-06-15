@@ -166,9 +166,10 @@ class NBEATSWiki(BaseModel):
                  dropout: float = 0.2,
                  n_stacks: int = 16,
                  nb_blocks_per_stack: int = 1,
+                 missing_p: float = 0.0,
                  thetas_dims: int = 128,
                  share_weights_in_stack: bool = False,
-                 attn: bool = False,
+                 attn: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -180,6 +181,7 @@ class NBEATSWiki(BaseModel):
         self.hidden_size = hidden_size
         self.device = torch.device('cuda:0')
         self.max_start = None
+        self.missing_p = missing_p
         self.diff = {}
         initializer(self)
 
@@ -226,7 +228,7 @@ class NBEATSWiki(BaseModel):
 
         p = next(self.parameters())
         for k, v in self.series.items():
-            self.series[k] = np.asarray(v)
+            self.series[k] = np.asarray(v).astype(float)
 
         # Compute correlation
         for node, neighs in self.in_degrees.items():
@@ -240,6 +242,17 @@ class NBEATSWiki(BaseModel):
             self.in_degrees[node] = np.array(neighs)[keep_idx]
 
         for k, v in self.series.items():
+            if self.missing_p > 0:
+                size = len(v) - self.forecast_length
+                indices = self.rs.choice(np.arange(1, size), replace=False,
+                                         size=int(size * self.missing_p))
+                self.series[k][indices] = np.nan
+
+                mask = np.isnan(self.series[k])
+                idx = np.where(~mask, np.arange(len(mask)), 0)
+                np.maximum.accumulate(idx, out=idx)
+                self.series[k][mask] = self.series[k][idx[mask]]
+
             self.series[k] = p.new_tensor(self.series[k])
             self.diff[k] = p.new_tensor(self.diff[k])
 

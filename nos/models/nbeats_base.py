@@ -82,10 +82,13 @@ class NBeatsNet(nn.Module):
             size=(backcast.size()[0], self.forecast_length,))
         for stack_id in range(len(self.stacks)):
             for block_id in range(len(self.stacks[stack_id])):
-                b, f, X_neighs = self.stacks[stack_id][block_id](
+                b, f, bn, fn, X_neighs = self.stacks[stack_id][block_id](
                     backcast, X_neighs, X_neigh_masks)
                 backcast = backcast.to(self.device) - b
                 forecast = forecast.to(self.device) + f
+                if bn is not None and fn is not None:
+                    backcast = backcast - bn
+                    forecast = forecast + fn
         return backcast, forecast
 
 
@@ -118,7 +121,7 @@ def linspace(backcast_length, forecast_length):
 class Block(nn.Module):
 
     def __init__(self, units, thetas_dim, device, backcast_length=10, forecast_length=5, share_thetas=False,
-                 nb_harmonics=None, dropout=0.0, max_neighbours=0, attn=False):
+                 nb_harmonics=None, dropout=0.0, max_neighbours=0, attn=True):
         super(Block, self).__init__()
         self.units = units
         self.thetas_dim = thetas_dim
@@ -131,6 +134,7 @@ class Block(nn.Module):
         self.fc4 = GehringLinear(units, units, dropout=dropout)
         self.dropout = dropout
         self.device = device
+        self.use_attn = attn
         self.max_neighbours = max_neighbours
         self.backcast_linspace, self.forecast_linspace = linspace(
             backcast_length, forecast_length)
@@ -147,10 +151,10 @@ class Block(nn.Module):
             self.fc3n = GehringLinear(units, units, dropout=dropout)
             self.fc4n = GehringLinear(units, units, dropout=dropout)
             self.theta_b_fc_n = GehringLinear(units, thetas_dim, bias=False)
-            # if attn:
-            self.attn = nn.MultiheadAttention(
-                units, 4, dropout=dropout, bias=True,
-                add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+            if attn:
+                self.attn = nn.MultiheadAttention(
+                    units, 4, dropout=dropout, bias=True,
+                    add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
             # else:
             # self.avg_fc = GehringLinear(2 * units, units)
         #     self.conv = SAGEConv(units, units)
@@ -193,10 +197,10 @@ class Block(nn.Module):
             X_neighs = X_neighs.reshape(B, N, -1)
             X_neigh_masks = X_neigh_masks.reshape(B, N)
 
-            x = self._get_neighbour_embeds(
+            x_attended = self._get_neighbour_embeds(
                 X_neighs, X_neigh_masks, x)
 
-        return x, X_neighs
+        return x, X_neighs, x_attended
 
     def _get_neighbour_embeds(self, X_neighs, X_neigh_masks, X):
         # X.shape == [batch_size, backcast_len]
@@ -209,18 +213,20 @@ class Block(nn.Module):
         # key.shape == value.shape == [n_neighs, batch_size, backcast_len]
 
         # key_padding_mask: The padding positions are labelled with 1
-        attn_output, _ = self.attn(
-            query, key, value, key_padding_mask=X_neigh_masks)
-        # attn_output.shape == [1, batch_size, backcast_len]
-
-        X_attended = attn_output.squeeze(0)
-        # X_attended.shape == [batch_size, backcast_len]
+        if self.use_attn:
+            attn_output, _ = self.attn(
+                query, key, value, key_padding_mask=X_neigh_masks)
+            # attn_output.shape == [1, batch_size, backcast_len]
+            X_attended = attn_output.squeeze(0)
+            # X_attended.shape == [batch_size, backcast_len]
+        else:
+            X_attended = value.mean(dim=0)
 
         # X_out = torch.cat([X_attended, X], dim=-1)
-        X_out = X + X_attended
+        # X_out = X + X_attended
 
         # return self.avg_fc(X_out)
-        return X_out
+        return X_attended
 
     def _get_neighbour_embeds_avg(self, X_neighs, X_neigh_masks, X):
         B = X.shape[0]
@@ -393,10 +399,11 @@ class GenericBlock(Block):
 
         if max_neighbours > 0:
             self.backcast_fc_n = GehringLinear(thetas_dim, backcast_length)
+            self.forecast_fc_n = GehringLinear(thetas_dim, forecast_length)
 
     def forward(self, x, X_neighs=None, X_neigh_masks=None):
         # no constraint for generic arch.
-        x, X_neighs = super(GenericBlock, self).forward(
+        x, X_neighs, x_attended = super(GenericBlock, self).forward(
             x, X_neighs, X_neigh_masks)
 
         theta_b = F.relu(self.theta_b_fc(x))
@@ -406,7 +413,12 @@ class GenericBlock(Block):
         forecast = self.forecast_fc(theta_f)  # generic. 3.3.
 
         if X_neighs is not None:
-            theta_b_n = F.relu(self.theta_b_fc_n(X_neighs))
-            X_neighs = self.backcast_fc_n(theta_b_n)
+            theta_b_n = F.relu(self.theta_b_fc_n(x_attended))
+            theta_f_n = F.relu(self.theta_f_fc(x_attended))
 
-        return backcast, forecast, X_neighs
+            backcast_n = self.backcast_fc_n(theta_b_n)
+            forcast_n = self.forecast_fc_n(theta_f_n)
+        else:
+            backcast_n = forcast_n = None
+
+        return backcast, forecast, backcast_n, forcast_n, X_neighs
