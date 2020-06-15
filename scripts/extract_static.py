@@ -125,8 +125,17 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
     logger.info(f'Building graph for {key}')
 
     for p in seeds:
+        page = db.pages.find_one({'i': int(p)}, projection=['title'])
+        if page['title'].startswith('List of'):
+            continue
+
+        s = get_traffic_for_page(page['title'], int(p), db)
+        if s is None or -1 in s:
+            continue
+
         outlinks[p] = list(csr_matric.getrow(p).nonzero()[1])
         inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
+        series[p] = s
 
     for page in inlinks:
         # for link in outlinks[page]:
@@ -148,15 +157,15 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
         if page['title'].startswith('List of'):
             continue
 
-        s = get_traffic_for_page(page['title'])
-        if s is None or -1 in s['series']:
+        s = get_traffic_for_page(page['title'], int(p), db)
+        if s is None or -1 in s:
             continue
 
         pbar.update(1)
 
         outlinks[p] = list(csr_matric.getrow(p).nonzero()[1])
         inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
-        series[p] = s['series']
+        series[p] = s
 
         # for link in outlinks[p]:
         #     if link not in outlinks:
@@ -227,7 +236,11 @@ def get_subgraph_traffic_from_dump(topic):
         pickle.dump(series, f)
 
 
-def get_traffic_for_page(o_title):
+def get_traffic_for_page(o_title, i, db):
+    s = db.series.find_one({'_id': i})
+    if s is not None:
+        return s['s']
+
     # Reproduce the data collection process
     start = '2015070100'
     end = '2020060900'
@@ -288,11 +301,7 @@ def get_traffic_for_page(o_title):
             series.append(-1)
     assert len(series) == 1806
 
-    output = {
-        'series': series,
-        'first_date': first,
-    }
-    return output
+    return series
 
 
 def extract_all(mongo_host, redis_host):
