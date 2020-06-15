@@ -76,14 +76,14 @@ class NBeatsNet(nn.Module):
         else:
             return GenericBlock
 
-    def forward(self, backcast, X_neighs=None, neighbor_lens=None, mask_list=None):
+    def forward(self, backcast, X_neighs=None, X_neigh_masks=None):
         # maybe batch size here.
         forecast = torch.zeros(
             size=(backcast.size()[0], self.forecast_length,))
         for stack_id in range(len(self.stacks)):
             for block_id in range(len(self.stacks[stack_id])):
                 b, f, X_neighs = self.stacks[stack_id][block_id](
-                    backcast, X_neighs, neighbor_lens, mask_list)
+                    backcast, X_neighs, X_neigh_masks)
                 backcast = backcast.to(self.device) - b
                 forecast = forecast.to(self.device) + f
         return backcast, forecast
@@ -142,18 +142,19 @@ class Block(nn.Module):
             self.theta_f_fc = GehringLinear(units, thetas_dim, bias=False)
 
         if max_neighbours > 0:
-            if attn:
-                self.attn = nn.MultiheadAttention(
-                    units, 4, dropout=dropout, bias=True,
-                    add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
-            else:
-                self.avg_fc = GehringLinear(2 * units, units)
+            # if attn:
+            self.attn = nn.MultiheadAttention(
+                units, 4, dropout=dropout, bias=True,
+                add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+            # else:
+            self.avg_fc = GehringLinear(2 * units, units)
         #     self.conv = SAGEConv(units, units)
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
+        self.register_buffer('_float', torch.FloatTensor(1))
 
-    def forward(self, x, X_neighs=None, neighbor_lens=None, mask_list=None):
+    def forward(self, x, X_neighs=None, X_neigh_masks=None):
         x = F.relu(self.fc1(x.to(self.device)))
         x = F.dropout(x, self.dropout, self.training)
         x = F.relu(self.fc2(x))
@@ -164,21 +165,57 @@ class Block(nn.Module):
         x = F.dropout(x, self.dropout, self.training)
 
         if X_neighs is not None:
+            B, N, E = X_neighs.shape
+            X_neighs = X_neighs.reshape(B * N, E)
+            X_neigh_masks = X_neigh_masks.reshape(B * N)
+
             X_neighs = F.relu(self.fc1(X_neighs.to(self.device)))
-            X_neighs = F.dropout(X_neighs, self.dropout, self.training)
-            X_neighs = F.relu(self.fc2(X_neighs))
-            X_neighs = F.dropout(X_neighs, self.dropout, self.training)
-            X_neighs = F.relu(self.fc3(X_neighs))
-            X_neighs = F.dropout(X_neighs, self.dropout, self.training)
-            X_neighs = F.relu(self.fc4(X_neighs))
+            X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
+            X_neighs = F.relu(self.fc2(X_neighs))
+            X_neighs[X_neigh_masks] = 0
+            X_neighs = F.dropout(X_neighs, self.dropout, self.training)
+
+            X_neighs = F.relu(self.fc3(X_neighs))
+            X_neighs[X_neigh_masks] = 0
+            X_neighs = F.dropout(X_neighs, self.dropout, self.training)
+
+            X_neighs = F.relu(self.fc4(X_neighs))
+            X_neighs[X_neigh_masks] = 0
+            X_neighs = F.dropout(X_neighs, self.dropout, self.training)
+
+            X_neighs = X_neighs.reshape(B, N, -1)
+            X_neigh_masks = X_neigh_masks.reshape(B, N)
+
             x = self._get_neighbour_embeds(
-                X_neighs, neighbor_lens, mask_list, x)
+                X_neighs, X_neigh_masks, x)
 
         return x, X_neighs
 
-    def _get_neighbour_embeds(self, X_neighbors, neighbor_lens, mask_list, X):
+    def _get_neighbour_embeds(self, X_neighs, X_neigh_masks, X):
+        # X.shape == [batch_size, backcast_len]
+        # X_neighs.shape == [batch_size, n_neighs, backcast_len]
+
+        query = X.unsqueeze(1).transpose(0, 1)
+        # query.shape == [1, batch_size, backcast_len]
+
+        key = value = X_neighs.transpose(0, 1)
+        # key.shape == value.shape == [n_neighs, batch_size, backcast_len]
+
+        # key_padding_mask: The padding positions are labelled with 1
+        attn_output, _ = self.attn(
+            query, key, value, key_padding_mask=X_neigh_masks)
+        # attn_output.shape == [1, batch_size, backcast_len]
+
+        X_attended = attn_output.squeeze(0)
+        # X_attended.shape == [batch_size, backcast_len]
+
+        X_out = torch.cat([X_attended, X], dim=-1)
+
+        return self.avg_fc(X_out)
+
+    def _get_neighbour_embeds_avg(self, X_neighs, X_neigh_masks, X):
         B = X.shape[0]
         X_neighbors = X_neighbors.reshape(B, self.max_neighbours, -1)
         X_neighbors[mask_list] = 0
@@ -301,9 +338,9 @@ class SeasonalityBlock(Block):
                                                    forecast_length, share_thetas=True,
                                                    dropout=dropout, max_neighbours=max_neighbours, attn=attn)
 
-    def forward(self, x, X_neighs=None, neighbor_lens=None, mask_list=None):
+    def forward(self, x, X_neighs=None, X_neigh_masks=None):
         x, X_neighs = super(SeasonalityBlock, self).forward(
-            x, X_neighs, neighbor_lens, mask_list)
+            x, X_neighs, X_neigh_masks)
         backcast = seasonality_model(self.theta_b_fc(
             x), self.backcast_linspace, self.device)
         forecast = seasonality_model(self.theta_f_fc(
@@ -322,9 +359,9 @@ class TrendBlock(Block):
                                          forecast_length, share_thetas=True,
                                          dropout=dropout, max_neighbours=max_neighbours, attn=attn)
 
-    def forward(self, x, X_neighs=None, neighbor_lens=None, mask_list=None):
+    def forward(self, x, X_neighs=None, X_neigh_masks=None):
         x, X_neighs = super(TrendBlock, self).forward(
-            x, X_neighs, neighbor_lens, mask_list)
+            x, X_neighs, X_neigh_masks)
         backcast = trend_model(self.theta_b_fc(
             x), self.backcast_linspace, self.device)
         forecast = trend_model(self.theta_f_fc(
@@ -347,10 +384,10 @@ class GenericBlock(Block):
         self.backcast_fc = GehringLinear(thetas_dim, backcast_length)
         self.forecast_fc = GehringLinear(thetas_dim, forecast_length)
 
-    def forward(self, x, X_neighs=None, neighbor_lens=None, mask_list=None):
+    def forward(self, x, X_neighs=None, X_neigh_masks=None):
         # no constraint for generic arch.
         x, X_neighs = super(GenericBlock, self).forward(
-            x, X_neighs, neighbor_lens, mask_list)
+            x, X_neighs, X_neigh_masks)
 
         theta_b = F.relu(self.theta_b_fc(x))
         theta_f = F.relu(self.theta_f_fc(x))

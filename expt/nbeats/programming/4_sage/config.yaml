@@ -13,7 +13,7 @@ model:
   type: nbeats_wiki
   data_dir: "./data/wiki/subgraphs"
   seed_word: programming
-  max_neighbours: 8
+  max_neighbours: 32
 iterator:
   type: basic
   batch_size: 512

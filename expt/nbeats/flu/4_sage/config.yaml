@@ -2,7 +2,7 @@
 dataset_reader:
   type: subwiki_network
   data_dir: "./data/wiki/subgraphs"
-  seed_word: star_wars
+  seed_word: flu
   fp16: false
 train_data_path: train
 validation_data_path: valid
@@ -12,7 +12,7 @@ vocabulary:
 model:
   type: nbeats_wiki
   data_dir: "./data/wiki/subgraphs"
-  seed_word: star_wars
+  seed_word: flu
   max_neighbours: 32
 iterator:
   type: basic

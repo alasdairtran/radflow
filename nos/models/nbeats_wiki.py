@@ -39,7 +39,7 @@ class NaiveWiki(BaseModel):
                  seed_word: str = 'programming',
                  method: str = 'previous_day',
                  forecast_length: int = 28,
-                 backcast_length: int = 140,
+                 backcast_length: int = 224,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -160,7 +160,7 @@ class NBEATSWiki(BaseModel):
                  data_dir: str,
                  seed_word: str = 'programming',
                  forecast_length: int = 28,
-                 backcast_length: int = 140,
+                 backcast_length: int = 224,
                  max_neighbours: int = 0,
                  hidden_size: int = 128,
                  dropout: float = 0.2,
@@ -201,13 +201,14 @@ class NBEATSWiki(BaseModel):
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
+        self.register_buffer('_float', torch.FloatTensor(1))
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
             return
 
         # Check how long the time series is
-        series_len = len(next(self.series.values()))
+        series_len = len(next(iter(self.series.values())))
         n_weeks = series_len // 7 + 1
 
         # Remove trends using the first year of data
@@ -225,28 +226,42 @@ class NBEATSWiki(BaseModel):
 
         p = next(self.parameters())
         for k, v in self.series.items():
-            v_array = np.asarray(v)
-            self.series[k] = p.new_tensor(v_array)
+            self.series[k] = np.asarray(v)
+
+        # Compute correlation
+        for node, neighs in self.in_degrees.items():
+            x = self.series[node][:self.backcast_length]
+            corrs = []
+            for neigh in neighs:
+                y = self.series[neigh][:self.backcast_length]
+                r = np.corrcoef(x, y)[0, 1]
+                corrs.append(r)
+            keep_idx = np.argsort(corrs)[::-1][:self.max_neighbours]
+            self.in_degrees[node] = np.array(neighs)[keep_idx]
+
+        for k, v in self.series.items():
+            self.series[k] = p.new_tensor(self.series[k])
             self.diff[k] = p.new_tensor(self.diff[k])
 
         self.max_start = len(
             self.series[k]) - self.forecast_length - self.total_length
 
     def _get_neighbours(self, keys, split):
-        neighbor_lens = []
-        mask_list = []
+        # neighbor_lens = []
+        # mask_list = []
 
-        sources = torch.zeros(
+        sources = self._float.new_zeros(
             (len(keys), self.max_neighbours, self.backcast_length))
+        masks = self._long.new_ones((len(keys), self.max_neighbours)).bool()
 
         for i, key in enumerate(keys):
             if key in self.in_degrees:
                 neighs = self.in_degrees[key][:self.max_neighbours]
             else:
                 neighs = []
-            neighbor_lens.append([len(neighs)])
-            mask_list.append([False] * len(neighs) + [True]
-                             * (self.max_neighbours - len(neighs)))
+            # neighbor_lens.append([len(neighs)])
+            # mask_list.append([False] * len(neighs) + [True]
+            #                  * (self.max_neighbours - len(neighs)))
             for j, n in enumerate(neighs):
                 s = self.series[n]
                 if split in ['train', 'valid']:
@@ -254,17 +269,18 @@ class NBEATSWiki(BaseModel):
                 elif split == 'test':
                     s = s[-self.total_length:-self.forecast_length]
                 sources[i, j] = s
+                masks[i, j] = 0
 
         # sources.shape == [batch_size, max_neighbours, backcast_length]
-        sources = sources.reshape(
-            len(keys) * self.max_neighbours, self.backcast_length)
+        # sources = sources.reshape(
+        #     len(keys) * self.max_neighbours, self.backcast_length)
 
-        neighbor_lens = torch.tensor(neighbor_lens)
+        # neighbor_lens = torch.tensor(neighbor_lens)
         # sources.shape == [batch_size, 1]
 
-        mask_list = torch.tensor(mask_list)
+        # mask_list = torch.tensor(mask_list)
 
-        return sources, neighbor_lens.to(self.device), mask_list.to(self.device)
+        return sources, masks
 
     def forward(self, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
@@ -321,10 +337,10 @@ class NBEATSWiki(BaseModel):
         if self.max_neighbours == 0:
             _, X = self.net(X)
         else:
-            neighbours, neighbor_lens, mask_list = self._get_neighbours(
+            neighbours, neighbour_masks = self._get_neighbours(
                 keys, split)
             X_neighs = torch.log1p(neighbours)
-            _, X = self.net(X, X_neighs, neighbor_lens, mask_list)
+            _, X = self.net(X, X_neighs, neighbour_masks)
 
         # X.shape == [batch_size, forecast_len]
 
