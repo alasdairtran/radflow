@@ -416,7 +416,7 @@ def make_subwiki_boxplots(topic):
     with open(f'expt/nbeats/{topic}/3_no_graph/serialization/evaluate-metrics.json') as f:
         smape['NBEATS'] = json.load(f)['smapes']
 
-    with open(f'expt/nbeats/{topic}/4_sage/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/nbeats/{topic}/4_attn/serialization/evaluate-metrics.json') as f:
         smape['Agg'] = json.load(f)['smapes']
 
     smapes = [smape['naive'], smape['SN'], smape['NBEATS'],

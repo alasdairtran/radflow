@@ -142,12 +142,17 @@ class Block(nn.Module):
             self.theta_f_fc = GehringLinear(units, thetas_dim, bias=False)
 
         if max_neighbours > 0:
+            self.fc1n = GehringLinear(backcast_length, units, dropout=dropout)
+            self.fc2n = GehringLinear(units, units, dropout=dropout)
+            self.fc3n = GehringLinear(units, units, dropout=dropout)
+            self.fc4n = GehringLinear(units, units, dropout=dropout)
+            self.theta_b_fc_n = GehringLinear(units, thetas_dim, bias=False)
             # if attn:
             self.attn = nn.MultiheadAttention(
                 units, 4, dropout=dropout, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
             # else:
-            self.avg_fc = GehringLinear(2 * units, units)
+            # self.avg_fc = GehringLinear(2 * units, units)
         #     self.conv = SAGEConv(units, units)
 
         # Shortcut to create new tensors in the same device as the module
@@ -169,19 +174,19 @@ class Block(nn.Module):
             X_neighs = X_neighs.reshape(B * N, E)
             X_neigh_masks = X_neigh_masks.reshape(B * N)
 
-            X_neighs = F.relu(self.fc1(X_neighs.to(self.device)))
+            X_neighs = F.relu(self.fc1n(X_neighs.to(self.device)))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc2(X_neighs))
+            X_neighs = F.relu(self.fc2n(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc3(X_neighs))
+            X_neighs = F.relu(self.fc3n(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc4(X_neighs))
+            X_neighs = F.relu(self.fc4n(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
@@ -211,9 +216,11 @@ class Block(nn.Module):
         X_attended = attn_output.squeeze(0)
         # X_attended.shape == [batch_size, backcast_len]
 
-        X_out = torch.cat([X_attended, X], dim=-1)
+        # X_out = torch.cat([X_attended, X], dim=-1)
+        X_out = X + X_attended
 
-        return self.avg_fc(X_out)
+        # return self.avg_fc(X_out)
+        return X_out
 
     def _get_neighbour_embeds_avg(self, X_neighs, X_neigh_masks, X):
         B = X.shape[0]
@@ -384,6 +391,9 @@ class GenericBlock(Block):
         self.backcast_fc = GehringLinear(thetas_dim, backcast_length)
         self.forecast_fc = GehringLinear(thetas_dim, forecast_length)
 
+        if max_neighbours > 0:
+            self.backcast_fc_n = GehringLinear(thetas_dim, backcast_length)
+
     def forward(self, x, X_neighs=None, X_neigh_masks=None):
         # no constraint for generic arch.
         x, X_neighs = super(GenericBlock, self).forward(
@@ -396,7 +406,7 @@ class GenericBlock(Block):
         forecast = self.forecast_fc(theta_f)  # generic. 3.3.
 
         if X_neighs is not None:
-            theta_b_n = F.relu(self.theta_b_fc(X_neighs))
-            X_neighs = self.backcast_fc(theta_b_n)
+            theta_b_n = F.relu(self.theta_b_fc_n(X_neighs))
+            X_neighs = self.backcast_fc_n(theta_b_n)
 
         return backcast, forecast, X_neighs
