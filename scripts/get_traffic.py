@@ -328,10 +328,15 @@ def get_traffic_from_api(mongo_host, i, n_jobs, batch, total):
 
     pages = db.pages.find({'i': {'$gte': start, '$lt': end}},
                           projection=['i', 'title'])
+
+    docs = db.traffic.find({'_id': {'$gte': start, '$lt': end}}, projection=[])
+    done_ids = set([d['_id'] for d in docs])
+
     for page in pages:
-        start_ts = time.time()
-        if db.traffic.find_one({'_id': page['i']}, projection=['_id']):
+        if page['i'] in done_ids:
             continue
+
+        start_ts = time.time()
         s = get_traffic_for_page(page['title'])
         if s is None:
             # Ensure that we take at least 1 second to appease the server

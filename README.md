@@ -35,8 +35,9 @@ python scripts/extract_graph.py --reindex
 
 # Get page view counts directly from wiki API
 # Also create a redis database to cache a map from title to node ID
-python scripts/get_traffic.py -m dijkstra -b 0 -t 2 # cray
-python scripts/get_traffic.py -m dijkstra -b 1 -t 2 # braun
+python scripts/get_traffic.py -m localhost -b 0 -t 3 # dijkstra
+python scripts/get_traffic.py -m dijkstra -b 1 -t 3 # cray
+python scripts/get_traffic.py -m dijkstra -b 2 -t 3 # braun
 
 # Extract static subgraphs for our first round of experiment
 python scripts/extract_static.py -r cray # dijsktra
