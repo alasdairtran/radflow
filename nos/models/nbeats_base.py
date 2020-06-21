@@ -26,7 +26,7 @@ class NBeatsNet(nn.Module):
                  nb_harmonics=None,
                  dropout=0.1,
                  max_neighbours=0,
-                 attn=False):
+                 peek=False):
         super(NBeatsNet, self).__init__()
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
@@ -41,7 +41,7 @@ class NBeatsNet(nn.Module):
         self.device = device
         self.dropout = dropout
         self.max_neighbours = max_neighbours
-        self.attn = attn
+        self.peek = peek
         print(f'| N-Beats')
         for stack_id in range(len(self.stack_types)):
             self.stacks.append(self.create_stack(stack_id))
@@ -61,7 +61,7 @@ class NBeatsNet(nn.Module):
             else:
                 block = block_init(self.hidden_layer_units, self.thetas_dim[stack_id],
                                    self.device, self.backcast_length, self.forecast_length,
-                                   self.nb_harmonics, self.dropout, self.max_neighbours, self.attn)
+                                   self.nb_harmonics, self.dropout, self.max_neighbours)
                 self.parameters.extend(block.parameters())
             print(f'     | -- {block}')
             blocks.append(block)
@@ -76,19 +76,45 @@ class NBeatsNet(nn.Module):
         else:
             return GenericBlock
 
-    def forward(self, backcast, X_neighs=None, X_neigh_masks=None):
+    def forward(self, backcast, backcast_n=None, target_n=None, X_neigh_masks=None):
         # maybe batch size here.
-        forecast = torch.zeros(
-            size=(backcast.size()[0], self.forecast_length,))
+        B = backcast.shape[0]
+        backcast = backcast.to(self.device)
+        forecast = torch.zeros(size=(B, self.forecast_length)).to(self.device)
+
+        if backcast_n is not None:
+            B, N, S = backcast_n.shape
+            forecast_n = torch.zeros(
+                size=(B, N, self.forecast_length)).to(self.device)
+
         for stack_id in range(len(self.stacks)):
             for block_id in range(len(self.stacks[stack_id])):
-                b, f, bn, fn, X_neighs = self.stacks[stack_id][block_id](
-                    backcast, X_neighs, X_neigh_masks)
-                backcast = backcast.to(self.device) - b
-                forecast = forecast.to(self.device) + f
+                b, f, bn, fn, attn_weights = self.stacks[stack_id][block_id](
+                    backcast, backcast_n, X_neigh_masks)
+
+                backcast = backcast - b
+                # backcast.shape == [B, S]
+
+                forecast = forecast + f
+                # forecast.shape == [B, T]
+
                 if bn is not None and fn is not None:
-                    backcast = backcast - bn
-                    forecast = forecast + fn
+                    attn_weights = attn_weights.unsqueeze(2)
+                    # attn_weights.shape == [B, N, 1]
+                    if self.peek:
+                        backcast = backcast - (attn_weights * bn).sum(1)
+                        forecast = forecast + \
+                            (attn_weights * (target_n - forecast_n)).sum(1)
+                    else:
+                        backcast = backcast - (attn_weights * bn).sum(1)
+                        forecast = forecast + (attn_weights * fn).sum(1)
+
+                    backcast_n = backcast_n - bn
+                    # backcast_n.shape == [B, N, S]
+
+                    forecast_n = forecast_n + fn
+                    # forecast_n.shape == [B, N, T]
+
         return backcast, forecast
 
 
@@ -121,7 +147,7 @@ def linspace(backcast_length, forecast_length):
 class Block(nn.Module):
 
     def __init__(self, units, thetas_dim, device, backcast_length=10, forecast_length=5, share_thetas=False,
-                 nb_harmonics=None, dropout=0.0, max_neighbours=0, attn=True):
+                 nb_harmonics=None, dropout=0.0, max_neighbours=0):
         super(Block, self).__init__()
         self.units = units
         self.thetas_dim = thetas_dim
@@ -134,7 +160,6 @@ class Block(nn.Module):
         self.fc4 = GehringLinear(units, units, dropout=dropout)
         self.dropout = dropout
         self.device = device
-        self.use_attn = attn
         self.max_neighbours = max_neighbours
         self.backcast_linspace, self.forecast_linspace = linspace(
             backcast_length, forecast_length)
@@ -146,17 +171,15 @@ class Block(nn.Module):
             self.theta_f_fc = GehringLinear(units, thetas_dim, bias=False)
 
         if max_neighbours > 0:
-            self.fc1n = GehringLinear(backcast_length, units, dropout=dropout)
-            self.fc2n = GehringLinear(units, units, dropout=dropout)
-            self.fc3n = GehringLinear(units, units, dropout=dropout)
-            self.fc4n = GehringLinear(units, units, dropout=dropout)
-            self.theta_b_fc_n = GehringLinear(units, thetas_dim, bias=False)
-            if attn:
-                self.attn = nn.MultiheadAttention(
-                    units, 4, dropout=dropout, bias=True,
-                    add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
-            # else:
-            # self.avg_fc = GehringLinear(2 * units, units)
+            pass
+            # self.fc1n = GehringLinear(backcast_length, units, dropout=dropout)
+            # self.fc2n = GehringLinear(units, units, dropout=dropout)
+            # self.fc3n = GehringLinear(units, units, dropout=dropout)
+            # self.fc4n = GehringLinear(units, units, dropout=dropout)
+            # self.theta_b_fc_n = GehringLinear(units, thetas_dim, bias=False)
+            self.attn = nn.MultiheadAttention(
+                units, 4, dropout=dropout, bias=True,
+                add_bias_kv=False, add_zero_attn=True, kdim=None, vdim=None)
         #     self.conv = SAGEConv(units, units)
 
         # Shortcut to create new tensors in the same device as the module
@@ -173,61 +196,63 @@ class Block(nn.Module):
         x = F.relu(self.fc4(x))
         x = F.dropout(x, self.dropout, self.training)
 
-        x_attended = None
+        attn_weights = None
         if X_neighs is not None:
             B, N, E = X_neighs.shape
             X_neighs = X_neighs.reshape(B * N, E)
             X_neigh_masks = X_neigh_masks.reshape(B * N)
 
-            X_neighs = F.relu(self.fc1n(X_neighs.to(self.device)))
+            X_neighs = F.relu(self.fc1(X_neighs.to(self.device)))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc2n(X_neighs))
+            X_neighs = F.relu(self.fc2(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc3n(X_neighs))
+            X_neighs = F.relu(self.fc3(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc4n(X_neighs))
+            X_neighs = F.relu(self.fc4(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
             X_neighs = X_neighs.reshape(B, N, -1)
             X_neigh_masks = X_neigh_masks.reshape(B, N)
 
-            x_attended = self._get_neighbour_embeds(
-                X_neighs, X_neigh_masks, x)
+            attn_weights = self._get_attn_weights(X_neighs, X_neigh_masks, x)
+            # attn_weights.shape == [batch_size, 1, n_neighs]
 
-        return x, X_neighs, x_attended
+        return x, X_neighs, attn_weights
 
-    def _get_neighbour_embeds(self, X_neighs, X_neigh_masks, X):
-        # X.shape == [batch_size, backcast_len]
-        # X_neighs.shape == [batch_size, n_neighs, backcast_len]
+    def _get_attn_weights(self, X_neighs, X_neigh_masks, X):
+        # X.shape == [batch_size, embed_dim]
+        # X_neighs.shape == [batch_size, n_neighs, embed_dim]
 
         query = X.unsqueeze(1).transpose(0, 1)
-        # query.shape == [1, batch_size, backcast_len]
+        # query.shape == [1, batch_size, embed_dim]
 
         key = value = X_neighs.transpose(0, 1)
-        # key.shape == value.shape == [n_neighs, batch_size, backcast_len]
+        # key.shape == value.shape == [n_neighs, batch_size, embed_dim]
 
         # key_padding_mask: The padding positions are labelled with 1
-        if self.use_attn:
-            attn_output, _ = self.attn(
-                query, key, value, key_padding_mask=X_neigh_masks)
-            # attn_output.shape == [1, batch_size, backcast_len]
-            X_attended = attn_output.squeeze(0)
-            # X_attended.shape == [batch_size, backcast_len]
-        else:
-            X_attended = value.mean(dim=0)
+        attn_output, attn_weights = self.attn(
+            query, key, value, key_padding_mask=X_neigh_masks)
+        # attn_output.shape == [1, batch_size, embed_dim]
+        # attn_weights.shape == [batch_size, 1, n_neighs + 1]
+
+        attn_weights = attn_weights.squeeze(1)[:, :-1]
+        # attn_weights.shape == [batch_size, n_neighs]
+
+        # X_attended = attn_output.squeeze(0)
+        # X_attended.shape == [batch_size, embed_dim]
 
         # X_out = torch.cat([X_attended, X], dim=-1)
         # X_out = X + X_attended
 
         # return self.avg_fc(X_out)
-        return X_attended
+        return attn_weights
 
     def _get_neighbour_embeds_avg(self, X_neighs, X_neigh_masks, X):
         B = X.shape[0]
@@ -342,15 +367,15 @@ class Block(nn.Module):
 
 class SeasonalityBlock(Block):
 
-    def __init__(self, units, thetas_dim, device, backcast_length=10, forecast_length=5, nb_harmonics=None, dropout=0.1, max_neighbours=0, attn=False):
+    def __init__(self, units, thetas_dim, device, backcast_length=10, forecast_length=5, nb_harmonics=None, dropout=0.1, max_neighbours=0):
         if nb_harmonics:
             super(SeasonalityBlock, self).__init__(units, nb_harmonics, device, backcast_length,
                                                    forecast_length, share_thetas=True,
-                                                   dropout=dropout, max_neighbours=max_neighbours, attn=attn)
+                                                   dropout=dropout, max_neighbours=max_neighbours)
         else:
             super(SeasonalityBlock, self).__init__(units, forecast_length, device, backcast_length,
                                                    forecast_length, share_thetas=True,
-                                                   dropout=dropout, max_neighbours=max_neighbours, attn=attn)
+                                                   dropout=dropout, max_neighbours=max_neighbours)
 
     def forward(self, x, X_neighs=None, X_neigh_masks=None):
         x, X_neighs = super(SeasonalityBlock, self).forward(
@@ -368,10 +393,10 @@ class SeasonalityBlock(Block):
 
 class TrendBlock(Block):
 
-    def __init__(self, units, thetas_dim, device, backcast_length=10, forecast_length=5, nb_harmonics=None, dropout=0.1, max_neighbours=0, attn=False):
+    def __init__(self, units, thetas_dim, device, backcast_length=10, forecast_length=5, nb_harmonics=None, dropout=0.1, max_neighbours=0):
         super(TrendBlock, self).__init__(units, thetas_dim, device, backcast_length,
                                          forecast_length, share_thetas=True,
-                                         dropout=dropout, max_neighbours=max_neighbours, attn=attn)
+                                         dropout=dropout, max_neighbours=max_neighbours)
 
     def forward(self, x, X_neighs=None, X_neigh_masks=None):
         x, X_neighs = super(TrendBlock, self).forward(
@@ -390,21 +415,21 @@ class TrendBlock(Block):
 
 class GenericBlock(Block):
 
-    def __init__(self, units, thetas_dim, device, backcast_length=10, forecast_length=5, nb_harmonics=None, dropout=0.1, max_neighbours=0, attn=False):
+    def __init__(self, units, thetas_dim, device, backcast_length=10, forecast_length=5, nb_harmonics=None, dropout=0.1, max_neighbours=0):
         super(GenericBlock, self).__init__(units, thetas_dim,
                                            device, backcast_length, forecast_length,
-                                           dropout=dropout, max_neighbours=max_neighbours, attn=attn)
+                                           dropout=dropout, max_neighbours=max_neighbours)
 
         self.backcast_fc = GehringLinear(thetas_dim, backcast_length)
         self.forecast_fc = GehringLinear(thetas_dim, forecast_length)
 
-        if max_neighbours > 0:
-            self.backcast_fc_n = GehringLinear(thetas_dim, backcast_length)
-            self.forecast_fc_n = GehringLinear(thetas_dim, forecast_length)
+        # if max_neighbours > 0:
+        #     self.backcast_fc_n = GehringLinear(thetas_dim, backcast_length)
+        #     self.forecast_fc_n = GehringLinear(thetas_dim, forecast_length)
 
     def forward(self, x, X_neighs=None, X_neigh_masks=None):
         # no constraint for generic arch.
-        x, X_neighs, x_attended = super(GenericBlock, self).forward(
+        x, X_neighs, attn_weights = super(GenericBlock, self).forward(
             x, X_neighs, X_neigh_masks)
 
         theta_b = F.relu(self.theta_b_fc(x))
@@ -414,12 +439,12 @@ class GenericBlock(Block):
         forecast = self.forecast_fc(theta_f)  # generic. 3.3.
 
         if X_neighs is not None:
-            theta_b_n = F.relu(self.theta_b_fc_n(x_attended))
-            theta_f_n = F.relu(self.theta_f_fc(x_attended))
+            theta_b_n = F.relu(self.theta_b_fc(X_neighs))
+            theta_f_n = F.relu(self.theta_f_fc(X_neighs))
 
-            backcast_n = self.backcast_fc_n(theta_b_n)
-            forcast_n = self.forecast_fc_n(theta_f_n)
+            backcast_n = self.backcast_fc(theta_b_n)
+            forcast_n = self.forecast_fc(theta_f_n)
         else:
             backcast_n = forcast_n = None
 
-        return backcast, forecast, backcast_n, forcast_n, X_neighs
+        return backcast, forecast, backcast_n, forcast_n, attn_weights

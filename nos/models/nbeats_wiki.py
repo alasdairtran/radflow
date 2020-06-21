@@ -169,7 +169,7 @@ class NBEATSWiki(BaseModel):
                  missing_p: float = 0.0,
                  thetas_dims: int = 128,
                  share_weights_in_stack: bool = False,
-                 attn: bool = True,
+                 peek: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -198,7 +198,7 @@ class NBEATSWiki(BaseModel):
                              share_weights_in_stack=share_weights_in_stack,
                              dropout=dropout,
                              max_neighbours=max_neighbours,
-                             attn=attn,
+                             peek=peek,
                              )
 
         # Shortcut to create new tensors in the same device as the module
@@ -259,12 +259,14 @@ class NBEATSWiki(BaseModel):
         self.max_start = len(
             self.series[k]) - self.forecast_length * 2 - self.total_length
 
-    def _get_neighbours(self, keys, split):
+    def _get_neighbours(self, keys, split, start):
         # neighbor_lens = []
         # mask_list = []
 
         sources = self._float.new_zeros(
             (len(keys), self.max_neighbours, self.backcast_length))
+        targets = self._float.new_zeros(
+            (len(keys), self.max_neighbours, self.forecast_length))
         masks = self._long.new_ones((len(keys), self.max_neighbours)).bool()
 
         for i, key in enumerate(keys):
@@ -277,11 +279,9 @@ class NBEATSWiki(BaseModel):
             #                  * (self.max_neighbours - len(neighs)))
             for j, n in enumerate(neighs):
                 s = self.series[n]
-                if split in ['train', 'valid']:
-                    s = s[:self.backcast_length]
-                elif split == 'test':
-                    s = s[-self.total_length:-self.forecast_length]
-                sources[i, j] = s
+                s = s[start:start+self.total_length]
+                sources[i, j] = s[:self.backcast_length]
+                targets[i, j] = s[self.backcast_length:]
                 masks[i, j] = 0
 
         # sources.shape == [batch_size, max_neighbours, backcast_length]
@@ -293,7 +293,7 @@ class NBEATSWiki(BaseModel):
 
         # mask_list = torch.tensor(mask_list)
 
-        return sources, masks
+        return sources, targets, masks
 
     def forward(self, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
@@ -321,15 +321,13 @@ class NBEATSWiki(BaseModel):
             s = self.series[key]
             if split == 'train':
                 start = self.rs.randint(0, self.max_start)
-                s = s[start:start+self.total_length]
-                d = self.diff[key][start:start+self.total_length]
             elif split == 'valid':
-                start = self.max_start
-                s = s[start:start+self.total_length]
-                d = self.diff[key][start:start+self.total_length]
+                start = self.max_start + self.forecast_length
             elif split == 'test':
-                s = s[-self.total_length:]
-                d = self.diff[key][-self.total_length:]
+                # start = len(s) - self.total_length
+                start = self.max_start + self.forecast_length * 2
+            s = s[start:start+self.total_length]
+            d = self.diff[key][start:start+self.total_length]
             series_list.append(s)
             diff_list.append(d)
 
@@ -350,10 +348,11 @@ class NBEATSWiki(BaseModel):
         if self.max_neighbours == 0:
             _, X = self.net(X)
         else:
-            neighbours, neighbour_masks = self._get_neighbours(
-                keys, split)
-            X_neighs = torch.log1p(neighbours)
-            _, X = self.net(X, X_neighs, neighbour_masks)
+            n_sources, n_targets, neighbour_masks = self._get_neighbours(
+                keys, split, start)
+            X_neighs = torch.log1p(n_sources)
+            y_neighs = torch.log1p(n_targets)
+            _, X = self.net(X, X_neighs, y_neighs, neighbour_masks)
 
         # X.shape == [batch_size, forecast_len]
 

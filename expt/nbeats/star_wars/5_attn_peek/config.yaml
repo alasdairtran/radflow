@@ -2,7 +2,7 @@
 dataset_reader:
   type: subwiki_network
   data_dir: "./data/wiki/subgraphs"
-  seed_word: programming
+  seed_word: star_wars
   fp16: false
 train_data_path: train
 validation_data_path: valid
@@ -12,13 +12,14 @@ vocabulary:
 model:
   type: nbeats_wiki
   data_dir: "./data/wiki/subgraphs"
-  seed_word: programming
+  seed_word: star_wars
   n_stacks: 8
   hidden_size: 256
   thetas_dims: 256
   backcast_length: 224
   dropout: 0.1
-  max_neighbours: 0
+  max_neighbours: 16
+  peek: true
 iterator:
   type: basic
   batch_size: 512
