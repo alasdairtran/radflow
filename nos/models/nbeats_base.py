@@ -103,8 +103,7 @@ class NBeatsNet(nn.Module):
                     # attn_weights.shape == [B, N, 1]
                     if self.peek:
                         backcast = backcast - (attn_weights * bn).sum(1)
-                        forecast = forecast + \
-                            (attn_weights * (target_n - forecast_n)).sum(1)
+                        forecast = forecast + (attn_weights * target_n).sum(1)
                     else:
                         backcast = backcast - (attn_weights * bn).sum(1)
                         forecast = forecast + (attn_weights * fn).sum(1)
