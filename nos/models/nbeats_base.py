@@ -173,6 +173,7 @@ class Block(nn.Module):
         x = F.relu(self.fc4(x))
         x = F.dropout(x, self.dropout, self.training)
 
+        x_attended = None
         if X_neighs is not None:
             B, N, E = X_neighs.shape
             X_neighs = X_neighs.reshape(B * N, E)

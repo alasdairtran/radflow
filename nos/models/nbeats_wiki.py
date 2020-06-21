@@ -257,7 +257,7 @@ class NBEATSWiki(BaseModel):
             self.diff[k] = p.new_tensor(self.diff[k])
 
         self.max_start = len(
-            self.series[k]) - self.forecast_length - self.total_length
+            self.series[k]) - self.forecast_length * 2 - self.total_length
 
     def _get_neighbours(self, keys, split):
         # neighbor_lens = []

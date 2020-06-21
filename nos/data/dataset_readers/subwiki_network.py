@@ -36,9 +36,9 @@ class SubWikivNetworkReader(DatasetReader):
 
         keys = sorted(self.series.keys())
         self.rs.shuffle(keys)
-        keys = list(keys)
-        self.valid_keys = keys[:200]
-        self.train_keys = keys[200:]
+        self.keys = list(keys)
+        # self.valid_keys = keys[:200]
+        # self.train_keys = keys[200:]
 
         # Check for reproducibility
         # assert sum(self.valid_keys) == 2939816
@@ -49,19 +49,14 @@ class SubWikivNetworkReader(DatasetReader):
             raise ValueError(f'Unknown split: {split}')
 
         if split == 'train':
-            keys = sorted(self.train_keys)
+            keys = sorted(self.keys)
             while True:
                 self.rs.shuffle(keys)
                 for key in keys:
                     yield self.series_to_instance(key, split)
 
-        elif split == 'valid':
-            keys = sorted(self.valid_keys)
-            for key in keys:
-                yield self.series_to_instance(key, split)
-
-        elif split == 'test':
-            keys = sorted(self.series.keys())
+        elif split in ['valid', 'test']:
+            keys = sorted(self.keys)
             for key in keys:
                 yield self.series_to_instance(key, split)
 
