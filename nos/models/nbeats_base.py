@@ -89,8 +89,12 @@ class NBeatsNet(nn.Module):
 
         for stack_id in range(len(self.stacks)):
             for block_id in range(len(self.stacks[stack_id])):
-                b, f, bn, fn, attn_weights = self.stacks[stack_id][block_id](
-                    backcast, backcast_n, X_neigh_masks)
+                if stack_id == 0 and block_id == 0:
+                    b, f, bn, fn, attn_weights = self.stacks[stack_id][block_id](
+                        backcast, backcast_n, X_neigh_masks)
+                else:
+                    b, f, bn, fn, attn_weights = self.stacks[stack_id][block_id](
+                        backcast, None, None)
 
                 backcast = backcast - b
                 # backcast.shape == [B, S]
@@ -101,7 +105,7 @@ class NBeatsNet(nn.Module):
                 if bn is not None and fn is not None:
                     attn_weights = attn_weights.unsqueeze(2)
                     # attn_weights.shape == [B, N, 1]
-                    if self.peek:
+                    if self.peek and stack_id == 0 and block_id == 0:
                         backcast = backcast - (attn_weights * bn).sum(1)
                         forecast = forecast + (attn_weights * target_n).sum(1)
                     else:
