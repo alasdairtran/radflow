@@ -172,11 +172,12 @@ class Block(nn.Module):
 
         if max_neighbours > 0:
             pass
-            # self.fc1n = GehringLinear(backcast_length, units, dropout=dropout)
-            # self.fc2n = GehringLinear(units, units, dropout=dropout)
-            # self.fc3n = GehringLinear(units, units, dropout=dropout)
-            # self.fc4n = GehringLinear(units, units, dropout=dropout)
-            # self.theta_b_fc_n = GehringLinear(units, thetas_dim, bias=False)
+            self.fc1n = GehringLinear(backcast_length, units, dropout=dropout)
+            self.fc2n = GehringLinear(units, units, dropout=dropout)
+            self.fc3n = GehringLinear(units, units, dropout=dropout)
+            self.fc4n = GehringLinear(units, units, dropout=dropout)
+            self.theta_b_fc_n = GehringLinear(units, thetas_dim, bias=False)
+            self.theta_f_fc_n = GehringLinear(units, thetas_dim, bias=False)
             self.attn = nn.MultiheadAttention(
                 units, 4, dropout=dropout, bias=True,
                 add_bias_kv=False, add_zero_attn=True, kdim=None, vdim=None)
@@ -202,19 +203,19 @@ class Block(nn.Module):
             X_neighs = X_neighs.reshape(B * N, E)
             X_neigh_masks = X_neigh_masks.reshape(B * N)
 
-            X_neighs = F.relu(self.fc1(X_neighs.to(self.device)))
+            X_neighs = F.relu(self.fc1n(X_neighs.to(self.device)))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc2(X_neighs))
+            X_neighs = F.relu(self.fc2n(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc3(X_neighs))
+            X_neighs = F.relu(self.fc3n(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
-            X_neighs = F.relu(self.fc4(X_neighs))
+            X_neighs = F.relu(self.fc4n(X_neighs))
             X_neighs[X_neigh_masks] = 0
             X_neighs = F.dropout(X_neighs, self.dropout, self.training)
 
@@ -423,9 +424,9 @@ class GenericBlock(Block):
         self.backcast_fc = GehringLinear(thetas_dim, backcast_length)
         self.forecast_fc = GehringLinear(thetas_dim, forecast_length)
 
-        # if max_neighbours > 0:
-        #     self.backcast_fc_n = GehringLinear(thetas_dim, backcast_length)
-        #     self.forecast_fc_n = GehringLinear(thetas_dim, forecast_length)
+        if max_neighbours > 0:
+            self.backcast_fc_n = GehringLinear(thetas_dim, backcast_length)
+            self.forecast_fc_n = GehringLinear(thetas_dim, forecast_length)
 
     def forward(self, x, X_neighs=None, X_neigh_masks=None):
         # no constraint for generic arch.
@@ -439,11 +440,11 @@ class GenericBlock(Block):
         forecast = self.forecast_fc(theta_f)  # generic. 3.3.
 
         if X_neighs is not None:
-            theta_b_n = F.relu(self.theta_b_fc(X_neighs))
-            theta_f_n = F.relu(self.theta_f_fc(X_neighs))
+            theta_b_n = F.relu(self.theta_b_fc_n(X_neighs))
+            theta_f_n = F.relu(self.theta_f_fc_n(X_neighs))
 
-            backcast_n = self.backcast_fc(theta_b_n)
-            forcast_n = self.forecast_fc(theta_f_n)
+            backcast_n = self.backcast_fc_n(theta_b_n)
+            forcast_n = self.forecast_fc_n(theta_f_n)
         else:
             backcast_n = forcast_n = None
 
