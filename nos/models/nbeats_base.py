@@ -50,12 +50,13 @@ class NBeatsNet(nn.Module):
 
         if max_neighbours > 0:
             embed_dim = hidden_layer_units * len(self.stack_types)
-            kdim = vdim = hidden_layer_units * (len(self.stack_types) + 1)
+            kdim = vdim = hidden_layer_units * 2
+            self.downsample = GehringLinear(embed_dim, hidden_layer_units)
             self.attn_forecast = nn.MultiheadAttention(
-                embed_dim, 4, dropout=dropout, bias=True,
+                hidden_layer_units, 4, dropout=dropout, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=kdim, vdim=vdim)
             self.theta_f_fc = self.theta_b_fc = GehringLinear(
-                embed_dim, thetas_dims[-1], bias=False)
+                hidden_layer_units, thetas_dims[-1], bias=False)
             self.forecast_fc = GehringLinear(thetas_dims[-1], 1)
             self.peek_fc = GehringLinear(1, hidden_layer_units)
 
@@ -142,9 +143,12 @@ class NBeatsNet(nn.Module):
             x_embed = x_embed.expand(-1, -1, self.forecast_length, -1)
             # x_embed.shape == [1, batch_size, forecast_len, n_layers * embed_dim]
 
+            x_embed = self.downsample(x_embed)
+            # x_embed.shape == [1, batch_size, forecast_len, embed_dim]
+
             T, B, L, E = x_embed.shape
             query = x_embed.reshape(T, B * L, E)
-            # x_embed.shape == [1, batch_size * forecast_len, n_layers * embed_dim]
+            # x_embed.shape == [1, batch_size * forecast_len, embed_dim]
 
             target_n = target_n.unsqueeze(-1)
             # target_n.shape == [batch_size, n_neighs, forecast_len, 1]
@@ -155,18 +159,21 @@ class NBeatsNet(nn.Module):
             xn_embeds = torch.cat(xn_list, dim=-1)
             # xn_embeds.shape == [batch_size, n_neighs, n_layers * embed_dim]
 
+            xn_embeds = self.downsample(xn_embeds)
+            # xn_embeds.shape == [batch_size, n_neighs, embed_dim]
+
             xn_embeds = xn_embeds.unsqueeze(2)
-            # xn_embeds.shape == [batch_size, n_neighs, 1, n_layers * embed_dim]
+            # xn_embeds.shape == [batch_size, n_neighs, 1, embed_dim]
 
             xn_embeds = xn_embeds.expand(-1, -1, self.forecast_length, -1)
-            # xn_embeds.shape == [batch_size, n_neighs, forecast_len, n_layers * embed_dim]
+            # xn_embeds.shape == [batch_size, n_neighs, forecast_len, embed_dim]
 
             xn_embeds = torch.cat([xn_embeds, target_n], dim=-1)
-            # xn_embeds.shape == [batch_size, n_neighs, forecast_len, (n_layers + 1) * embed_dim]
+            # xn_embeds.shape == [batch_size, n_neighs, forecast_len, 2 * embed_dim]
 
             B, N, L, E = xn_embeds.shape
             key = value = xn_embeds.transpose(0, 1).reshape(N, B * L, E)
-            # xn_embeds.shape == [n_neighs, batch_size * forecast_len, (n_layers + 1) * embed_dim]
+            # xn_embeds.shape == [n_neighs, batch_size * forecast_len, 2 * embed_dim]
 
             X_neigh_masks = X_neigh_masks.unsqueeze(1)
             X_neigh_masks = X_neigh_masks.expand(-1, self.forecast_length, -1)
@@ -175,7 +182,7 @@ class NBeatsNet(nn.Module):
 
             attn_output, attn_weights = self.attn_forecast(
                 query, key, value, key_padding_mask=X_neigh_masks)
-            # attn_output.shape == [1, batch_size * forecast_len, n_layers * embed_dim]
+            # attn_output.shape == [1, batch_size * forecast_len, embed_dim]
             # attn_weights.shape == [batch_size, 1, n_neighs + 2]
 
             attn_output = attn_output.squeeze(0)
