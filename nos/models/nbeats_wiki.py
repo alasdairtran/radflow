@@ -27,6 +27,7 @@ from nos.utils import keystoint
 from .base import BaseModel
 from .metrics import get_smape
 from .nbeats_base import NBeatsNet
+from .nbeats_transformer import NBeatsTransformer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -170,6 +171,7 @@ class NBEATSWiki(BaseModel):
                  thetas_dims: int = 128,
                  share_weights_in_stack: bool = False,
                  peek: bool = False,
+                 net: str = 'nbeats',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -188,18 +190,33 @@ class NBEATSWiki(BaseModel):
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
             self.in_degrees, _, self.series = pickle.load(f)
 
-        self.net = NBeatsNet(device=torch.device('cuda:0'),
-                             stack_types=[NBeatsNet.GENERIC_BLOCK] * n_stacks,
-                             nb_blocks_per_stack=nb_blocks_per_stack,
-                             forecast_length=forecast_length,
-                             backcast_length=backcast_length,
-                             thetas_dims=[thetas_dims] * n_stacks,
-                             hidden_layer_units=hidden_size,
-                             share_weights_in_stack=share_weights_in_stack,
-                             dropout=dropout,
-                             max_neighbours=max_neighbours,
-                             peek=peek,
-                             )
+        if net == 'nbeats':
+            self.net = NBeatsNet(device=torch.device('cuda:0'),
+                                 stack_types=[
+                                     NBeatsNet.GENERIC_BLOCK] * n_stacks,
+                                 nb_blocks_per_stack=nb_blocks_per_stack,
+                                 forecast_length=forecast_length,
+                                 backcast_length=backcast_length,
+                                 thetas_dims=[thetas_dims] * n_stacks,
+                                 hidden_layer_units=hidden_size,
+                                 share_weights_in_stack=share_weights_in_stack,
+                                 dropout=dropout,
+                                 max_neighbours=max_neighbours,
+                                 peek=peek,
+                                 )
+        elif net == 'transformer':
+            self.net = NBeatsTransformer(
+                device=torch.device('cuda:0'),
+                stack_types=[NBeatsNet.GENERIC_BLOCK] * n_stacks,
+                nb_blocks_per_stack=nb_blocks_per_stack,
+                forecast_length=forecast_length,
+                backcast_length=backcast_length,
+                hidden_layer_units=hidden_size,
+                share_weights_in_stack=share_weights_in_stack,
+                dropout=dropout,
+                max_neighbours=max_neighbours,
+                peek=peek,
+            )
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
