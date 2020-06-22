@@ -231,14 +231,23 @@ class NBEATSWiki(BaseModel):
             self.series[k] = np.asarray(v).astype(float)
 
         # Compute correlation
+        # for node, neighs in self.in_degrees.items():
+        #     x = self.series[node][:self.backcast_length]
+        #     corrs = []
+        #     for neigh in neighs:
+        #         y = self.series[neigh][:self.backcast_length]
+        #         r = np.corrcoef(x, y)[0, 1]
+        #         corrs.append(r)
+        #     keep_idx = np.argsort(corrs)[::-1][:self.max_neighbours]
+        #     self.in_degrees[node] = np.array(neighs)[keep_idx]
+
+        # Sort by view counts
         for node, neighs in self.in_degrees.items():
-            x = self.series[node][:self.backcast_length]
-            corrs = []
+            counts = []
             for neigh in neighs:
-                y = self.series[neigh][:self.backcast_length]
-                r = np.corrcoef(x, y)[0, 1]
-                corrs.append(r)
-            keep_idx = np.argsort(corrs)[::-1][:self.max_neighbours]
+                count = self.series[neigh][:self.backcast_length].sum()
+                counts.append(count)
+            keep_idx = np.argsort(counts)[::-1][:self.max_neighbours]
             self.in_degrees[node] = np.array(neighs)[keep_idx]
 
         for k, v in self.series.items():
