@@ -51,7 +51,7 @@ class NBeatsNet(nn.Module):
         if max_neighbours > 0:
             self.attn = nn.MultiheadAttention(
                 hidden_layer_units, 4, dropout=dropout, bias=True,
-                add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+                add_bias_kv=False, add_zero_attn=True, kdim=None, vdim=None)
             self.theta_f_fc = self.theta_b_fc = GehringLinear(
                 hidden_layer_units, thetas_dims[-1], bias=False)
             self.forecast_fc = GehringLinear(thetas_dims[-1], forecast_length)
@@ -150,14 +150,16 @@ class NBeatsNet(nn.Module):
             # attn_output.shape == [1, batch_size, embed_dim]
             # attn_weights.shape == [batch_size, 1, n_neighs + 2]
 
-            attn_output = attn_output.squeeze(0)
+            # attn_output = attn_output.squeeze(0)
             # attn_output.shape == [batch_size, embed_dim]
 
-            attn_weights = attn_weights.squeeze(1)[:, :-2]
-            # attn_weights.shape == [batch_size, n_neighs]
+            attn_weights = attn_weights.squeeze(1)[:, :-1].unsqueeze(2)
+            # attn_weights.shape == [batch_size, n_neighs, 1]
 
-            theta_f = F.relu(self.theta_f_fc(attn_output))
-            fa = self.forecast_fc(theta_f)
+            # theta_f = F.relu(self.theta_f_fc(attn_output))
+            # fa = self.forecast_fc(theta_f)
+
+            fa = (attn_weights * target_n).sum(1)
 
             forecast = forecast + fa
 
