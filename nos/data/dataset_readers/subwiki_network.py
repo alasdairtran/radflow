@@ -23,18 +23,22 @@ class SubWikivNetworkReader(DatasetReader):
                  data_dir: str,
                  seed_word: str = 'programming',
                  fp16: bool = True,
+                 use_edge: bool = False,
                  lazy: bool = True) -> None:
         super().__init__(lazy)
         self.data_dir = data_dir
         self.dtype = np.float16 if fp16 else np.float32
 
         with open(f'data/wiki/subgraphs/{seed_word}.pkl', 'rb') as f:
-            _, _, self.series = pickle.load(f)
+            in_degrees, _, self.series = pickle.load(f)
 
         random.seed(1234)
         self.rs = np.random.RandomState(1234)
 
-        keys = sorted(self.series.keys())
+        if use_edge:
+            keys = sorted(in_degrees.keys())
+        else:
+            keys = sorted(self.series.keys())
         self.rs.shuffle(keys)
         self.keys = list(keys)
         # self.valid_keys = keys[:200]
