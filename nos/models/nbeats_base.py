@@ -50,7 +50,7 @@ class NBeatsNet(nn.Module):
 
         if max_neighbours > 0:
             self.attn = nn.MultiheadAttention(
-                hidden_layer_units, 4, dropout=dropout, bias=True,
+                hidden_layer_units * len(self.stack_types), 4, dropout=dropout, bias=True,
                 add_bias_kv=False, add_zero_attn=True, kdim=None, vdim=None)
             self.theta_f_fc = self.theta_b_fc = GehringLinear(
                 hidden_layer_units, thetas_dims[-1], bias=False)
@@ -130,24 +130,21 @@ class NBeatsNet(nn.Module):
 
         if self.max_neighbours > 0:
             # Aggregate the neighbours
-            x_embed = torch.stack(x_list, dim=0)
-            # x_embed.shape == [n_layers, batch_size, embed_dim]
+            x_embed = torch.cat(x_list, dim=-1)
+            # x_embed.shape == [batch_size, n_layers * embed_dim]
 
-            query = x_embed.mean(dim=0).unsqueeze(0)
-            # query.shape == [1, batch_size, embed_dim]
+            query = x_embed.unsqueeze(0)
+            # query.shape == [1, batch_size, n_layers * embed_dim]
 
-            xn_embeds = torch.stack(xn_list, dim=0)
-            # xn_embeds.shape == [n_layers, batch_size, n_neighs, embed_dim]
-
-            xn_embeds = xn_embeds.mean(dim=0)
-            # xn_embeds.shape == [batch_size, n_neighs, embed_dim]
+            xn_embeds = torch.cat(xn_list, dim=-1)
+            # xn_embeds.shape == [batch_size, n_neighs, n_layers * embed_dim]
 
             key = value = xn_embeds.transpose(0, 1)
-            # xn_embeds.shape == [n_neighs, batch_size, embed_dim]
+            # xn_embeds.shape == [n_neighs, batch_size, n_layers * embed_dim]
 
             attn_output, attn_weights = self.attn(
                 query, key, value, key_padding_mask=X_neigh_masks)
-            # attn_output.shape == [1, batch_size, embed_dim]
+            # attn_output.shape == [1, batch_size, n_layers * embed_dim]
             # attn_weights.shape == [batch_size, 1, n_neighs + 2]
 
             # attn_output = attn_output.squeeze(0)
