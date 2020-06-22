@@ -49,11 +49,14 @@ class NBeatsNet(nn.Module):
         self.to(self.device)
 
         if max_neighbours > 0:
-            self.attn = nn.MultiheadAttention(
+            self.attn_backcast = nn.MultiheadAttention(
+                hidden_layer_units * len(self.stack_types), 4, dropout=dropout, bias=True,
+                add_bias_kv=False, add_zero_attn=True, kdim=None, vdim=None)
+            self.attn_forecast = nn.MultiheadAttention(
                 hidden_layer_units * len(self.stack_types), 4, dropout=dropout, bias=True,
                 add_bias_kv=False, add_zero_attn=True, kdim=None, vdim=None)
             self.theta_f_fc = self.theta_b_fc = GehringLinear(
-                hidden_layer_units, thetas_dims[-1], bias=False)
+                hidden_layer_units * len(self.stack_types), thetas_dims[-1], bias=False)
             self.forecast_fc = GehringLinear(thetas_dims[-1], forecast_length)
 
     def create_stack(self, stack_id):
@@ -142,23 +145,25 @@ class NBeatsNet(nn.Module):
             key = value = xn_embeds.transpose(0, 1)
             # xn_embeds.shape == [n_neighs, batch_size, n_layers * embed_dim]
 
-            attn_output, attn_weights = self.attn(
+            attn_output, _ = self.attn_backcast(
+                query, key, value, key_padding_mask=X_neigh_masks)
+            _, attn_weights = self.attn_forecast(
                 query, key, value, key_padding_mask=X_neigh_masks)
             # attn_output.shape == [1, batch_size, n_layers * embed_dim]
             # attn_weights.shape == [batch_size, 1, n_neighs + 2]
 
-            # attn_output = attn_output.squeeze(0)
+            attn_output = attn_output.squeeze(0)
             # attn_output.shape == [batch_size, embed_dim]
 
             attn_weights = attn_weights.squeeze(1)[:, :-1].unsqueeze(2)
             # attn_weights.shape == [batch_size, n_neighs, 1]
 
-            # theta_f = F.relu(self.theta_f_fc(attn_output))
-            # fa = self.forecast_fc(theta_f)
+            theta_f = F.relu(self.theta_f_fc(attn_output))
+            fa = self.forecast_fc(theta_f)
 
-            fa = (attn_weights * target_n).sum(1)
+            fb = (attn_weights * target_n).sum(1)
 
-            forecast = forecast + fa
+            forecast = forecast + fa + fb
 
         return backcast, forecast
 
