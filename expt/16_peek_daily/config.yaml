@@ -24,7 +24,7 @@ model:
       bias: True
       bidirectional: false
     decoder_input_dim: 1
-    hidden_size: 128
+    hidden_size: 64
     dropout: 0.1
     dilation: 1
 iterator:

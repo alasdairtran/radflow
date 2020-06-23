@@ -419,15 +419,65 @@ def make_subwiki_boxplots(topic):
     with open(f'expt/nbeats/{topic}/4_attn/serialization/evaluate-metrics.json') as f:
         smape['Agg'] = json.load(f)['smapes']
 
+    with open(f'expt/nbeats/{topic}/5_attn_peek/serialization/evaluate-metrics.json') as f:
+        smape['Peek'] = json.load(f)['smapes']
+
     smapes = [smape['naive'], smape['SN'], smape['NBEATS'],
-              smape['Agg']]
+              smape['Agg'], smape['Peek']]
 
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
     ax.boxplot(smapes, showfliers=False, meanline=True,
                showmeans=True, widths=0.7)
     ax.set_xticklabels(
-        ['Naive', 'Seasonal', 'N-BEATS', 'Aggregation'])
+        ['Naive', 'Seasonal', 'N-BEATS', 'N-BEATS + Agg', 'N-BEATS + Agg + Peek'])
+    ax.set_ylabel('SMAPE')
+    ax.set_title(f'{topic}')
+
+    means = [np.mean(x) for x in smapes]
+    pos = range(len(means))
+    for tick, label in zip(pos, ax.get_xticklabels()):
+        ax.text(pos[tick] + 0.85, means[tick] +
+                0.07, '{0:.3f}'.format(means[tick]))
+
+    fig.tight_layout()
+    plt.show()
+    fig.savefig(f'figures/smape_subwiki_{topic}.png')
+
+
+def make_vevo_boxplots(topic):
+    smape = {}
+
+    with open(f'expt/nbeats/{topic}/1_previous_day/serialization/evaluate-metrics.json') as f:
+        smape['naive'] = json.load(f)['smapes']
+
+    with open(f'expt/nbeats/{topic}/2_previous_week/serialization/evaluate-metrics.json') as f:
+        smape['SN'] = json.load(f)['smapes']
+
+    with open(f'expt/nbeats/{topic}/3_no_graph/serialization/evaluate-metrics.json') as f:
+        smape['NBEATS'] = json.load(f)['smapes']
+
+    with open(f'expt/nbeats/{topic}/4_attn/serialization/evaluate-metrics.json') as f:
+        smape['Agg'] = json.load(f)['smapes']
+
+    with open(f'expt/nbeats/{topic}/5a_attn_peek/serialization/evaluate-metrics.json') as f:
+        smape['Peek'] = json.load(f)['smapes']
+
+    with open(f'expt/11_no_agg/serialization/evaluate-metrics.json') as f:
+        smape['LSTM'] = json.load(f)['smapes']
+
+    with open(f'expt/16_peek_daily/serialization/evaluate-metrics.json') as f:
+        smape['LSTMPeek'] = json.load(f)['smapes']
+
+    smapes = [smape['naive'], smape['SN'], smape['LSTM'], smape['NBEATS'],
+              smape['Agg'], smape['Peek'], smape['LSTMPeek']]
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = plt.subplot(1, 1, 1)
+    ax.boxplot(smapes, showfliers=False, meanline=True,
+               showmeans=True, widths=0.7)
+    ax.set_xticklabels(
+        ['Naive', 'Seasonal', 'LSTM', 'N-BEATS', 'N-BEATS + Agg', 'N-BEATS + Agg + Peek', 'LSTM + Agg + Peek'])
     ax.set_ylabel('SMAPE')
     ax.set_title(f'{topic}')
 
@@ -613,8 +663,9 @@ def main():
     # make_partial_edge_boxplots()
     # make_neighbour_boxplots()
     make_subwiki_boxplots('programming')
+    make_vevo_boxplots('vevo')
     # make_subwiki_boxplots('graph_theory')
-    make_subwiki_boxplots('star_wars')
+    # make_subwiki_boxplots('star_wars')
 
     # make_subwiki_daily_smape('programming')
     # make_subwiki_daily_smape('graph_theory')
