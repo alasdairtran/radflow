@@ -27,6 +27,7 @@ from nos.utils import keystoint
 from .base import BaseModel
 from .metrics import get_smape
 from .nbeats_base import NBeatsNet
+from .nbeats_plus import NBeatsPlusNet
 from .nbeats_transformer import NBeatsTransformer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -204,6 +205,20 @@ class NBEATSWiki(BaseModel):
                                  max_neighbours=max_neighbours,
                                  peek=peek,
                                  )
+        elif net == 'plus':
+            self.net = NBeatsPlusNet(device=torch.device('cuda:0'),
+                                     stack_types=[
+                                     NBeatsNet.GENERIC_BLOCK] * n_stacks,
+                                     nb_blocks_per_stack=nb_blocks_per_stack,
+                                     forecast_length=forecast_length,
+                                     backcast_length=backcast_length,
+                                     thetas_dims=[thetas_dims] * n_stacks,
+                                     hidden_layer_units=hidden_size,
+                                     share_weights_in_stack=share_weights_in_stack,
+                                     dropout=dropout,
+                                     max_neighbours=max_neighbours,
+                                     peek=peek,
+                                     )
         elif net == 'transformer':
             self.net = NBeatsTransformer(
                 device=torch.device('cuda:0'),
