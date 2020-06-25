@@ -59,7 +59,6 @@ class NBEATSTransformer(BaseModel):
         self.device = torch.device('cuda:0')
         self.max_start = None
         self.missing_p = missing_p
-        self.diff = {}
         initializer(self)
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
@@ -67,8 +66,9 @@ class NBEATSTransformer(BaseModel):
 
         self.layers = nn.ModuleList([])
         for _ in range(n_stacks):
-            layer = TBEATLayer(hidden_size, dropout, n_heads)
+            layer = TBEATLayer(hidden_size, dropout, n_heads, forecast_length)
             self.layers.append(layer)
+        self.upsample = GehringLinear(1, hidden_size)
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -78,37 +78,9 @@ class NBEATSTransformer(BaseModel):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
             return
 
-        # Check how long the time series is
-        series_len = len(next(iter(self.series.values())))
-        n_weeks = series_len // 7 + 1
-
-        # Remove trends using the first year of data
-        train_len = self.backcast_length
-        for k, v in self.series.items():
-            v_full = np.array(v[:train_len]).reshape(train_len // 7, 7)
-            avg_all = v_full.mean()
-            avg_week = v_full.mean(axis=0)
-            diff = avg_week - avg_all
-            diff = np.tile(diff, n_weeks)
-            diff = diff[:len(v)]
-            # self.series[k] = v - diff
-            self.diff[k] = diff
-            # self.diff[k] = max(v[:train_len])
-
         p = next(self.parameters())
         for k, v in self.series.items():
             self.series[k] = np.asarray(v).astype(float)
-
-        # Compute correlation
-        # for node, neighs in self.in_degrees.items():
-        #     x = self.series[node][:self.backcast_length]
-        #     corrs = []
-        #     for neigh in neighs:
-        #         y = self.series[neigh][:self.backcast_length]
-        #         r = np.corrcoef(x, y)[0, 1]
-        #         corrs.append(r)
-        #     keep_idx = np.argsort(corrs)[::-1][:self.max_neighbours]
-        #     self.in_degrees[node] = np.array(neighs)[keep_idx]
 
         # Sort by view counts
         for node, neighs in self.in_degrees.items():
@@ -132,7 +104,6 @@ class NBEATSTransformer(BaseModel):
                 self.series[k][mask] = self.series[k][idx[mask]]
 
             self.series[k] = p.new_tensor(self.series[k])
-            self.diff[k] = p.new_tensor(self.diff[k])
 
         self.max_start = len(
             self.series[k]) - self.forecast_length * 2 - self.total_length
@@ -159,15 +130,6 @@ class NBEATSTransformer(BaseModel):
                 sources[i, j] = s
                 masks[i, j] = 0
 
-        # sources.shape == [batch_size, max_neighbours, backcast_length]
-        # sources = sources.reshape(
-        #     len(keys) * self.max_neighbours, self.backcast_length)
-
-        # neighbor_lens = torch.tensor(neighbor_lens)
-        # sources.shape == [batch_size, 1]
-
-        # mask_list = torch.tensor(mask_list)
-
         return sources, masks
 
     def forward(self, keys, splits) -> Dict[str, Any]:
@@ -191,7 +153,6 @@ class NBEATSTransformer(BaseModel):
         }
 
         series_list = []
-        diff_list = []
         for key in keys:
             s = self.series[key]
             if split == 'train':
@@ -202,15 +163,10 @@ class NBEATSTransformer(BaseModel):
                 # start = len(s) - self.total_length
                 start = self.max_start + self.forecast_length * 2
             s = s[start:start+self.total_length]
-            d = self.diff[key][start:start+self.total_length]
             series_list.append(s)
-            diff_list.append(d)
 
         series = torch.stack(series_list, dim=0)
         # series.shape == [batch_size, total_length]
-
-        diffs = torch.stack(diff_list, dim=0)
-        # diffs = series.new_tensor(diff_list)
 
         # targets_diff = diffs[:, -self.forecast_length:]
         S = torch.log1p(series)
@@ -220,9 +176,8 @@ class NBEATSTransformer(BaseModel):
             keys, split, start)
         Sn = torch.log1p(n_series)
 
-        X = S[:, :-1]
-        Xn = Sn[:, :, :-1]
-        y = S[:, 1:]
+        X = S[:, :-self.forecast_length]
+        Xn = Sn[:, :, :-self.forecast_length]
         # S.shape == [batch_size, total_len]
         # Sn.shape == [batch_size, n_neighs, total_len]
         # masks.shape == [batch_size, n_neighs]
@@ -230,7 +185,7 @@ class NBEATSTransformer(BaseModel):
         forecast = self._forward(X, Xn, masks)
 
         preds = torch.exp(forecast) - 1
-        targets = torch.exp(y) - 1
+        targets = series[:, -self.forecast_length:]
         loss = self._get_smape_loss(targets, preds)
 
         # loss = self.mse(X, targets)
@@ -238,22 +193,7 @@ class NBEATSTransformer(BaseModel):
 
         # During evaluation, we compute one time step at a time
         if splits[0] in ['test']:
-            X = S[:, :-self.forecast_length]
-            Xn = Sn[:, :, :-self.forecast_length]
-
-            forecast = X.new_zeros(B, self.forecast_length)
-            for i in range(self.forecast_length):
-                full_forecast = self._forward(X, Xn, masks)
-                forecast[:, i] = full_forecast[:, -1]
-
-                X = torch.cat([X, forecast[:, i:i+1]], dim=-1)
-                offset = -(self.forecast_length - i - 1) or None
-                Xn = Sn[:, :, :offset]
-
-            preds = torch.exp(forecast) - 1
-            targets = series[:, -self.forecast_length:]
             smapes, daily_errors = get_smape(targets, preds)
-
             out_dict['smapes'] = smapes
             out_dict['daily_errors'] = daily_errors
             out_dict['keys'] = keys
@@ -265,21 +205,31 @@ class NBEATSTransformer(BaseModel):
         X = X.transpose(0, 1)
         # X.shape == [seq_len, batch_size]
 
+        X = X.unsqueeze(-1)
+        # X.shape == [seq_len, batch_size, 1]
+
+        # Step 1: Upsample the time series
+        X = self.upsample(X)
+
         Xn = Xn.transpose(2, 1).transpose(1, 0)
         # Xn.shape == [seq_len, batch_size, n_neighs]
 
         masks = masks.unsqueeze(0).expand_as(Xn)
-        # masks.shape == [1, batch_size, n_neighs]
+        # masks.shape == [seq_len, batch_size, n_neighs]
 
-        T, B = X.shape
-        forecast = X.new_zeros(T, B)
+        Xn = Xn.unsqueeze(-1)
+
+        Xn = self.upsample(Xn)
+
+        T, B, E = X.shape
+        forecast = X.new_zeros(B, self.forecast_length)
+        # X.shape == [seq_len, batch_size, hidden_size]
         for layer in self.layers:
-            b, bn, f = layer(X, Xn, masks)
-            forecast = forecast + f
-            X = X - b
-            Xn = Xn - bn
+            X, Xn, f = layer(X, Xn, masks)
+            forecast = forecast + f[-1]
+            # X = X - b
+            # Xn = Xn - bn
 
-        forecast = forecast.transpose(0, 1)
         # forecast.shape == [batch_size, seq_len]
 
         return forecast
@@ -304,9 +254,8 @@ class NBEATSTransformer(BaseModel):
 
 
 class TBEATLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, n_heads):
+    def __init__(self, hidden_size, dropout, n_heads, forecast_len):
         super().__init__()
-        self.upsample = GehringLinear(1, hidden_size)
         self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
 
         self.dropout_1 = nn.Dropout(dropout)
@@ -319,7 +268,7 @@ class TBEATLayer(nn.Module):
         self.linear_1 = GehringLinear(hidden_size, hidden_size * 4)
         self.linear_2 = GehringLinear(hidden_size * 4, hidden_size)
 
-        self.final_out = GehringLinear(hidden_size, 2)
+        self.final_out = GehringLinear(hidden_size, forecast_len)
 
         self.activation = F.gelu
 
@@ -328,26 +277,20 @@ class TBEATLayer(nn.Module):
         # Xn.shape == [seq_len, batch_size, n_neighs]
         # masks.shape == [batch_size, n_neighs]
 
-        S, B, N = Xn.shape
-        Xn = Xn.reshape(S, B * N)
+        # S, B, N = Xn.shape
+        # Xn = Xn.reshape(S, B * N)
         # Xn.shape == [seq_len, batch_size * n_neighs]
 
         b, f = self._forward(X)
-        bn, _ = self._forward(Xn)
 
-        bn = bn.reshape(S, B, N)
-        bn[masks] = 0
+        bn = None
+        # bn, _ = self._forward(Xn)
+        # bn = bn.reshape(S, B, N)
+        # bn[masks] = 0
 
         return b, bn, f
 
     def _forward(self, X):
-        X = X.unsqueeze(-1)
-        # X.shape == [seq_len, batch_size, 1]
-
-        # Step 1: Upsample the time series
-        X = self.upsample(X)
-        # X.shape == [seq_len, batch_size, hidden_size]
-
         # We can't attend positions which are True
         T, B, E = X.shape
         attn_mask = X.new_full((T, T), 1)
@@ -366,9 +309,7 @@ class TBEATLayer(nn.Module):
         X = self.norm_2(X)
         # X.shape == [seq_len, batch_size, hidden_size]
 
-        out = self.final_out(X)
-        # out.shape == [seq_len, batch_size, 2]
-        b = out[:, :, 0]
-        f = out[:, :, 1]
+        f = self.final_out(X)
+        # out.shape == [seq_len, batch_size, forecast_len]
 
-        return b, f
+        return X, f
