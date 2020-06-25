@@ -219,15 +219,39 @@ class NBEATSTransformer(BaseModel):
         n_series, masks = self._get_neighbours(
             keys, split, start)
         Sn = torch.log1p(n_series)
-        loss, preds, targets = self._forward(S, Sn, masks)
+
+        X = S[:, :-1]
+        Xn = Sn[:, :, :-1]
+        y = S[:, 1:]
+        # S.shape == [batch_size, total_len]
+        # Sn.shape == [batch_size, n_neighs, total_len]
+        # masks.shape == [batch_size, n_neighs]
+
+        forecast = self._forward(X, Xn, masks)
+
+        preds = torch.exp(forecast) - 1
+        targets = torch.exp(y) - 1
+        loss = self._get_smape_loss(targets, preds)
 
         # loss = self.mse(X, targets)
         out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
         if splits[0] in ['test']:
-            targets = targets[:, -self.forecast_length:]
-            preds = preds[:, -self.forecast_length:]
+            X = S[:, :-self.forecast_length]
+            Xn = Sn[:, :, :-self.forecast_length]
+
+            forecast = X.new_zeros(B, self.forecast_length)
+            for i in range(self.forecast_length):
+                full_forecast = self._forward(X, Xn, masks)
+                forecast[:, i] = full_forecast[:, -1]
+
+                X = torch.cat([X, forecast[:, i:i+1]], dim=-1)
+                offset = -(self.forecast_length - i - 1) or None
+                Xn = Sn[:, :, :offset]
+
+            preds = torch.exp(forecast) - 1
+            targets = series[:, -self.forecast_length:]
             smapes, daily_errors = get_smape(targets, preds)
 
             out_dict['smapes'] = smapes
@@ -237,15 +261,7 @@ class NBEATSTransformer(BaseModel):
 
         return out_dict
 
-    def _forward(self, S, Sn, masks):
-        # S.shape == [batch_size, total_len]
-        # Sn.shape == [batch_size, n_neighs, total_len]
-        # masks.shape == [batch_size, n_neighs]
-
-        X = S[:, :-1]
-        Xn = Sn[:, :, :-1]
-        y = S[:, 1:]
-
+    def _forward(self, X, Xn, masks):
         X = X.transpose(0, 1)
         # X.shape == [seq_len, batch_size]
 
@@ -255,8 +271,8 @@ class NBEATSTransformer(BaseModel):
         masks = masks.unsqueeze(0).expand_as(Xn)
         # masks.shape == [1, batch_size, n_neighs]
 
-        B, T = y.shape
-        forecast = y.new_zeros(T, B)
+        T, B = X.shape
+        forecast = X.new_zeros(T, B)
         for layer in self.layers:
             b, bn, f = layer(X, Xn, masks)
             forecast = forecast + f
@@ -266,11 +282,7 @@ class NBEATSTransformer(BaseModel):
         forecast = forecast.transpose(0, 1)
         # forecast.shape == [batch_size, seq_len]
 
-        preds = torch.exp(forecast) - 1
-        targets = torch.exp(y) - 1
-        loss = self._get_smape_loss(targets, preds)
-
-        return loss, preds, targets
+        return forecast
 
     def _get_smape_loss(self, targets, preds):
         numerator = torch.abs(targets - preds)
