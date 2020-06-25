@@ -225,9 +225,9 @@ class NBEATSTransformer(BaseModel):
         forecast = X.new_zeros(B, self.forecast_length)
         # X.shape == [seq_len, batch_size, hidden_size]
         for layer in self.layers:
-            X, Xn, f = layer(X, Xn, masks)
+            b, Xn, f = layer(X, Xn, masks)
             forecast = forecast + f[-1]
-            # X = X - b
+            X = X - b
             # Xn = Xn - bn
 
         # forecast.shape == [batch_size, seq_len]
