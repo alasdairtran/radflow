@@ -66,9 +66,10 @@ class NBEATSTransformer(BaseModel):
             self.in_degrees, _, self.series = pickle.load(f)
 
         self.agg = agg
+        self.peek = peek
         if self.agg:
             self.agg_layer = AggregateLayer(
-                hidden_size, dropout, n_heads, forecast_length)
+                hidden_size, dropout, n_heads, forecast_length, peek)
 
         self.layers = nn.ModuleList([])
         for _ in range(n_stacks):
@@ -184,11 +185,13 @@ class NBEATSTransformer(BaseModel):
 
         X = S[:, :-self.forecast_length]
         Xn = Sn[:, :, :-self.forecast_length]
+        yn = n_series.unfold(2, self.forecast_length, 1)[:, :, 1:]
         # S.shape == [batch_size, total_len]
         # Sn.shape == [batch_size, n_neighs, total_len]
         # masks.shape == [batch_size, n_neighs]
+        # yn.shape == [batch_size, n_neighs, seq_len, forecast_len]
 
-        forecast = self._forward(X, Xn, masks)
+        forecast = self._forward(X, Xn, yn, masks)
 
         # targets = series[:, -self.forecast_length:]
         targets = series.unfold(1, self.forecast_length, 1)[:, 1:]
@@ -217,7 +220,7 @@ class NBEATSTransformer(BaseModel):
 
         return out_dict
 
-    def _forward(self, X, Xn, masks):
+    def _forward(self, X, Xn, yn, masks):
         X = X.transpose(0, 1)
         # X.shape == [seq_len, batch_size]
 
@@ -242,8 +245,13 @@ class NBEATSTransformer(BaseModel):
 
         # Claim: First look at the neighbours to determine the overall trend
         if self.agg:
-            f = self.agg_layer(X, Xn, masks)
-            forecast = forecast + f
+            f, w = self.agg_layer(X, Xn, masks)
+            if self.peek:
+                yn = yn.transpose(2, 1).transpose(1, 0)
+                # yn.shape == [seq_len, batch_size, n_neighs, forecast_len]
+                forecast = forecast + (w * yn).sum(2)
+            else:
+                forecast = forecast + f
 
         # X.shape == [seq_len, batch_size, hidden_size]
         for layer in self.layers:
@@ -275,7 +283,7 @@ class NBEATSTransformer(BaseModel):
 
 
 class AggregateLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, n_heads, forecast_len):
+    def __init__(self, hidden_size, dropout, n_heads, forecast_len, peek):
         super().__init__()
         self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
 
@@ -295,9 +303,10 @@ class AggregateLayer(nn.Module):
 
         self.agg_attn = nn.MultiheadAttention(
             hidden_size, n_heads, dropout,
-            add_bias_kv=True, add_zero_attn=True)
+            add_bias_kv=(not peek), add_zero_attn=True)
         self.norm_3 = nn.LayerNorm(hidden_size)
         self.dropout_4 = nn.Dropout(dropout)
+        self.peek = peek
 
     def forward(self, X, Xn, masks):
         # X.shape == [seq_len, batch_size, hidden_size]
@@ -323,8 +332,13 @@ class AggregateLayer(nn.Module):
 
         masks = masks.reshape(T * B, N)
 
-        X_a, _ = self.agg_attn(
-            X, Xn, Xn, key_padding_mask=masks, need_weights=False)
+        X_a, weights = self.agg_attn(
+            X, Xn, Xn, key_padding_mask=masks, need_weights=self.peek)
+        # weights.shape == [seq_len * batch_size, 1, n_neighs + 2]
+
+        if self.peek:
+            weights = weights.squeeze(1)[:, :-1].reshape(T, B, N, 1)
+            # weights.shape == [seq_len, batch_size, n_neighs, 1]
 
         X = X + self.dropout_4(X_a)
         X = self.norm_3(X)
@@ -333,7 +347,7 @@ class AggregateLayer(nn.Module):
 
         f = self.final_out(X)
 
-        return f
+        return f, weights
 
     def _forward(self, X):
         # We can't attend positions which are True
