@@ -65,10 +65,14 @@ class NBEATSTransformer(BaseModel):
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
             self.in_degrees, _, self.series = pickle.load(f)
 
+        self.agg = agg
+        if self.agg:
+            self.agg_layer = AggregateLayer(
+                hidden_size, dropout, n_heads, forecast_length)
+
         self.layers = nn.ModuleList([])
         for _ in range(n_stacks):
-            layer = TBEATLayer(hidden_size, dropout,
-                               n_heads, forecast_length, agg)
+            layer = TBEATLayer(hidden_size, dropout, n_heads, forecast_length)
             self.layers.append(layer)
         self.upsample = GehringLinear(1, hidden_size)
 
@@ -186,7 +190,6 @@ class NBEATSTransformer(BaseModel):
 
         forecast = self._forward(X, Xn, masks)
 
-        preds = torch.exp(forecast) - 1
         # targets = series[:, -self.forecast_length:]
         targets = series.unfold(1, self.forecast_length, 1)[:, 1:]
         # targets.shape == [batch_size, seq_len, forecast_len]
@@ -196,7 +199,8 @@ class NBEATSTransformer(BaseModel):
 
         S, B, T = targets.shape
         targets = targets.reshape(S * B, T)
-        preds = preds.reshape(S * B, T)
+        forecast = forecast.reshape(S * B, T)
+        preds = torch.exp(forecast) - 1
 
         loss = self._get_smape_loss(targets, preds)
 
@@ -235,12 +239,17 @@ class NBEATSTransformer(BaseModel):
 
         T, B, E = X.shape
         forecast = X.new_zeros(T, B, self.forecast_length)
+
+        # Claim: First look at the neighbours to determine the overall trend
+        if self.agg:
+            f = self.agg_layer(X, Xn, masks)
+            forecast = forecast + f
+
         # X.shape == [seq_len, batch_size, hidden_size]
         for layer in self.layers:
-            b, bn, f = layer(X, Xn, masks)
+            b, f = layer(X)
             forecast = forecast + f
             X = X - b
-            Xn = Xn - bn
 
         # forecast.shape == [seq_len, batch_size, forecast_len]
 
@@ -265,10 +274,9 @@ class NBEATSTransformer(BaseModel):
         return params_dict
 
 
-class TBEATLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, n_heads, forecast_len, agg):
+class AggregateLayer(nn.Module):
+    def __init__(self, hidden_size, dropout, n_heads, forecast_len):
         super().__init__()
-        self.agg = agg
         self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
 
         self.dropout_1 = nn.Dropout(dropout)
@@ -285,31 +293,49 @@ class TBEATLayer(nn.Module):
 
         self.activation = F.gelu
 
-        if agg:
-            self.neigh_attn = nn.MultiheadAttention(
-                hidden_size, n_heads, dropout,
-                add_bias_kv=True, add_zero_attn=True)
-            self.norm_3 = nn.LayerNorm(hidden_size)
-            self.dropout_4 = nn.Dropout(dropout)
+        self.agg_attn = nn.MultiheadAttention(
+            hidden_size, n_heads, dropout,
+            add_bias_kv=True, add_zero_attn=True)
+        self.norm_3 = nn.LayerNorm(hidden_size)
+        self.dropout_4 = nn.Dropout(dropout)
 
     def forward(self, X, Xn, masks):
         # X.shape == [seq_len, batch_size, hidden_size]
         # Xn.shape == [seq_len, batch_size, n_neighs, hidden_size]
         # masks.shape == [seq_len, batch_size, n_neighs]
 
-        b, f = self._forward(X, Xn, masks)
+        X = self._forward(X)
 
-        S, B, N, E = Xn.shape
-        Xn = Xn.reshape(S, B * N, E)
-        # Xn.shape == [seq_len, batch_size * n_neighs]
+        T, B, N, E = Xn.shape
+        Xn = Xn.reshape(T, B * N, E)
+        Xn = self._forward(Xn)
+        Xn = Xn.reshape(T, B, N, E)
+        Xn[masks] = 0
 
-        bn, _ = self._forward(Xn)
-        bn = bn.reshape(S, B, N, E)
-        bn[masks] = 0
+        X = X.reshape(1, T * B, E)
+        # X.shape == [1, seq_len * batch_size, hidden_size]
 
-        return b, bn, f
+        Xn = Xn.transpose(2, 1).transpose(1, 0)
+        # Xn.shape == [n_neighs, seq_len, batch_size, hidden_size]
 
-    def _forward(self, X, Xn=None, masks=None):
+        Xn = Xn.reshape(N, T * B, E)
+        # Xn.shape == [n_neighs, seq_len * batch_size, hidden_size]
+
+        masks = masks.reshape(T * B, N)
+
+        X_a, _ = self.agg_attn(
+            X, Xn, Xn, key_padding_mask=masks, need_weights=False)
+
+        X = X + self.dropout_4(X_a)
+        X = self.norm_3(X)
+
+        X = X.reshape(T, B, E)
+
+        f = self.final_out(X)
+
+        return f
+
+    def _forward(self, X):
         # We can't attend positions which are True
         T, B, E = X.shape
         attn_mask = X.new_full((T, T), 1)
@@ -324,26 +350,47 @@ class TBEATLayer(nn.Module):
         X = X + self.dropout_1(X_1)
         X = self.norm_1(X)
 
-        # Attention over neighbours
-        if self.agg and Xn is not None:
-            T, B, N, E = Xn.shape
-            X = X.reshape(1, T * B, E)
+        X_2 = self.linear_2(self.dropout_2(self.activation(self.linear_1(X))))
+        X = X + self.dropout_3(X_2)
+        X = self.norm_2(X)
+        # X.shape == [seq_len, batch_size, hidden_size]
 
-            Xn = Xn.transpose(2, 1).transpose(1, 0)
-            # Xn.shape == [n_neighs, seq_len, batch_size, hidden_size]
+        return X
 
-            Xn = Xn.reshape(N, T * B, E)
-            # Xn.shape == [n_neighs, seq_len * batch_size, hidden_size]
 
-            masks = masks.reshape(T * B, N)
+class TBEATLayer(nn.Module):
+    def __init__(self, hidden_size, dropout, n_heads, forecast_len):
+        super().__init__()
+        self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
 
-            X_a, _ = self.neigh_attn(
-                X, Xn, Xn, key_padding_mask=masks, need_weights=False)
+        self.dropout_1 = nn.Dropout(dropout)
+        self.dropout_2 = nn.Dropout(dropout)
+        self.dropout_3 = nn.Dropout(dropout)
 
-            X = X + self.dropout_4(X_a)
-            X = self.norm_3(X)
+        self.norm_1 = nn.LayerNorm(hidden_size)
+        self.norm_2 = nn.LayerNorm(hidden_size)
 
-            X = X.reshape(T, B, E)
+        self.linear_1 = GehringLinear(hidden_size, hidden_size * 4)
+        self.linear_2 = GehringLinear(hidden_size * 4, hidden_size)
+
+        self.final_out = GehringLinear(hidden_size, forecast_len)
+
+        self.activation = F.gelu
+
+    def forward(self, X):
+        # We can't attend positions which are True
+        T, B, E = X.shape
+        attn_mask = X.new_full((T, T), 1)
+        # Zero out the diagonal and everything below
+        # We can attend to ourselves and the past
+        attn_mask = torch.triu(attn_mask, diagonal=1)
+        # attn_mask.shape == [T, T]
+
+        X_1, _ = self.attn(X, X, X, need_weights=False, attn_mask=attn_mask)
+        # X.shape == [seq_len, batch_size, hidden_size]
+
+        X = X + self.dropout_1(X_1)
+        X = self.norm_1(X)
 
         X_2 = self.linear_2(self.dropout_2(self.activation(self.linear_1(X))))
         X = X + self.dropout_3(X_2)
