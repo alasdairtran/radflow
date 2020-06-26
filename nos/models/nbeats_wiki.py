@@ -384,9 +384,9 @@ class NBEATSWiki(BaseModel):
         # X.shape == [batch_size, forecast_len]
 
         # loss = self.mse(X, torch.log1p(targets.clamp(min=0)))
-        t = torch.log1p(targets)
-        numerator = torch.abs(t - X)
-        denominator = torch.abs(t) + torch.abs(X)
+        preds = torch.exp(X) - 1
+        numerator = torch.abs(targets - preds)
+        denominator = torch.abs(targets) + torch.abs(preds)
         loss = numerator / denominator
         loss[torch.isnan(loss)] = 0
         loss = loss.mean()
@@ -396,8 +396,6 @@ class NBEATSWiki(BaseModel):
 
         # During evaluation, we compute one time step at a time
         if splits[0] in ['test']:
-            preds = torch.exp(X) - 1  # + diffs[:, -self.forecast_length:]
-            # preds = X
             smapes, daily_errors = get_smape(targets, preds)
 
             out_dict['smapes'] = smapes
