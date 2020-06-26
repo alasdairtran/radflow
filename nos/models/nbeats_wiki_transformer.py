@@ -185,7 +185,17 @@ class NBEATSTransformer(BaseModel):
         forecast = self._forward(X, Xn, masks)
 
         preds = torch.exp(forecast) - 1
-        targets = series[:, -self.forecast_length:]
+        # targets = series[:, -self.forecast_length:]
+        targets = series.unfold(1, self.forecast_length, 1)[:, 1:]
+        # targets.shape == [batch_size, seq_len, forecast_len]
+
+        targets = targets.transpose(0, 1)
+        # targets.shape == [seq_len, batch_size, forecast_len]
+
+        S, B, T = targets.shape
+        targets = targets.reshape(S * B, T)
+        preds = preds.reshape(S * B, T)
+
         loss = self._get_smape_loss(targets, preds)
 
         # loss = self.mse(X, targets)
@@ -222,15 +232,15 @@ class NBEATSTransformer(BaseModel):
         Xn = self.upsample(Xn)
 
         T, B, E = X.shape
-        forecast = X.new_zeros(B, self.forecast_length)
+        forecast = X.new_zeros(T, B, self.forecast_length)
         # X.shape == [seq_len, batch_size, hidden_size]
         for layer in self.layers:
             b, Xn, f = layer(X, Xn, masks)
-            forecast = forecast + f[-1]
+            forecast = forecast + f
             X = X - b
             # Xn = Xn - bn
 
-        # forecast.shape == [batch_size, seq_len]
+        # forecast.shape == [seq_len, batch_size, forecast_len]
 
         return forecast
 
