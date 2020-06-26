@@ -47,6 +47,7 @@ class NBEATSTransformer(BaseModel):
                  missing_p: float = 0.0,
                  n_heads: int = 4,
                  peek: bool = False,
+                 agg: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -66,7 +67,8 @@ class NBEATSTransformer(BaseModel):
 
         self.layers = nn.ModuleList([])
         for _ in range(n_stacks):
-            layer = TBEATLayer(hidden_size, dropout, n_heads, forecast_length)
+            layer = TBEATLayer(hidden_size, dropout,
+                               n_heads, forecast_length, agg)
             self.layers.append(layer)
         self.upsample = GehringLinear(1, hidden_size)
 
@@ -235,10 +237,10 @@ class NBEATSTransformer(BaseModel):
         forecast = X.new_zeros(T, B, self.forecast_length)
         # X.shape == [seq_len, batch_size, hidden_size]
         for layer in self.layers:
-            b, Xn, f = layer(X, Xn, masks)
+            b, bn, f = layer(X, Xn, masks)
             forecast = forecast + f
             X = X - b
-            # Xn = Xn - bn
+            Xn = Xn - bn
 
         # forecast.shape == [seq_len, batch_size, forecast_len]
 
@@ -264,8 +266,9 @@ class NBEATSTransformer(BaseModel):
 
 
 class TBEATLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, n_heads, forecast_len):
+    def __init__(self, hidden_size, dropout, n_heads, forecast_len, agg):
         super().__init__()
+        self.agg = agg
         self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
 
         self.dropout_1 = nn.Dropout(dropout)
@@ -282,25 +285,31 @@ class TBEATLayer(nn.Module):
 
         self.activation = F.gelu
 
-    def forward(self, X, Xn, masks):
-        # X.shape == [seq_len, batch_size]
-        # Xn.shape == [seq_len, batch_size, n_neighs]
-        # masks.shape == [batch_size, n_neighs]
+        if agg:
+            self.neigh_attn = nn.MultiheadAttention(
+                hidden_size, n_heads, dropout,
+                add_bias_kv=True, add_zero_attn=True)
+            self.norm_3 = nn.LayerNorm(hidden_size)
+            self.dropout_4 = nn.Dropout(dropout)
 
-        # S, B, N = Xn.shape
-        # Xn = Xn.reshape(S, B * N)
+    def forward(self, X, Xn, masks):
+        # X.shape == [seq_len, batch_size, hidden_size]
+        # Xn.shape == [seq_len, batch_size, n_neighs, hidden_size]
+        # masks.shape == [seq_len, batch_size, n_neighs]
+
+        b, f = self._forward(X, Xn, masks)
+
+        S, B, N, E = Xn.shape
+        Xn = Xn.reshape(S, B * N, E)
         # Xn.shape == [seq_len, batch_size * n_neighs]
 
-        b, f = self._forward(X)
-
-        bn = None
-        # bn, _ = self._forward(Xn)
-        # bn = bn.reshape(S, B, N)
-        # bn[masks] = 0
+        bn, _ = self._forward(Xn)
+        bn = bn.reshape(S, B, N, E)
+        bn[masks] = 0
 
         return b, bn, f
 
-    def _forward(self, X):
+    def _forward(self, X, Xn=None, masks=None):
         # We can't attend positions which are True
         T, B, E = X.shape
         attn_mask = X.new_full((T, T), 1)
@@ -314,6 +323,28 @@ class TBEATLayer(nn.Module):
 
         X = X + self.dropout_1(X_1)
         X = self.norm_1(X)
+
+        # Attention over neighbours
+        if self.agg and Xn is not None:
+            T, B, N, E = Xn.shape
+            X = X.reshape(1, T * B, E)
+
+            Xn = Xn.transpose(2, 1).transpose(1, 0)
+            # Xn.shape == [n_neighs, seq_len, batch_size, hidden_size]
+
+            Xn = Xn.reshape(N, T * B, E)
+            # Xn.shape == [n_neighs, seq_len * batch_size, hidden_size]
+
+            masks = masks.reshape(T * B, N)
+
+            X_a, _ = self.neigh_attn(
+                X, Xn, Xn, key_padding_mask=masks, need_weights=False)
+
+            X = X + self.dropout_4(X_a)
+            X = self.norm_3(X)
+
+            X = X.reshape(T, B, E)
+
         X_2 = self.linear_2(self.dropout_2(self.activation(self.linear_1(X))))
         X = X + self.dropout_3(X_2)
         X = self.norm_2(X)
