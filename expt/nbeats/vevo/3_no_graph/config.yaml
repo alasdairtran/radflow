@@ -36,8 +36,8 @@ trainer:
   keep_batchnorm_fp32: None
   optimizer:
     type: bert_adam
-    lr: 0.00001
-    weight_decay: 0.00001
+    lr: 0.0001
+    weight_decay: 0.0001
     warmup: 0.05
     t_total: 81920 # 4096 batches per epoch
     max_grad_norm: 0.1
