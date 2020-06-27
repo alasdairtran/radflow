@@ -48,6 +48,7 @@ class NBEATSTransformer(BaseModel):
                  n_heads: int = 4,
                  agg: bool = False,
                  minus_residual: bool = False,
+                 opt_forecast: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -61,6 +62,7 @@ class NBEATSTransformer(BaseModel):
         self.max_start = None
         self.missing_p = missing_p
         self.minus_residual = minus_residual
+        self.opt_forecast = opt_forecast
         initializer(self)
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
@@ -201,8 +203,12 @@ class NBEATSTransformer(BaseModel):
         # targets.shape == [seq_len, batch_size, forecast_len]
 
         S, B, T = targets.shape
-        targets = targets.reshape(S * B, T)
-        forecast = forecast.reshape(S * B, T)
+        if self.opt_forecast:
+            targets = targets[-1]
+            forecast = forecast[-1]
+        else:
+            targets = targets.reshape(S * B, T)
+            forecast = forecast.reshape(S * B, T)
         preds = torch.exp(forecast) - 1
 
         loss = self._get_smape_loss(targets, preds)
@@ -212,8 +218,9 @@ class NBEATSTransformer(BaseModel):
 
         # During evaluation, we compute one time step at a time
         if splits[0] in ['test']:
-            targets = targets.reshape(S, B, T)[-1]
-            preds = preds.reshape(S, B, T)[-1]
+            if not self.opt_forecast:
+                targets = targets.reshape(S, B, T)[-1]
+                preds = preds.reshape(S, B, T)[-1]
             smapes, daily_errors = get_smape(targets, preds)
             out_dict['smapes'] = smapes
             out_dict['daily_errors'] = daily_errors
