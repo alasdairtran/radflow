@@ -47,7 +47,7 @@ class NBEATSTransformer(BaseModel):
                  missing_p: float = 0.0,
                  n_heads: int = 4,
                  agg: bool = False,
-                 optimize_forecast: bool = False,
+                 minus_residual: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -60,7 +60,7 @@ class NBEATSTransformer(BaseModel):
         self.device = torch.device('cuda:0')
         self.max_start = None
         self.missing_p = missing_p
-        self.optimize_forecast = optimize_forecast
+        self.minus_residual = minus_residual
         initializer(self)
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
@@ -201,12 +201,8 @@ class NBEATSTransformer(BaseModel):
         # targets.shape == [seq_len, batch_size, forecast_len]
 
         S, B, T = targets.shape
-        if not self.optimize_forecast:
-            targets = targets.reshape(S * B, T)
-            forecast = forecast.reshape(S * B, T)
-        else:
-            targets = targets[-1]
-            forecast = forecast[-1]
+        targets = targets.reshape(S * B, T)
+        forecast = forecast.reshape(S * B, T)
         preds = torch.exp(forecast) - 1
 
         loss = self._get_smape_loss(targets, preds)
@@ -253,8 +249,10 @@ class NBEATSTransformer(BaseModel):
 
         # Claim: First look at the neighbours to determine the overall trend
         if self.agg:
-            f = self.agg_layer(X, Xn, masks)
+            b, f = self.agg_layer(X, Xn, masks)
             forecast = forecast + f
+            if self.minus_residual:
+                X = X - b
 
         # X.shape == [seq_len, batch_size, hidden_size]
         for layer in self.layers:
@@ -350,7 +348,7 @@ class AggregateLayer(nn.Module):
         f = self.final_out(X)
         # f.shape == [seq_len, batch_size, forecast_len]
 
-        return f
+        return X, f
 
     def _forward(self, X):
         # We can't attend positions which are True

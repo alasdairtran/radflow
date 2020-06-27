@@ -20,7 +20,6 @@ model:
   backcast_length: 35
   dropout: 0.1
   max_neighbours: 8
-  optimize_forecast: true
 iterator:
   type: basic
   batch_size: 512
