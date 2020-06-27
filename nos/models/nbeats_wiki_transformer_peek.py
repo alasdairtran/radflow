@@ -212,6 +212,8 @@ class NBEATSTransformerPeek(BaseModel):
 
         # During evaluation, we compute one time step at a time
         if splits[0] in ['test']:
+            targets = targets.reshape(S, B, T)[-1]
+            preds = preds.reshape(S, B, T)[-1]
             smapes, daily_errors = get_smape(targets, preds)
             out_dict['smapes'] = smapes
             out_dict['daily_errors'] = daily_errors
