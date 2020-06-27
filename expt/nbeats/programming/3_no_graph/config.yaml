@@ -14,9 +14,10 @@ model:
   data_dir: "./data/wiki/subgraphs"
   seed_word: programming
   n_stacks: 8
-  hidden_size: 256
-  thetas_dims: 256
-  backcast_length: 224
+  hidden_size: 128
+  thetas_dims: 128
+  forecast_length: 14
+  backcast_length: 84
   dropout: 0.1
   max_neighbours: 0
 iterator:

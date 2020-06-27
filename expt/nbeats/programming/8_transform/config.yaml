@@ -15,8 +15,8 @@ model:
   seed_word: programming
   n_stacks: 8
   hidden_size: 128
-  forecast_length: 28
-  backcast_length: 140
+  forecast_length: 14
+  backcast_length: 84
   dropout: 0.1
   max_neighbours: 8
 iterator:

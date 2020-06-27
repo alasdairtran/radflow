@@ -12,6 +12,8 @@ vocabulary:
 model:
   type: nbeats_naive
   method: previous_week
+  forecast_length: 14
+  backcast_length: 84
   data_dir: "./data/wiki/subgraphs"
   seed_word: programming
 iterator:
