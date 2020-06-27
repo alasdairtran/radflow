@@ -47,6 +47,7 @@ class NBEATSTransformer(BaseModel):
                  missing_p: float = 0.0,
                  n_heads: int = 4,
                  agg: bool = False,
+                 optimize_forecast: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -59,6 +60,7 @@ class NBEATSTransformer(BaseModel):
         self.device = torch.device('cuda:0')
         self.max_start = None
         self.missing_p = missing_p
+        self.optimize_forecast = optimize_forecast
         initializer(self)
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
@@ -199,8 +201,12 @@ class NBEATSTransformer(BaseModel):
         # targets.shape == [seq_len, batch_size, forecast_len]
 
         S, B, T = targets.shape
-        targets = targets.reshape(S * B, T)
-        forecast = forecast.reshape(S * B, T)
+        if not self.optimize_forecast:
+            targets = targets.reshape(S * B, T)
+            forecast = forecast.reshape(S * B, T)
+        else:
+            targets = targets[-1]
+            forecast = forecast[-1]
         preds = torch.exp(forecast) - 1
 
         loss = self._get_smape_loss(targets, preds)
