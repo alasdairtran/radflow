@@ -46,7 +46,6 @@ class NBEATSTransformer(BaseModel):
                  n_stacks: int = 8,
                  missing_p: float = 0.0,
                  n_heads: int = 4,
-                 peek: bool = False,
                  agg: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -66,10 +65,9 @@ class NBEATSTransformer(BaseModel):
             self.in_degrees, _, self.series = pickle.load(f)
 
         self.agg = agg
-        self.peek = peek
         if self.agg:
             self.agg_layer = AggregateLayer(
-                hidden_size, dropout, n_heads, forecast_length, peek)
+                hidden_size, dropout, n_heads, forecast_length)
 
         self.layers = nn.ModuleList([])
         for _ in range(n_stacks):
@@ -191,7 +189,7 @@ class NBEATSTransformer(BaseModel):
         # masks.shape == [batch_size, n_neighs]
         # yn.shape == [batch_size, n_neighs, seq_len, forecast_len]
 
-        forecast = self._forward(X, Xn, yn, masks)
+        forecast = self._forward(X, yn, masks)
 
         # targets = series[:, -self.forecast_length:]
         targets = series.unfold(1, self.forecast_length, 1)[:, 1:]
@@ -220,7 +218,7 @@ class NBEATSTransformer(BaseModel):
 
         return out_dict
 
-    def _forward(self, X, Xn, yn, masks):
+    def _forward(self, X, yn, masks):
         X = X.transpose(0, 1)
         # X.shape == [seq_len, batch_size]
 
@@ -230,28 +228,24 @@ class NBEATSTransformer(BaseModel):
         # Step 1: Upsample the time series
         X = self.upsample(X)
 
-        Xn = Xn.transpose(2, 1).transpose(1, 0)
-        # Xn.shape == [seq_len, batch_size, n_neighs]
+        # yn.shape == [batch_size, n_neighs, seq_len, forecast_len]
+        yn = yn.transpose(2, 1).transpose(1, 0)
+        # Xn.shape == [seq_len, batch_size, n_neighs, forecast_len]
 
-        masks = masks.unsqueeze(0).expand_as(Xn)
-        # masks.shape == [seq_len, batch_size, n_neighs]
+        masks = masks.unsqueeze(0).unsqueeze(-1).expand_as(yn)
+        # masks.shape == [seq_len, batch_size, n_neighs, forecast_len]
 
-        Xn = Xn.unsqueeze(-1)
+        yn = yn.unsqueeze(-1)
 
-        Xn = self.upsample(Xn)
+        yn = self.upsample(yn)
 
         T, B, E = X.shape
         forecast = X.new_zeros(T, B, self.forecast_length)
 
         # Claim: First look at the neighbours to determine the overall trend
         if self.agg:
-            f, w = self.agg_layer(X, Xn, masks)
-            if self.peek:
-                yn = yn.transpose(2, 1).transpose(1, 0)
-                # yn.shape == [seq_len, batch_size, n_neighs, forecast_len]
-                forecast = forecast + (w * yn).sum(2)
-            else:
-                forecast = forecast + f
+            f = self.agg_layer(X, yn, masks)
+            forecast = forecast + f
 
         # X.shape == [seq_len, batch_size, hidden_size]
         for layer in self.layers:
@@ -283,7 +277,7 @@ class NBEATSTransformer(BaseModel):
 
 
 class AggregateLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, n_heads, forecast_len, peek):
+    def __init__(self, hidden_size, dropout, n_heads, forecast_len):
         super().__init__()
         self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
 
@@ -297,57 +291,67 @@ class AggregateLayer(nn.Module):
         self.linear_1 = GehringLinear(hidden_size, hidden_size * 4)
         self.linear_2 = GehringLinear(hidden_size * 4, hidden_size)
 
-        self.final_out = GehringLinear(hidden_size, forecast_len)
+        self.final_out = GehringLinear(hidden_size, 1)
+        self.forecast_len = forecast_len
 
         self.activation = F.gelu
 
         self.agg_attn = nn.MultiheadAttention(
             hidden_size, n_heads, dropout,
-            add_bias_kv=(not peek), add_zero_attn=True)
+            add_bias_kv=True, add_zero_attn=True)
         self.norm_3 = nn.LayerNorm(hidden_size)
         self.dropout_4 = nn.Dropout(dropout)
-        self.peek = peek
 
-    def forward(self, X, Xn, masks):
+    def forward(self, X, yn, masks):
         # X.shape == [seq_len, batch_size, hidden_size]
-        # Xn.shape == [seq_len, batch_size, n_neighs, hidden_size]
-        # masks.shape == [seq_len, batch_size, n_neighs]
+        # yn.shape == [seq_len, batch_size, n_neighs, forecast_len, hidden_size]
+        # masks.shape == [seq_len, batch_size, n_neighs, forecast_len]
 
         X = self._forward(X)
 
-        T, B, N, E = Xn.shape
-        Xn = Xn.reshape(T, B * N, E)
-        Xn = self._forward(Xn)
-        Xn = Xn.reshape(T, B, N, E)
-        Xn[masks] = 0
+        S, B, N, T, E = yn.shape
+        yn = yn.reshape(S, B * N * T, E)
+        yn = self._forward(yn)
+        yn = yn.reshape(S, B, N, T, E)
+        yn[masks] = 0
 
-        X = X.reshape(1, T * B, E)
-        # X.shape == [1, seq_len * batch_size, hidden_size]
+        X = X.unsqueeze(0).unsqueeze(3)
+        # X.shape == [1, seq_len, batch_size, 1, hidden_size]
 
-        Xn = Xn.transpose(2, 1).transpose(1, 0)
-        # Xn.shape == [n_neighs, seq_len, batch_size, hidden_size]
+        X = X.expand(-1, -1, -1, T, -1)
+        # X.shape == [1, seq_len, batch_size, forecast_len, hidden_size]
 
-        Xn = Xn.reshape(N, T * B, E)
-        # Xn.shape == [n_neighs, seq_len * batch_size, hidden_size]
+        X = X.reshape(1, S * B * T, E)
+        # X.shape == [1, seq_len * batch_size * forecast_len, hidden_size]
 
-        masks = masks.reshape(T * B, N)
+        yn = yn.transpose(2, 1).transpose(1, 0)
+        # yn.shape == [n_neighs, seq_len, batch_size, forecast_len, hidden_size]
 
-        X_a, weights = self.agg_attn(
-            X, Xn, Xn, key_padding_mask=masks, need_weights=self.peek)
-        # weights.shape == [seq_len * batch_size, 1, n_neighs + 2]
+        yn = yn.reshape(N, S * B * T, E)
+        # yn.shape == [n_neighs, seq_len * batch_size * forecast_len, hidden_size]
 
-        if self.peek:
-            weights = weights.squeeze(1)[:, :-1].reshape(T, B, N, 1)
-            # weights.shape == [seq_len, batch_size, n_neighs, 1]
+        masks = masks.transpose(2, 3)
+        # masks.shape == [seq_len, batch_size, forecast_len, n_neighs]
+
+        masks = masks.reshape(S * B * T, N)
+
+        X_a, _ = self.agg_attn(
+            X, yn, yn, key_padding_mask=masks, need_weights=False)
+        # X_a == [1, seq_len * batch_size * forecast_len, hidden_size]
+        # weights.shape == [seq_len * batch_size * forecast_len, n_neighs + 2]
+
+        # if self.peek:
+        #     weights = weights.squeeze(1)[:, :-1].reshape(T, B, N, 1)
+        #     # weights.shape == [seq_len, batch_size, n_neighs, 1]
 
         X = X + self.dropout_4(X_a)
         X = self.norm_3(X)
-
-        X = X.reshape(T, B, E)
-
         f = self.final_out(X)
 
-        return f, weights
+        f = f.reshape(S, B, T)
+        # f.shape == [seq_len, batch_size, forecast_len]
+
+        return f
 
     def _forward(self, X):
         # We can't attend positions which are True
