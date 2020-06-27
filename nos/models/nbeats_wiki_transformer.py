@@ -191,7 +191,7 @@ class NBEATSTransformer(BaseModel):
         # masks.shape == [batch_size, n_neighs]
         # yn.shape == [batch_size, n_neighs, seq_len, forecast_len]
 
-        forecast = self._forward(X, yn, masks)
+        forecast = self._forward(X, Xn, yn, masks)
 
         # targets = series[:, -self.forecast_length:]
         targets = series.unfold(1, self.forecast_length, 1)[:, 1:]
@@ -224,7 +224,7 @@ class NBEATSTransformer(BaseModel):
 
         return out_dict
 
-    def _forward(self, X, yn, masks):
+    def _forward(self, X, Xn, yn, masks):
         X = X.transpose(0, 1)
         # X.shape == [seq_len, batch_size]
 
@@ -234,23 +234,26 @@ class NBEATSTransformer(BaseModel):
         # Step 1: Upsample the time series
         X = self.upsample(X)
 
+        Xn = Xn.transpose(2, 1).transpose(1, 0)
+        # Xn.shape == [seq_len, batch_size, n_neighs]
+
         # yn.shape == [batch_size, n_neighs, seq_len, forecast_len]
-        yn = yn.transpose(2, 1).transpose(1, 0)
+        # yn = yn.transpose(2, 1).transpose(1, 0)
         # Xn.shape == [seq_len, batch_size, n_neighs, forecast_len]
 
-        masks = masks.unsqueeze(0).unsqueeze(-1).expand_as(yn)
-        # masks.shape == [seq_len, batch_size, n_neighs, forecast_len]
+        masks = masks.unsqueeze(0).expand_as(Xn)
+        # masks.shape == [seq_len, batch_size, n_neighs]
 
-        yn = yn.unsqueeze(-1)
+        Xn = Xn.unsqueeze(-1)
 
-        yn = self.upsample(yn)
+        Xn = self.upsample(Xn)
 
         T, B, E = X.shape
         forecast = X.new_zeros(T, B, self.forecast_length)
 
         # Claim: First look at the neighbours to determine the overall trend
         if self.agg:
-            f = self.agg_layer(X, yn, masks)
+            f = self.agg_layer(X, Xn, masks)
             forecast = forecast + f
 
         # X.shape == [seq_len, batch_size, hidden_size]
@@ -297,7 +300,7 @@ class AggregateLayer(nn.Module):
         self.linear_1 = GehringLinear(hidden_size, hidden_size * 4)
         self.linear_2 = GehringLinear(hidden_size * 4, hidden_size)
 
-        self.final_out = GehringLinear(hidden_size, 1)
+        self.final_out = GehringLinear(hidden_size, forecast_len)
         self.forecast_len = forecast_len
 
         self.activation = F.gelu
@@ -308,43 +311,34 @@ class AggregateLayer(nn.Module):
         self.norm_3 = nn.LayerNorm(hidden_size)
         self.dropout_4 = nn.Dropout(dropout)
 
-    def forward(self, X, yn, masks):
+    def forward(self, X, Xn, masks):
         # X.shape == [seq_len, batch_size, hidden_size]
-        # yn.shape == [seq_len, batch_size, n_neighs, forecast_len, hidden_size]
-        # masks.shape == [seq_len, batch_size, n_neighs, forecast_len]
+        # Xn.shape == [seq_len, batch_size, n_neighs, hidden_size]
+        # masks.shape == [seq_len, batch_size, n_neighs]
 
         X = self._forward(X)
 
-        S, B, N, T, E = yn.shape
-        yn = yn.reshape(S, B * N * T, E)
-        yn = self._forward(yn)
-        yn = yn.reshape(S, B, N, T, E)
-        yn[masks] = 0
+        S, B, N, E = Xn.shape
+        Xn = Xn.reshape(S, B * N, E)
+        Xn = self._forward(Xn)
+        Xn = Xn.reshape(S, B, N, E)
+        Xn[masks] = 0
 
-        X = X.unsqueeze(0).unsqueeze(3)
-        # X.shape == [1, seq_len, batch_size, 1, hidden_size]
+        X = X.reshape(1, S * B, E)
+        # X.shape == [1, seq_len * batch_size, hidden_size]
 
-        X = X.expand(-1, -1, -1, T, -1)
-        # X.shape == [1, seq_len, batch_size, forecast_len, hidden_size]
+        Xn = Xn.transpose(2, 1).transpose(1, 0)
+        # Xn.shape == [n_neighs, seq_len, batch_size, hidden_size]
 
-        X = X.reshape(1, S * B * T, E)
-        # X.shape == [1, seq_len * batch_size * forecast_len, hidden_size]
+        Xn = Xn.reshape(N, S * B, E)
+        # Xn.shape == [n_neighs, seq_len * batch_size, hidden_size]
 
-        yn = yn.transpose(2, 1).transpose(1, 0)
-        # yn.shape == [n_neighs, seq_len, batch_size, forecast_len, hidden_size]
-
-        yn = yn.reshape(N, S * B * T, E)
-        # yn.shape == [n_neighs, seq_len * batch_size * forecast_len, hidden_size]
-
-        masks = masks.transpose(2, 3)
-        # masks.shape == [seq_len, batch_size, forecast_len, n_neighs]
-
-        masks = masks.reshape(S * B * T, N)
+        masks = masks.reshape(S * B, N)
 
         X_a, _ = self.agg_attn(
-            X, yn, yn, key_padding_mask=masks, need_weights=False)
-        # X_a == [1, seq_len * batch_size * forecast_len, hidden_size]
-        # weights.shape == [seq_len * batch_size * forecast_len, n_neighs + 2]
+            X, Xn, Xn, key_padding_mask=masks, need_weights=False)
+        # X_a == [1, seq_len * batch_size, hidden_size]
+        # weights.shape == [seq_len * batch_size, n_neighs + 2]
 
         # if self.peek:
         #     weights = weights.squeeze(1)[:, :-1].reshape(T, B, N, 1)
@@ -352,9 +346,8 @@ class AggregateLayer(nn.Module):
 
         X = X + self.dropout_4(X_a)
         X = self.norm_3(X)
+        X = X.reshape(S, B, E)
         f = self.final_out(X)
-
-        f = f.reshape(S, B, T)
         # f.shape == [seq_len, batch_size, forecast_len]
 
         return f
