@@ -14,5 +14,6 @@ from .naive import (NaivePreviousDayModel, NaiveRollingAverageModel,
                     NaiveSeasonalDiffModel, NaiveSeasonalModel)
 from .nbeats_wiki import NaiveWiki, NBEATSWiki
 from .nbeats_wiki_transformer import NBEATSTransformer
+from .nbeats_wiki_transformer_peek import NBEATSTransformerPeek
 from .transformer import TimeSeriesTransformer
 from .wiki_lstm_network import WikiTimeSeriesLSTMNetworkDaily
