@@ -184,7 +184,7 @@ class NBEATSWiki(BaseModel):
         self.device = torch.device('cuda:0')
         self.max_start = None
         self.missing_p = missing_p
-        self.diff = {}
+        # self.diff = {}
         initializer(self)
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
@@ -232,17 +232,17 @@ class NBEATSWiki(BaseModel):
         n_weeks = series_len // 7 + 1
 
         # Remove trends using the first year of data
-        train_len = self.backcast_length
-        for k, v in self.series.items():
-            v_full = np.array(v[:train_len]).reshape(train_len // 7, 7)
-            avg_all = v_full.mean()
-            avg_week = v_full.mean(axis=0)
-            diff = avg_week - avg_all
-            diff = np.tile(diff, n_weeks)
-            diff = diff[:len(v)]
-            # self.series[k] = v - diff
-            self.diff[k] = diff
-            # self.diff[k] = max(v[:train_len])
+        # train_len = self.backcast_length
+        # for k, v in self.series.items():
+        #     v_full = np.array(v[:train_len]).reshape(train_len // 7, 7)
+        #     avg_all = v_full.mean()
+        #     avg_week = v_full.mean(axis=0)
+        #     diff = avg_week - avg_all
+        #     diff = np.tile(diff, n_weeks)
+        #     diff = diff[:len(v)]
+        #     # self.series[k] = v - diff
+        #     self.diff[k] = diff
+        #     # self.diff[k] = max(v[:train_len])
 
         p = next(self.parameters())
         for k, v in self.series.items():
@@ -281,7 +281,7 @@ class NBEATSWiki(BaseModel):
                 self.series[k][mask] = self.series[k][idx[mask]]
 
             self.series[k] = p.new_tensor(self.series[k])
-            self.diff[k] = p.new_tensor(self.diff[k])
+            # self.diff[k] = p.new_tensor(self.diff[k])
 
         self.max_start = len(
             self.series[k]) - self.forecast_length * 2 - self.total_length
@@ -343,7 +343,7 @@ class NBEATSWiki(BaseModel):
         }
 
         series_list = []
-        diff_list = []
+        # diff_list = []
         for key in keys:
             s = self.series[key]
             if split == 'train':
@@ -354,14 +354,14 @@ class NBEATSWiki(BaseModel):
                 # start = len(s) - self.total_length
                 start = self.max_start + self.forecast_length * 2
             s = s[start:start+self.total_length]
-            d = self.diff[key][start:start+self.total_length]
+            # d = self.diff[key][start:start+self.total_length]
             series_list.append(s)
-            diff_list.append(d)
+            # diff_list.append(d)
 
         series = torch.stack(series_list, dim=0)
         # series.shape == [batch_size, total_length]
 
-        diffs = torch.stack(diff_list, dim=0)
+        # diffs = torch.stack(diff_list, dim=0)
         # diffs = series.new_tensor(diff_list)
 
         sources = series[:, :self.backcast_length]

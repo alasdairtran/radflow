@@ -49,6 +49,13 @@ class NBeatsNet(nn.Module):
         self.to(self.device)
 
         if max_neighbours > 0:
+            self.neigh_proj_1 = GehringLinear(
+                max_neighbours, hidden_layer_units)
+            self.neigh_proj_2 = GehringLinear(
+                hidden_layer_units, hidden_layer_units)
+            self.neigh_proj_3 = GehringLinear(hidden_layer_units, 1)
+
+        if False:
             embed_dim = hidden_layer_units * len(self.stack_types)
             kdim = vdim = hidden_layer_units * 2
             self.downsample = GehringLinear(embed_dim, hidden_layer_units)
@@ -73,7 +80,7 @@ class NBeatsNet(nn.Module):
             else:
                 block = block_init(self.hidden_layer_units, self.thetas_dim[stack_id],
                                    self.device, self.backcast_length, self.forecast_length,
-                                   self.nb_harmonics, self.dropout, self.max_neighbours)
+                                   self.nb_harmonics, self.dropout, 0)
                 self.parameters.extend(block.parameters())
             print(f'     | -- {block}')
             blocks.append(block)
@@ -92,23 +99,39 @@ class NBeatsNet(nn.Module):
         # maybe batch size here.
         B = backcast.shape[0]
         backcast = backcast.to(self.device)
-        forecast = torch.zeros(size=(B, self.forecast_length)).to(self.device)
 
-        if self.max_neighbours > 0:
+        if target_n is None:
+            forecast = torch.zeros(
+                size=(B, self.forecast_length)).to(self.device)
+        else:
+            # target_n.shape == [batch_size, n_neighs, forecast_len]
+            target_n = target_n.transpose(1, 2)
+            # target_n.shape == [batch_size, forecast_len, n_neighs]
+
+            X_neighs = F.dropout(F.gelu(self.neigh_proj_1(target_n)))
+            # target_n.shape == [batch_size, forecast_len, hidden_size]
+
+            X_neighs = F.dropout(F.gelu(self.neigh_proj_2(X_neighs)))
+            # target_n.shape == [batch_size, forecast_len, hidden_size]
+
+            forecast = self.neigh_proj_3(X_neighs).squeeze(-1)
+            # forecast.shape == [batch_size, forecast_len]
+
+        if False:
             B, N, S = backcast_n.shape
             forecast_n = torch.zeros(
                 size=(B, N, self.forecast_length)).to(self.device)
 
         x_list = []
-        xn_list = []
+        # xn_list = []
         for stack_id in range(len(self.stacks)):
             for block_id in range(len(self.stacks[stack_id])):
                 b, f, bn, fn, x_i, xn_i = self.stacks[stack_id][block_id](
-                    backcast, backcast_n, X_neigh_masks)
+                    backcast)
                 # x_i.shape == [batch_size, embed_dim]
                 # xn_i.shape == [batch_size, n_neighs, embed_dim]
                 x_list.append(x_i)
-                xn_list.append(xn_i)
+                # xn_list.append(xn_i)
 
                 backcast = backcast - b
                 # backcast.shape == [B, S]
@@ -116,7 +139,7 @@ class NBeatsNet(nn.Module):
                 forecast = forecast + f
                 # forecast.shape == [B, T]
 
-                if self.max_neighbours > 0:
+                if False:
                     # attn_weights = attn_weights.unsqueeze(2)
                     # attn_weights.shape == [B, N, 1]
                     # if self.peek and stack_id == 0 and block_id == 0:
@@ -132,7 +155,7 @@ class NBeatsNet(nn.Module):
                     forecast_n = forecast_n + fn
                     # forecast_n.shape == [B, N, T]
 
-        if self.max_neighbours > 0:
+        if False:
             # Aggregate the neighbours
             x_embed = torch.cat(x_list, dim=-1)
             # x_embed.shape == [batch_size, n_layers * embed_dim]
