@@ -20,7 +20,7 @@ model:
   forecast_length: 7
   backcast_length: 35
   dropout: 0.1
-  max_neighbours: 16
+  max_neighbours: 32
 iterator:
   type: basic
   batch_size: 512
