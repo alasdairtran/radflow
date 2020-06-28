@@ -13,6 +13,7 @@ from .lstm_network_wiki import TimeSeriesLSTMNetworkWiki
 from .naive import (NaivePreviousDayModel, NaiveRollingAverageModel,
                     NaiveSeasonalDiffModel, NaiveSeasonalModel)
 from .nbeats_lstm import NBEATSLSTM
+from .nbeats_lstm_baseline import NBEATSLSTMBaseline
 from .nbeats_wiki import NaiveWiki, NBEATSWiki
 from .nbeats_wiki_transformer import NBEATSTransformer
 from .nbeats_wiki_transformer_bit import NBEATSTransformerBit
