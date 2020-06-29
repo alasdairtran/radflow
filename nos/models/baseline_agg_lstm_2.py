@@ -129,7 +129,7 @@ class BaselineAggLSTM2(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, n_skips=None, forward_full=False):
+    def _get_neighbour_embeds(self, X, keys, n_skips=None):
         if self.agg_type == 'none':
             return X
 
@@ -150,11 +150,8 @@ class BaselineAggLSTM2(BaseModel):
         sources = torch.stack(source_list, dim=0)
         # sources.shape == [batch_size * n_neighbors, seq_len]
 
-        if not forward_full:
-            X_neighbors, _ = self._forward(sources)
-        else:
-            X_neighbors = self._forward_full(sources)
-            X_neighbors = X_neighbors[:, 1:]
+        X_neighbors = self._forward_full(sources)
+        X_neighbors = X_neighbors[:, 1:]
 
         # X_neighbors.shape == [batch_size * n_neighbors, seq_len, hidden_size]
 
@@ -264,7 +261,7 @@ class BaselineAggLSTM2(BaseModel):
             for i in range(self.forecast_length):
                 X = self._forward_full(series)
                 X_full = self._get_neighbour_embeds(
-                    X, keys, self.forecast_length - i - 1, True)
+                    X, keys, self.forecast_length - i - 1)
                 X_full = self.fc(X_full)
                 delta = X_full.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
