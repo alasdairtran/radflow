@@ -1,6 +1,7 @@
 from .baseline_agg_lstm import BaselineAggLSTM
 from .baseline_agg_lstm_2 import BaselineAggLSTM2
 from .baseline_agg_lstm_3 import BaselineAggLSTM3
+from .baseline_agg_lstm_4 import BaselineAggLSTM4
 from .lstm import TimeSeriesLSTM
 from .lstm_network import TimeSeriesLSTMNetwork
 from .lstm_network_daily import TimeSeriesLSTMNetworkDaily
