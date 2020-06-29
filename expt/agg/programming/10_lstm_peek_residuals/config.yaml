@@ -19,7 +19,7 @@ model:
   hidden_size: 128
   dropout: 0.1
   forecast_length: 14
-  backcast_length: 98
+  backcast_length: 84
 iterator:
   type: basic
   batch_size: 256
