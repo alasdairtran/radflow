@@ -43,6 +43,7 @@ class BaselineAggLSTM3(BaseModel):
                  hidden_size: int = 128,
                  dropout: float = 0.1,
                  max_neighbours: int = 8,
+                 log: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.layers = nn.ModuleList([])
@@ -54,6 +55,7 @@ class BaselineAggLSTM3(BaseModel):
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
+        self.log = log
 
         self.n_days = forecast_length
         self.max_start = None
@@ -154,6 +156,9 @@ class BaselineAggLSTM3(BaseModel):
         sources = torch.stack(source_list, dim=0)
         # sources.shape == [batch_size * n_neighbors, seq_len]
 
+        if self.log:
+            sources = torch.log1p(sources)
+
         if offset == 0:
             X_neighbors, _, _ = self._forward(sources)
         else:
@@ -236,6 +241,9 @@ class BaselineAggLSTM3(BaseModel):
         series = torch.stack(series_list, dim=0)
         # series.shape == [batch_size, seq_len]
 
+        if self.log:
+            series = torch.log1p(series)
+
         X, preds, targets = self._forward(series)
         # X.shape == [batch_size, seq_len, hidden_size]
         # targets.shape == [batch_size, seq_len]
@@ -283,6 +291,8 @@ class BaselineAggLSTM3(BaseModel):
                 series = torch.cat(
                     [series, current_views.unsqueeze(-1)], dim=-1)
 
+            if self.log:
+                preds = torch.exp(preds) - 1
             smape, daily_errors = get_smape(targets, preds)
 
             out_dict['smapes'] = smape
