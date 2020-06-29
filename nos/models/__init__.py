@@ -1,3 +1,4 @@
+from .baseline_agg_lstm import BaselineAggLSTM
 from .lstm import TimeSeriesLSTM
 from .lstm_network import TimeSeriesLSTMNetwork
 from .lstm_network_daily import TimeSeriesLSTMNetworkDaily
