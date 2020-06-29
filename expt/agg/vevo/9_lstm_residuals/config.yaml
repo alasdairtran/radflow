@@ -11,7 +11,7 @@ test_data_path: test
 vocabulary:
   type: empty_vocab
 model:
-  type: baseline_agg_lstm_2
+  type: baseline_agg_lstm_3
   agg_type: none
   data_dir: "./data/wiki/subgraphs"
   seed_word: vevo
