@@ -36,13 +36,12 @@ class BaselineAggLSTM3(BaseModel):
                  data_dir: str,
                  agg_type: str,
                  forecast_length: int = 7,
-                 backcast_length: int = 35,
+                 backcast_length: int = 42,
                  peek: bool = False,
                  seed_word: str = 'vevo',
                  num_layers: int = 8,
                  hidden_size: int = 128,
                  dropout: float = 0.1,
-                 n_days: int = 7,
                  max_neighbours: int = 8,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -54,8 +53,10 @@ class BaselineAggLSTM3(BaseModel):
         self.max_neighbours = max_neighbours
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
+        self.total_length = forecast_length + backcast_length
 
-        self.n_days = n_days
+        self.n_days = forecast_length
+        self.max_start = None
         self.rs = np.random.RandomState(1234)
         initializer(self)
 
@@ -96,6 +97,9 @@ class BaselineAggLSTM3(BaseModel):
             v_array = np.asarray(v)
             self.series[k] = p.new_tensor(v_array)
 
+        self.max_start = len(
+            self.series[k]) - self.forecast_length * 2 - self.total_length
+
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
 
@@ -129,7 +133,7 @@ class BaselineAggLSTM3(BaseModel):
 
         return X, forecast
 
-    def _get_neighbour_embeds(self, X, keys, n_skips=None, forward_full=False):
+    def _get_neighbour_embeds(self, X, keys, start, offset=0):
         if self.agg_type == 'none':
             return X
 
@@ -144,13 +148,13 @@ class BaselineAggLSTM3(BaseModel):
             neighbor_lens.append(len(sources))
             for s in sources:
                 s_series = self.series[s]
-                s_series = s_series[:-n_skips if n_skips > 0 else None]
+                s_series = s_series[start:start+self.total_length+offset]
                 source_list.append(s_series)
 
         sources = torch.stack(source_list, dim=0)
         # sources.shape == [batch_size * n_neighbors, seq_len]
 
-        if not forward_full:
+        if offset == 0:
             X_neighbors, _, _ = self._forward(sources)
         else:
             X_neighbors, _ = self._forward_full(sources)
@@ -201,6 +205,7 @@ class BaselineAggLSTM3(BaseModel):
 
         self._initialize_series()
 
+        split = splits[0]
         B = len(keys)
         p = next(self.parameters())
         # keys.shape == [batch_size]
@@ -213,17 +218,19 @@ class BaselineAggLSTM3(BaseModel):
             'sample_size': p.new_tensor(B),
         }
 
-        if splits[0] in ['train']:
-            n_skips = self.n_days * 2
-        elif splits[0] in ['valid']:
-            n_skips = self.n_days
-        elif splits[0] == 'test':
-            n_skips = 0
-
         series_list = []
         for key in keys:
             s = self.series[key]
-            s = s[:-n_skips if n_skips > 0 else None]
+            if split == 'train':
+                if self.max_start == 0:
+                    start = 0
+                else:
+                    start = self.rs.randint(0, self.max_start)
+            elif split == 'valid':
+                start = self.max_start + self.forecast_length
+            elif split == 'test':
+                start = self.max_start + self.forecast_length * 2
+            s = s[start:start+self.total_length]
             series_list.append(s)
 
         series = torch.stack(series_list, dim=0)
@@ -234,7 +241,7 @@ class BaselineAggLSTM3(BaseModel):
         # targets.shape == [batch_size, seq_len]
 
         if self.agg_type != 'none':
-            X_full = self._get_neighbour_embeds(X, keys, n_skips)
+            X_full = self._get_neighbour_embeds(X, keys, start)
             # X_full.shape == [batch_size, seq_len, out_hidden_size]
 
             X_full = self.fc(X_full)
@@ -264,8 +271,7 @@ class BaselineAggLSTM3(BaseModel):
             current_views = series[:, -1]
             for i in range(self.forecast_length):
                 X = self._forward_full(series)
-                X_full = self._get_neighbour_embeds(
-                    X, keys, self.forecast_length - i - 1, True)
+                X_full = self._get_neighbour_embeds(X, keys, start, i + 1)
                 X_full = self.fc(X_full)
                 delta = X_full.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
