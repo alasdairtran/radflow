@@ -33,20 +33,23 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class BaselineAggLSTM2(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
-                 decoder: Decoder,
                  data_dir: str,
                  agg_type: str,
                  forecast_length: int = 7,
                  backcast_length: int = 35,
                  peek: bool = False,
                  seed_word: str = 'vevo',
+                 num_layers: int = 8,
+                 hidden_size: int = 128,
+                 dropout: float = 0.1,
                  n_days: int = 7,
                  max_neighbours: int = 8,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
-        self.decoder = decoder
+        self.decoder = nn.LSTM(1, hidden_size, num_layers,
+                               bias=True, batch_first=True, dropout=dropout)
         self.mse = nn.MSELoss()
-        self.hidden_size = decoder.get_output_dim()
+        self.hidden_size = hidden_size
         self.peek = peek
         self.max_neighbours = max_neighbours
         self.forecast_length = forecast_length
@@ -107,8 +110,7 @@ class BaselineAggLSTM2(BaseModel):
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len - 1, 1]
 
-        incremental_state: Dict[str, Any] = {}
-        X, _ = self.decoder(X, incremental_state=incremental_state)
+        X, _ = self.decoder(X)
 
         return X, targets
 
@@ -123,8 +125,7 @@ class BaselineAggLSTM2(BaseModel):
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
-        incremental_state: Dict[str, Any] = {}
-        X, _ = self.decoder(X, incremental_state=incremental_state)
+        X, _ = self.decoder(X)
 
         return X
 
@@ -368,8 +369,6 @@ class BaselineAggLSTM2(BaseModel):
 
         params_dict: Dict[str, Any] = {}
 
-        params_dict['decoder'] = Decoder.from_params(
-            vocab=vocab, params=params.pop('decoder'))
         params_dict['initializer'] = InitializerApplicator.from_params(
             params.pop('initializer', None))
 

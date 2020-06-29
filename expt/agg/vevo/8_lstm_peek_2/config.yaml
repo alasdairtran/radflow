@@ -11,24 +11,14 @@ test_data_path: test
 vocabulary:
   type: empty_vocab
 model:
-  type: baseline_agg_lstm
+  type: baseline_agg_lstm_2
   agg_type: mean
   peek: true
   data_dir: "./data/wiki/subgraphs"
   seed_word: vevo
-  decoder:
-    type: lstm_decoder
-    rnn:
-      type: lstm
-      batch_first: true
-      stateful: true
-      num_layers: 8
-      bias: True
-      bidirectional: false
-    decoder_input_dim: 1
-    hidden_size: 128
-    dropout: 0.1
-    dilation: 1
+  num_layers: 8
+  hidden_size: 128
+  dropout: 0.1
 iterator:
   type: basic
   batch_size: 512
