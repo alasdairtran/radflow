@@ -270,13 +270,15 @@ class BaselineAggLSTM3(BaseModel):
             series = series[:, :-self.forecast_length]
             current_views = series[:, -1]
             for i in range(self.forecast_length):
-                X = self._forward_full(series)
-                X_full = self._get_neighbour_embeds(X, keys, start, i + 1)
-                X_full = self.fc(X_full)
-                delta = X_full.squeeze(-1)[:, -1]
-                # delta.shape == [batch_size]
+                X, pred = self._forward_full(series)
+                pred = pred[:, -1]
+                if self.agg_type != 'none':
+                    X_full = self._get_neighbour_embeds(X, keys, start, i + 1)
+                    X_full = self.fc(X_full)
+                    pred = pred + X_full.squeeze(-1)[:, -1]
+                    # delta.shape == [batch_size]
 
-                current_views = current_views * delta
+                current_views = current_views * pred
                 preds[:, i] = current_views
                 series = torch.cat(
                     [series, current_views.unsqueeze(-1)], dim=-1)
