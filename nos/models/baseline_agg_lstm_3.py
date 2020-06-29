@@ -150,7 +150,11 @@ class BaselineAggLSTM3(BaseModel):
             neighbor_lens.append(len(sources))
             for s in sources:
                 s_series = self.series[s]
-                s_series = s_series[start:start+self.total_length+offset]
+                if offset == 0: # training
+                    length = self.total_length
+                else:
+                    length = self.backcast_length + offset
+                s_series = s_series[start:start+length]
                 source_list.append(s_series)
 
         sources = torch.stack(source_list, dim=0)
