@@ -186,7 +186,7 @@ class BaselineAggLSTM2(BaseModel):
         X_i = X_i.unsqueeze(0)
         # X_i.shape == [1, seq_len, hidden_size]
 
-        if X_neighbors_i.shape == 0:
+        if X_neighbors_i.shape[0] == 0:
             X_out = X_i.new_zeros(*X_i.shape)
         else:
             X_out = X_neighbors_i.mean(dim=0).unsqueeze(0)
