@@ -42,7 +42,6 @@ class BaselineAggLSTM2(BaseModel):
                  num_layers: int = 8,
                  hidden_size: int = 128,
                  dropout: float = 0.1,
-                 n_days: int = 7,
                  log: bool = False,
                  max_neighbours: int = 8,
                  initializer: InitializerApplicator = InitializerApplicator()):
@@ -57,7 +56,6 @@ class BaselineAggLSTM2(BaseModel):
         self.backcast_length = backcast_length
         self.log = log
 
-        self.n_days = n_days
         self.rs = np.random.RandomState(1234)
         initializer(self)
 
@@ -216,9 +214,9 @@ class BaselineAggLSTM2(BaseModel):
         }
 
         if splits[0] in ['train']:
-            n_skips = self.n_days * 2
+            n_skips = self.forecast_length * 2
         elif splits[0] in ['valid']:
-            n_skips = self.n_days
+            n_skips = self.forecast_length
         elif splits[0] == 'test':
             n_skips = 0
 
@@ -248,8 +246,8 @@ class BaselineAggLSTM2(BaseModel):
         # preds.shape == [batch_size, seq_len]
 
         if splits[0] in ['test']:
-            preds = preds[-self.n_days:]
-            targets = targets[-self.n_days:]
+            preds = preds[-self.forecast_length:]
+            targets = targets[-self.forecast_length:]
 
         loss = self.mse(preds, targets)
         out_dict['loss'] = loss
