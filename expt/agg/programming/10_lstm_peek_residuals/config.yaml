@@ -22,12 +22,12 @@ model:
   backcast_length: 98
 iterator:
   type: basic
-  batch_size: 512
+  batch_size: 256
   cache_instances: false
-  instances_per_epoch: 2097152
+  instances_per_epoch: 1048576
 validation_iterator:
   type: basic
-  batch_size: 512
+  batch_size: 256
   cache_instances: false
 trainer:
   type: callback_apex
