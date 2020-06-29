@@ -36,7 +36,7 @@ class BaselineAggLSTM2(BaseModel):
                  data_dir: str,
                  agg_type: str,
                  forecast_length: int = 7,
-                 backcast_length: int = 35,
+                 backcast_length: int = 42,
                  peek: bool = False,
                  seed_word: str = 'vevo',
                  num_layers: int = 8,
@@ -54,6 +54,7 @@ class BaselineAggLSTM2(BaseModel):
         self.max_neighbours = max_neighbours
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
+        self.total_length = forecast_length + backcast_length
         self.log = log
 
         self.rs = np.random.RandomState(1234)
@@ -96,6 +97,9 @@ class BaselineAggLSTM2(BaseModel):
             v_array = np.asarray(v)
             self.series[k] = p.new_tensor(v_array)
 
+        self.max_start = len(
+            self.series[k]) - self.forecast_length * 2 - self.total_length
+
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
 
@@ -129,7 +133,7 @@ class BaselineAggLSTM2(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, n_skips=None):
+    def _get_neighbour_embeds(self, X, keys, start, total_len):
         if self.agg_type == 'none':
             return X
 
@@ -144,7 +148,7 @@ class BaselineAggLSTM2(BaseModel):
             neighbor_lens.append(len(sources))
             for s in sources:
                 s_series = self.series[s]
-                s_series = s_series[:-n_skips if n_skips > 0 else None]
+                s_series = s_series[start:start+total_len]
                 source_list.append(s_series)
 
         sources = torch.stack(source_list, dim=0)
@@ -201,6 +205,7 @@ class BaselineAggLSTM2(BaseModel):
 
         self._initialize_series()
 
+        split = splits[0]
         B = len(keys)
         p = next(self.parameters())
         # keys.shape == [batch_size]
@@ -213,17 +218,19 @@ class BaselineAggLSTM2(BaseModel):
             'sample_size': p.new_tensor(B),
         }
 
-        if splits[0] in ['train']:
-            n_skips = self.forecast_length * 2
-        elif splits[0] in ['valid']:
-            n_skips = self.forecast_length
-        elif splits[0] == 'test':
-            n_skips = 0
-
         series_list = []
         for key in keys:
             s = self.series[key]
-            s = s[:-n_skips if n_skips > 0 else None]
+            if split == 'train':
+                if self.max_start == 0:
+                    start = 0
+                else:
+                    start = self.rs.randint(0, self.max_start)
+            elif split == 'valid':
+                start = self.max_start + self.forecast_length
+            elif split == 'test':
+                start = self.max_start + self.forecast_length * 2
+            s = s[start:start+self.total_length]
             series_list.append(s)
 
         series = torch.stack(series_list, dim=0)
@@ -236,7 +243,7 @@ class BaselineAggLSTM2(BaseModel):
         # X.shape == [batch_size, seq_len, hidden_size]
         # targets.shape == [batch_size, seq_len]
 
-        X_full = self._get_neighbour_embeds(X, keys, n_skips)
+        X_full = self._get_neighbour_embeds(X, keys, start, self.total_length)
         # X_full.shape == [batch_size, seq_len, out_hidden_size]
 
         X_full = self.fc(X_full)
@@ -266,8 +273,9 @@ class BaselineAggLSTM2(BaseModel):
             current_views = series[:, -1]
             for i in range(self.forecast_length):
                 X = self._forward_full(series)
+                seq_len = self.total_length - self.forecast_length + i + 1
                 X_full = self._get_neighbour_embeds(
-                    X, keys, self.forecast_length - i - 1)
+                    X, keys, start, seq_len)
                 X_full = self.fc(X_full)
                 delta = X_full.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
