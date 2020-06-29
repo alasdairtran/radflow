@@ -43,10 +43,11 @@ class BaselineAggLSTM4(BaseModel):
                  hidden_size: int = 128,
                  dropout: float = 0.1,
                  log: bool = False,
+                 subtract: bool = True,
                  max_neighbours: int = 8,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
-        self.decoder = LSTMDecoder(hidden_size, num_layers, dropout)
+        self.decoder = LSTMDecoder(hidden_size, num_layers, dropout, subtract)
         self.mse = nn.MSELoss()
         self.hidden_size = hidden_size
         self.peek = peek
@@ -308,9 +309,10 @@ class BaselineAggLSTM4(BaseModel):
 
 
 class LSTMDecoder(nn.Module):
-    def __init__(self, hidden_size, n_layers, dropout):
+    def __init__(self, hidden_size, n_layers, dropout, subtract):
         super().__init__()
         self.in_proj = GehringLinear(1, hidden_size)
+        self.subtract = subtract
         self.layers = nn.ModuleList([])
         for i in range(n_layers):
             self.layers.append(LSTMLayer(hidden_size, dropout))
@@ -331,15 +333,21 @@ class LSTMDecoder(nn.Module):
         h_list = []
         for layer in self.layers:
             h, b, f = layer(X)
-            X = X - b
+            if self.subtract:
+                X = X - b
+                h_list.append(h)
+            else:
+                X = h
             forecast = forecast + f
-            h_list.append(h)
 
-        h = torch.cat(h_list,  dim=-1)
-        # h.shape == [batch_size, seq_len, n_layers * hidden_size]
+        if self.subtract:
+            h = torch.cat(h_list,  dim=-1)
+            # h.shape == [batch_size, seq_len, n_layers * hidden_size]
 
-        h = self.out_proj(h)
-        # h.shape == [batch_size, seq_len, hidden_size]
+            h = self.out_proj(h)
+            # h.shape == [batch_size, seq_len, hidden_size]
+        else:
+            h = X
 
         return h, f
 
