@@ -57,6 +57,7 @@ class BaselineAggLSTM2(BaseModel):
         self.total_length = forecast_length + backcast_length
         self.log = log
 
+        self.max_start = None
         self.rs = np.random.RandomState(1234)
         initializer(self)
 
@@ -72,9 +73,6 @@ class BaselineAggLSTM2(BaseModel):
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
-
-        self.cached_series = {}
-        self.non_missing = {}
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
@@ -252,10 +250,6 @@ class BaselineAggLSTM2(BaseModel):
         preds = X_full.squeeze(-1)
         # preds.shape == [batch_size, seq_len]
 
-        if splits[0] in ['test']:
-            preds = preds[-self.forecast_length:]
-            targets = targets[-self.forecast_length:]
-
         loss = self.mse(preds, targets)
         out_dict['loss'] = loss
 
@@ -307,7 +301,4 @@ class BaselineAggLSTM2(BaseModel):
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, Any]:
-        if reset:
-            self.cached_series = {}
-
         return super().get_metrics(reset)

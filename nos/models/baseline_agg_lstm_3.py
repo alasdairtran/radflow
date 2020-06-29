@@ -42,11 +42,10 @@ class BaselineAggLSTM3(BaseModel):
                  num_layers: int = 8,
                  hidden_size: int = 128,
                  dropout: float = 0.1,
-                 max_neighbours: int = 8,
                  log: bool = False,
+                 max_neighbours: int = 8,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
-        self.layers = nn.ModuleList([])
         self.decoder = LSTMDecoder(hidden_size, num_layers, dropout)
         self.mse = nn.MSELoss()
         self.hidden_size = hidden_size
@@ -57,7 +56,6 @@ class BaselineAggLSTM3(BaseModel):
         self.total_length = forecast_length + backcast_length
         self.log = log
 
-        self.n_days = forecast_length
         self.max_start = None
         self.rs = np.random.RandomState(1234)
         initializer(self)
@@ -74,9 +72,6 @@ class BaselineAggLSTM3(BaseModel):
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
-
-        self.cached_series = {}
-        self.non_missing = {}
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
@@ -188,7 +183,7 @@ class BaselineAggLSTM3(BaseModel):
         X_i = X_i.unsqueeze(0)
         # X_i.shape == [1, seq_len, hidden_size]
 
-        if X_neighbors_i.shape == 0:
+        if X_neighbors_i.shape[0] == 0:
             X_out = X_i.new_zeros(*X_i.shape)
         else:
             X_out = X_neighbors_i.mean(dim=0).unsqueeze(0)
@@ -228,14 +223,11 @@ class BaselineAggLSTM3(BaseModel):
                     start = 0
                 else:
                     start = self.rs.randint(0, self.max_start)
-                total_len = self.total_length
             elif split == 'valid':
-                start = self.max_start
-                total_len = self.total_length + self.forecast_length
+                start = self.max_start + self.forecast_length
             elif split == 'test':
-                start = self.max_start
-                total_len = self.total_length + self.forecast_length * 2
-            s = s[start:start+total_len]
+                start = self.max_start + self.forecast_length * 2
+            s = s[start:start+self.total_length]
             series_list.append(s)
 
         series = torch.stack(series_list, dim=0)
@@ -249,7 +241,8 @@ class BaselineAggLSTM3(BaseModel):
         # targets.shape == [batch_size, seq_len]
 
         if self.agg_type != 'none':
-            X_full = self._get_neighbour_embeds(X, keys, start, total_len)
+            X_full = self._get_neighbour_embeds(
+                X, keys, start, self.total_length)
             # X_full.shape == [batch_size, seq_len, out_hidden_size]
 
             X_full = self.fc(X_full)
@@ -257,10 +250,6 @@ class BaselineAggLSTM3(BaseModel):
 
             preds = preds + X_full.squeeze(-1)
             # preds.shape == [batch_size, seq_len]
-
-        if splits[0] in ['test']:
-            preds = preds[-self.n_days:]
-            targets = targets[-self.n_days:]
 
         loss = self.mse(preds, targets)
         out_dict['loss'] = loss
@@ -281,7 +270,7 @@ class BaselineAggLSTM3(BaseModel):
                 X, pred = self._forward_full(series)
                 pred = pred[:, -1]
                 if self.agg_type != 'none':
-                    seq_len = total_len - self.forecast_length + i + 1
+                    seq_len = self.total_length - self.forecast_length + i + 1
                     X_full = self._get_neighbour_embeds(
                         X, keys, start, seq_len)
                     X_full = self.fc(X_full)
@@ -315,9 +304,6 @@ class BaselineAggLSTM3(BaseModel):
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, Any]:
-        if reset:
-            self.cached_series = {}
-
         return super().get_metrics(reset)
 
 
