@@ -42,6 +42,7 @@ class BaselineAggLSTM(BaseModel):
                  peek: bool = False,
                  seed_word: str = 'vevo',
                  n_days: int = 7,
+                 train_all: bool = False,
                  max_neighbours: int = 8,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -52,6 +53,7 @@ class BaselineAggLSTM(BaseModel):
         self.max_neighbours = max_neighbours
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
+        self.train_all = train_all
 
         self.n_days = n_days
         self.rs = np.random.RandomState(1234)
@@ -238,7 +240,10 @@ class BaselineAggLSTM(BaseModel):
         }
 
         if splits[0] in ['train']:
-            n_skips = self.n_days * 2
+            if self.train_all:
+                n_skips = self.n_days
+            else:
+                n_skips = self.n_days * 2
         elif splits[0] in ['valid']:
             n_skips = self.n_days
         elif splits[0] == 'test':
