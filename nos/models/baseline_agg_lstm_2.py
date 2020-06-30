@@ -43,6 +43,7 @@ class BaselineAggLSTM2(BaseModel):
                  hidden_size: int = 128,
                  dropout: float = 0.1,
                  log: bool = False,
+                 opt_smape: bool = False,
                  max_neighbours: int = 8,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -56,6 +57,7 @@ class BaselineAggLSTM2(BaseModel):
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
         self.log = log
+        self.opt_smape = opt_smape
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -101,13 +103,16 @@ class BaselineAggLSTM2(BaseModel):
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
 
-        training_series = series.clone().detach()
-        training_series[training_series == 0] = 1
-
         # Take the difference
-        diff = training_series[:, 1:] / training_series[:, :-1]
-        targets = diff[:, 1:]
-        inputs = diff[:, :-1]
+        if not self.log:
+            training_series = series.clone().detach()
+            training_series[training_series == 0] = 1
+            diff = training_series[:, 1:] / training_series[:, :-1]
+            targets = diff[:, 1:]
+            inputs = diff[:, :-1]
+        else:
+            inputs = series[:, :-1]
+            targets = series[:, 1:]
 
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len - 1, 1]
@@ -119,11 +124,13 @@ class BaselineAggLSTM2(BaseModel):
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
 
-        training_series = series.clone().detach()
-        training_series[training_series == 0] = 1
+        if not self.log:
+            training_series = series.clone().detach()
+            training_series[training_series == 0] = 1
+            inputs = training_series[:, 1:] / training_series[:, :-1]
+        else:
+            inputs = series
 
-        # Take the difference
-        inputs = training_series[:, 1:] / training_series[:, :-1]
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
@@ -250,7 +257,16 @@ class BaselineAggLSTM2(BaseModel):
         preds = X_full.squeeze(-1)
         # preds.shape == [batch_size, seq_len]
 
-        loss = self.mse(preds, targets)
+        if self.log and self.opt_smape:
+            preds = torch.exp(preds) - 1
+            targets = torch.exp(targets) - 1
+            numerator = torch.abs(targets - preds)
+            denominator = torch.abs(targets) + torch.abs(preds)
+            loss = numerator / denominator
+            loss[torch.isnan(loss)] = 0
+            loss = loss.mean()
+        else:
+            loss = self.mse(preds, targets)
         out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
@@ -271,10 +287,13 @@ class BaselineAggLSTM2(BaseModel):
                 X_full = self._get_neighbour_embeds(
                     X, keys, start, seq_len)
                 X_full = self.fc(X_full)
-                delta = X_full.squeeze(-1)[:, -1]
+                pred = X_full.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
 
-                current_views = current_views * delta
+                if not self.log:
+                    current_views = current_views * pred
+                else:
+                    current_views = pred
                 preds[:, i] = current_views
                 series = torch.cat(
                     [series, current_views.unsqueeze(-1)], dim=-1)

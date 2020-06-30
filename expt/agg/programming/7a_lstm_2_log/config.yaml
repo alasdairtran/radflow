@@ -20,14 +20,15 @@ model:
   backcast_length: 84
   forecast_length: 14
   log: true
+  opt_smape: true
 iterator:
   type: basic
-  batch_size: 256
+  batch_size: 128
   cache_instances: false
-  instances_per_epoch: 1048576
+  instances_per_epoch: 524288
 validation_iterator:
   type: basic
-  batch_size: 256
+  batch_size: 128
   cache_instances: false
 trainer:
   type: callback_apex

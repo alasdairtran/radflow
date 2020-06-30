@@ -10,16 +10,15 @@ test_data_path: test
 vocabulary:
   type: empty_vocab
 model:
-  type: baseline_agg_lstm_2
+  type: baseline_agg_lstm_4
   agg_type: mean
-  peek: true
   data_dir: "./data/wiki/subgraphs"
   seed_word: programming
   num_layers: 8
   hidden_size: 128
   dropout: 0.1
-  backcast_length: 84
   forecast_length: 14
+  backcast_length: 84
   log: true
   opt_smape: true
 iterator:
