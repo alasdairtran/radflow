@@ -22,12 +22,12 @@ model:
   opt_smape: true
 iterator:
   type: basic
-  batch_size: 512
+  batch_size: 128
   cache_instances: false
-  instances_per_epoch: 2097152
+  instances_per_epoch: 524288
 validation_iterator:
   type: basic
-  batch_size: 512
+  batch_size: 128
   cache_instances: false
 trainer:
   type: callback_apex
