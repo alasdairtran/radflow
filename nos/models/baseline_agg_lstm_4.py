@@ -175,7 +175,6 @@ class BaselineAggLSTM4(BaseModel):
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
-        initializer(self)
 
         assert agg_type in ['mean', 'none']
         self.agg_type = agg_type
@@ -189,6 +188,8 @@ class BaselineAggLSTM4(BaseModel):
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
+
+        initializer(self)
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
