@@ -258,8 +258,8 @@ class BaselineAggLSTM2(BaseModel):
         # preds.shape == [batch_size, seq_len]
 
         if split in ['valid', 'test']:
-            preds = preds[-self.forecast_length:]
-            targets = targets[-self.forecast_length:]
+            preds = preds[:, -self.forecast_length:]
+            targets = targets[:, -self.forecast_length:]
 
         if self.log and self.opt_smape:
             preds = torch.exp(preds) - 1

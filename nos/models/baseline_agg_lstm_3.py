@@ -252,8 +252,8 @@ class BaselineAggLSTM3(BaseModel):
             # preds.shape == [batch_size, seq_len]
 
         if split in ['valid', 'test']:
-            preds = preds[-self.forecast_length:]
-            targets = targets[-self.forecast_length:]
+            preds = preds[:, -self.forecast_length:]
+            targets = targets[:, -self.forecast_length:]
 
         loss = self.mse(preds, targets)
         out_dict['loss'] = loss
