@@ -370,6 +370,10 @@ class BaselineAggLSTM4(BaseModel):
             preds = preds + X_full.squeeze(-1)
             # preds.shape == [batch_size, seq_len]
 
+        if split in ['valid', 'test']:
+            preds = preds[-self.forecast_length:]
+            targets = targets[-self.forecast_length:]
+
         if self.log and self.opt_smape:
             preds = torch.exp(preds)
             targets = raw_series[:, 1:]
