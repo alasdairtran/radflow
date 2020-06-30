@@ -29,6 +29,119 @@ from .metrics import get_smape
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+@Model.register('new_naive')
+class NewNaive(BaseModel):
+    def __init__(self,
+                 vocab: Vocabulary,
+                 data_dir: str,
+                 seed_word: str = 'vevo',
+                 method: str = 'previous_day',
+                 forecast_length: int = 7,
+                 backcast_length: int = 42,
+                 initializer: InitializerApplicator = InitializerApplicator()):
+        super().__init__(vocab)
+        self.mse = nn.MSELoss()
+        self.forecast_length = forecast_length
+        self.backcast_length = backcast_length
+        self.total_length = backcast_length + forecast_length
+        self.rs = np.random.RandomState(1234)
+        self.device = torch.device('cuda:0')
+        self.method = method
+        initializer(self)
+
+        assert method in ['previous_day', 'previous_week']
+
+        with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
+            self.in_degrees, _, self.series = pickle.load(f)
+
+        # Shortcut to create new tensors in the same device as the module
+        self.register_buffer('_long', torch.LongTensor(1))
+        self.register_buffer('_float', torch.tensor(0.1))
+
+    def _initialize_series(self):
+        if isinstance(next(iter(self.series.values())), torch.Tensor):
+            return
+
+        for k, v in self.series.items():
+            v_array = np.asarray(v)
+            self.series[k] = self._float.new_tensor(v_array)
+
+        self.max_start = len(
+            self.series[k]) - self.forecast_length * 2 - self.total_length
+
+    def forward(self, keys, splits) -> Dict[str, Any]:
+        # Enable anomaly detection to find the operation that failed to compute
+        # its gradient.
+        # torch.autograd.set_detect_anomaly(True)
+
+        self._initialize_series()
+
+        split = splits[0]
+        B = len(keys)
+        # keys.shape == [batch_size]
+
+        self.history['_n_batches'] += 1
+        self.history['_n_samples'] += B
+
+        out_dict = {
+            'loss': None,
+            'sample_size': self._float.new_tensor(B),
+        }
+
+        series_list = []
+        for key in keys:
+            s = self.series[key]
+            if split == 'train':
+                if self.max_start == 0:
+                    start = 0
+                else:
+                    start = self.rs.randint(0, self.max_start)
+            elif split == 'valid':
+                start = self.max_start + self.forecast_length
+            elif split == 'test':
+                start = self.max_start + self.forecast_length * 2
+            s = s[start:start+self.total_length]
+            series_list.append(s)
+
+        series = torch.stack(series_list, dim=0)
+        # series.shape == [batch_size, total_length]
+
+        sources = series[:, :self.backcast_length]
+        targets = series[:, -self.forecast_length:]
+        B = sources.shape[0]
+        if self.method == 'previous_day':
+            preds = sources[:, -1:]
+            preds = preds.expand(B, self.forecast_length)
+        elif self.method == 'previous_week':
+            preds = sources[:, -7:]
+            preds = preds.repeat(1, self.forecast_length // 7 + 1)
+            preds = preds[:, :self.forecast_length]
+
+        loss = self.mse(torch.log1p(preds), torch.log1p(targets))
+        out_dict['loss'] = loss
+
+        # During evaluation, we compute one time step at a time
+        if splits[0] in ['test']:
+            smapes, daily_errors = get_smape(targets, preds)
+
+            out_dict['smapes'] = smapes
+            out_dict['daily_errors'] = daily_errors
+            out_dict['keys'] = keys
+            out_dict['preds'] = preds.cpu().numpy().tolist()
+
+        return out_dict
+
+    @classmethod
+    def get_params(cls, vocab: Vocabulary, params: Params) -> Dict[str, Any]:
+
+        params_dict: Dict[str, Any] = {}
+
+        params_dict['initializer'] = InitializerApplicator.from_params(
+            params.pop('initializer', None))
+
+        return params_dict
+
+
 @Model.register('baseline_agg_lstm_4')
 class BaselineAggLSTM4(BaseModel):
     def __init__(self,
