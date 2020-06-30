@@ -38,16 +38,17 @@ class NewNaive(BaseModel):
                  method: str = 'previous_day',
                  forecast_length: int = 7,
                  backcast_length: int = 42,
+                 test_lengths: List[int] = [7],
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = backcast_length + forecast_length
+        self.test_lengths = test_lengths
         self.rs = np.random.RandomState(1234)
         self.device = torch.device('cuda:0')
         self.method = method
-        initializer(self)
 
         assert method in ['previous_day', 'previous_week']
 
@@ -57,6 +58,8 @@ class NewNaive(BaseModel):
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
         self.register_buffer('_float', torch.tensor(0.1))
+
+        initializer(self)
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
@@ -124,22 +127,17 @@ class NewNaive(BaseModel):
         if splits[0] in ['test']:
             smapes, daily_errors = get_smape(targets, preds)
 
-            out_dict['smapes'] = smapes
-            out_dict['daily_errors'] = daily_errors
+            out_dict['smapes'] = smapes.tolist()
+            out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
+            self.history['_n_samples'] += len(keys)
+            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+
+            for k in self.test_lengths:
+                self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
 
         return out_dict
-
-    @classmethod
-    def get_params(cls, vocab: Vocabulary, params: Params) -> Dict[str, Any]:
-
-        params_dict: Dict[str, Any] = {}
-
-        params_dict['initializer'] = InitializerApplicator.from_params(
-            params.pop('initializer', None))
-
-        return params_dict
 
 
 @Model.register('baseline_agg_lstm_4')
@@ -441,16 +439,6 @@ class BaselineAggLSTM4(BaseModel):
                 self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
 
         return out_dict
-
-    @classmethod
-    def get_params(cls, vocab: Vocabulary, params: Params) -> Dict[str, Any]:
-
-        params_dict: Dict[str, Any] = {}
-
-        params_dict['initializer'] = InitializerApplicator.from_params(
-            params.pop('initializer', None))
-
-        return params_dict
 
 
 class LSTMDecoder(nn.Module):

@@ -37,7 +37,8 @@ class BaselineAggLSTM2(BaseModel):
                  agg_type: str,
                  forecast_length: int = 7,
                  backcast_length: int = 42,
-                 peek: bool = False,
+                 test_lengths: List[int] = [7],
+                 peek: bool = True,
                  seed_word: str = 'vevo',
                  num_layers: int = 8,
                  hidden_size: int = 128,
@@ -56,12 +57,11 @@ class BaselineAggLSTM2(BaseModel):
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
+        self.test_lengths = test_lengths
         self.log = log
         self.opt_smape = opt_smape
-
         self.max_start = None
         self.rs = np.random.RandomState(1234)
-        initializer(self)
 
         assert agg_type in ['mean', 'none']
         self.agg_type = agg_type
@@ -75,6 +75,8 @@ class BaselineAggLSTM2(BaseModel):
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
+
+        initializer(self)
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
@@ -163,7 +165,10 @@ class BaselineAggLSTM2(BaseModel):
             sources = torch.log1p(sources)
 
         X_neighbors = self._forward_full(sources)
-        X_neighbors = X_neighbors[:, 1:]
+        if self.peek:
+            X_neighbors = X_neighbors[:, 1:]
+        else:
+            X_neighbors = X_neighbors[:, :-1]
 
         # X_neighbors.shape == [batch_size * n_neighbors, seq_len, hidden_size]
 
@@ -238,11 +243,11 @@ class BaselineAggLSTM2(BaseModel):
             s = s[start:start+self.total_length]
             series_list.append(s)
 
-        series = torch.stack(series_list, dim=0)
+        raw_series = torch.stack(series_list, dim=0)
         # series.shape == [batch_size, seq_len]
 
         if self.log:
-            series = torch.log1p(series)
+            series = torch.log1p(raw_series)
 
         X, targets = self._forward(series)
         # X.shape == [batch_size, seq_len, hidden_size]
@@ -262,8 +267,11 @@ class BaselineAggLSTM2(BaseModel):
             targets = targets[:, -self.forecast_length:]
 
         if self.log and self.opt_smape:
-            preds = torch.exp(preds) - 1
-            targets = torch.exp(targets) - 1
+            preds = torch.exp(preds)
+            if split in ['valid', 'test']:
+                targets = raw_series[:, -self.forecast_length:]
+            else:
+                targets = raw_series[:, 1:]
             numerator = torch.abs(targets - preds)
             denominator = torch.abs(targets) + torch.abs(preds)
             loss = numerator / denominator
@@ -274,10 +282,12 @@ class BaselineAggLSTM2(BaseModel):
         out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
-        if splits[0] in ['test']:
+        if split in ['valid', 'test']:
             target_list = []
             for key in keys:
-                target_list.append(self.series[key][-self.forecast_length:])
+                s = start + self.backcast_length
+                e = s + self.forecast_length
+                target_list.append(self.series[key][s:e])
             targets = torch.stack(target_list, dim=0)
             # targets.shape == [batch_size, forecast_len]
 
@@ -303,25 +313,16 @@ class BaselineAggLSTM2(BaseModel):
                     [series, current_views.unsqueeze(-1)], dim=-1)
 
             if self.log:
-                preds = torch.exp(preds) - 1
-            smape, daily_errors = get_smape(targets, preds)
+                preds = torch.exp(preds)
+            smapes, daily_errors = get_smape(targets, preds)
 
-            out_dict['smapes'] = smape
-            out_dict['daily_errors'] = daily_errors
+            out_dict['smapes'] = smapes.tolist()
+            out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
+            self.history['_n_samples'] += len(keys)
+            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+
+            for k in self.test_lengths:
+                self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
 
         return out_dict
-
-    @classmethod
-    def get_params(cls, vocab: Vocabulary, params: Params) -> Dict[str, Any]:
-
-        params_dict: Dict[str, Any] = {}
-
-        params_dict['initializer'] = InitializerApplicator.from_params(
-            params.pop('initializer', None))
-
-        return params_dict
-
-    @overrides
-    def get_metrics(self, reset: bool = False) -> Dict[str, Any]:
-        return super().get_metrics(reset)

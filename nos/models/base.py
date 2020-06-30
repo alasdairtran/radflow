@@ -5,6 +5,7 @@ from typing import Any, Dict, Type
 from allennlp.common.params import Params
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
+from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
 
 from nos.modules import LoadStateDictWithPrefix
@@ -75,6 +76,10 @@ class BaseModel(LoadStateDictWithPrefix, Model):
     @classmethod
     def get_params(cls, vocab: Vocabulary, params: Params) -> Dict[str, Any]:
         params_dict: Dict[str, Any] = {}
+
+        params_dict['initializer'] = InitializerApplicator.from_params(
+            params.pop('initializer', None))
+
         return params_dict
 
     def extend_embedder_vocab(self, embedding_sources_mapping: Dict[str, str] = None) -> None:
