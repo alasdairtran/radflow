@@ -157,11 +157,10 @@ class BaselineAggLSTM4(BaseModel):
                  dropout: float = 0.1,
                  log: bool = False,
                  opt_smape: bool = False,
-                 subtract: bool = True,
                  max_neighbours: int = 8,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
-        self.decoder = LSTMDecoder(hidden_size, num_layers, dropout, subtract)
+        self.decoder = LSTMDecoder(hidden_size, num_layers, dropout)
         self.mse = nn.MSELoss()
         self.hidden_size = hidden_size
         self.peek = peek
@@ -274,7 +273,10 @@ class BaselineAggLSTM4(BaseModel):
             sources = torch.log1p(sources)
 
         X_neighbors, _ = self._forward_full(sources)
-        X_neighbors = X_neighbors[:, 1:]
+        if self.peek:
+            X_neighbors = X_neighbors[:, 1:]
+        else:
+            X_neighbors = X_neighbors[:, :-1]
 
         # X_neighbors.shape == [batch_size * n_neighbors, seq_len, hidden_size]
 
@@ -387,10 +389,12 @@ class BaselineAggLSTM4(BaseModel):
         out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
-        if splits[0] in ['test']:
+        if split in ['valid', 'test']:
             target_list = []
             for key in keys:
-                target_list.append(self.series[key][-self.forecast_length:])
+                s = start + self.backcast_length
+                e = s + self.forecast_length
+                target_list.append(self.series[key][s:e])
             targets = torch.stack(target_list, dim=0)
             # targets.shape == [batch_size, forecast_len]
 
@@ -424,6 +428,7 @@ class BaselineAggLSTM4(BaseModel):
             out_dict['smapes'] = smape
             out_dict['daily_errors'] = daily_errors
             out_dict['keys'] = keys
+            out_dict['smape'] = np.mean(smape)
 
         return out_dict
 
@@ -443,10 +448,9 @@ class BaselineAggLSTM4(BaseModel):
 
 
 class LSTMDecoder(nn.Module):
-    def __init__(self, hidden_size, n_layers, dropout, subtract):
+    def __init__(self, hidden_size, n_layers, dropout):
         super().__init__()
         self.in_proj = GehringLinear(1, hidden_size)
-        self.subtract = subtract
         self.layers = nn.ModuleList([])
         for i in range(n_layers):
             self.layers.append(LSTMLayer(hidden_size, dropout))
@@ -467,21 +471,15 @@ class LSTMDecoder(nn.Module):
         h_list = []
         for layer in self.layers:
             h, b, f = layer(X)
-            if self.subtract:
-                X = X - b
-                h_list.append(h)
-            else:
-                X = h
+            X = X - b
+            h_list.append(h)
             forecast = forecast + f
 
-        if self.subtract:
-            h = torch.cat(h_list,  dim=-1)
-            # h.shape == [batch_size, seq_len, n_layers * hidden_size]
+        h = torch.cat(h_list,  dim=-1)
+        # h.shape == [batch_size, seq_len, n_layers * hidden_size]
 
-            h = self.out_proj(h)
-            # h.shape == [batch_size, seq_len, hidden_size]
-        else:
-            h = X
+        h = self.out_proj(h)
+        # h.shape == [batch_size, seq_len, hidden_size]
 
         return h, f
 
