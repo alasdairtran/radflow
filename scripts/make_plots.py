@@ -407,30 +407,27 @@ def make_neighbour_boxplots():
 def make_subwiki_boxplots(topic):
     smape = {}
 
-    with open(f'expt/nbeats/{topic}/1_previous_day/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/agg/{topic}/1_previous_day/serialization/evaluate-metrics.json') as f:
         smape['naive'] = json.load(f)['smapes']
 
-    with open(f'expt/nbeats/{topic}/2_previous_week/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/agg/{topic}/2_previous_week/serialization/evaluate-metrics.json') as f:
         smape['SN'] = json.load(f)['smapes']
 
-    with open(f'expt/nbeats/{topic}/3_no_graph/serialization/evaluate-metrics.json') as f:
-        smape['NBEATS'] = json.load(f)['smapes']
+    with open(f'expt/agg/{topic}/7a_lstm_2_log/serialization/evaluate-metrics.json') as f:
+        smape['LSTM'] = json.load(f)['smapes']
 
-    with open(f'expt/nbeats/{topic}/4_attn/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/agg/{topic}/8a_lstm_peek_2_log/serialization/evaluate-metrics.json') as f:
         smape['Agg'] = json.load(f)['smapes']
 
-    with open(f'expt/nbeats/{topic}/5_attn_peek/serialization/evaluate-metrics.json') as f:
-        smape['Peek'] = json.load(f)['smapes']
-
-    smapes = [smape['naive'], smape['SN'], smape['NBEATS'],
-              smape['Agg'], smape['Peek']]
+    smapes = [smape['naive'], smape['SN'], smape['LSTM'],
+              smape['Agg']]
 
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
     ax.boxplot(smapes, showfliers=False, meanline=True,
                showmeans=True, widths=0.7)
     ax.set_xticklabels(
-        ['Naive', 'Seasonal', 'N-BEATS', 'N-BEATS + Agg', 'N-BEATS + Agg + Peek'])
+        ['Previous Day', 'Previous Week', 'LSTM', 'LSTM + Agg'])
     ax.set_ylabel('SMAPE')
     ax.set_title(f'{topic}')
 
@@ -448,36 +445,26 @@ def make_subwiki_boxplots(topic):
 def make_vevo_boxplots(topic):
     smape = {}
 
-    with open(f'expt/nbeats/{topic}/1_previous_day/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/agg/{topic}/1_previous_day/serialization/evaluate-metrics.json') as f:
         smape['naive'] = json.load(f)['smapes']
 
-    with open(f'expt/nbeats/{topic}/2_previous_week/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/agg/{topic}/2_previous_week/serialization/evaluate-metrics.json') as f:
         smape['SN'] = json.load(f)['smapes']
 
-    with open(f'expt/nbeats/{topic}/3_no_graph/serialization/evaluate-metrics.json') as f:
-        smape['NBEATS'] = json.load(f)['smapes']
-
-    with open(f'expt/nbeats/{topic}/4_attn/serialization/evaluate-metrics.json') as f:
-        smape['Agg'] = json.load(f)['smapes']
-
-    with open(f'expt/nbeats/{topic}/5a_attn_peek/serialization/evaluate-metrics.json') as f:
-        smape['Peek'] = json.load(f)['smapes']
-
-    with open(f'expt/11_no_agg/serialization/evaluate-metrics.json') as f:
+    with open(f'expt/agg/{topic}/7_lstm_2/serialization/evaluate-metrics.json') as f:
         smape['LSTM'] = json.load(f)['smapes']
 
-    with open(f'expt/16_peek_daily/serialization/evaluate-metrics.json') as f:
-        smape['LSTMPeek'] = json.load(f)['smapes']
+    with open(f'expt/agg/{topic}/8_lstm_peek_2/serialization/evaluate-metrics.json') as f:
+        smape['Agg'] = json.load(f)['smapes']
 
-    smapes = [smape['naive'], smape['SN'], smape['LSTM'], smape['NBEATS'],
-              smape['Agg'], smape['Peek'], smape['LSTMPeek']]
+    smapes = [smape['naive'], smape['SN'], smape['LSTM'], smape['Agg']]
 
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
     ax.boxplot(smapes, showfliers=False, meanline=True,
                showmeans=True, widths=0.7)
     ax.set_xticklabels(
-        ['Naive', 'Seasonal', 'LSTM', 'N-BEATS', 'N-BEATS + Agg', 'N-BEATS + Agg + Peek', 'LSTM + Agg + Peek'])
+        ['Previous Day', 'Previous Week', 'LSTM', 'LSTM + Agg'])
     ax.set_ylabel('SMAPE')
     ax.set_title(f'{topic}')
 
