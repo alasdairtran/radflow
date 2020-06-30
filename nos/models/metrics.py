@@ -11,4 +11,4 @@ def get_smape(target_tensors, pred_tensors):
     denominator = (np.abs(targets) + np.abs(preds))
     daily_errors_arr = 200 * np.nan_to_num(numerator / denominator)
     signed_err = preds - targets
-    return np.mean(daily_errors_arr, axis=1).tolist(), signed_err.tolist()
+    return daily_errors_arr, signed_err

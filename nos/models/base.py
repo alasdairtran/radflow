@@ -20,7 +20,7 @@ class BaseModel(LoadStateDictWithPrefix, Model):
         self.batch_history: Dict[str, float] = defaultdict(float)
         self.sample_history: Dict[str, float] = defaultdict(float)
         self.json_metrics: Dict[str, list] = defaultdict(list)
-        self.token_history: Dict[str, float] = defaultdict(float)
+        self.step_history: Dict[str, float] = defaultdict(float)
         self.epoch = 0
 
     @overrides
@@ -36,14 +36,14 @@ class BaseModel(LoadStateDictWithPrefix, Model):
             for metric, total in self.sample_history.items():
                 all_metrics[metric] = total / self.history['_n_samples']
 
-            for metric, total in self.token_history.items():
-                all_metrics[metric] = total / self.history['_n_tokens']
+            for metric, total in self.step_history.items():
+                all_metrics[metric] = total / self.history['_n_steps']
 
         if reset:
             self.history = defaultdict(float)
             self.batch_history = defaultdict(float)
             self.sample_history = defaultdict(float)
-            self.token_history = defaultdict(float)
+            self.step_history = defaultdict(float)
             if not self.training:
                 self.epoch += 1
 

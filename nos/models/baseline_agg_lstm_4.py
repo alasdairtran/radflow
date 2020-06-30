@@ -150,6 +150,7 @@ class BaselineAggLSTM4(BaseModel):
                  agg_type: str,
                  forecast_length: int = 7,
                  backcast_length: int = 42,
+                 test_lengths: List[int] = [7],
                  peek: bool = False,
                  seed_word: str = 'vevo',
                  num_layers: int = 8,
@@ -168,6 +169,7 @@ class BaselineAggLSTM4(BaseModel):
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
+        self.test_lengths = test_lengths
         self.log = log
         self.opt_smape = opt_smape
 
@@ -426,12 +428,16 @@ class BaselineAggLSTM4(BaseModel):
 
             if self.log:
                 preds = torch.exp(preds)
-            smape, daily_errors = get_smape(targets, preds)
+            smapes, daily_errors = get_smape(targets, preds)
 
-            out_dict['smapes'] = smape
-            out_dict['daily_errors'] = daily_errors
+            out_dict['smapes'] = smapes.tolist()
+            out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
-            out_dict['smape'] = np.mean(smape)
+            self.history['_n_samples'] += len(keys)
+            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+
+            for k in self.test_lengths:
+                self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
 
         return out_dict
 
@@ -444,10 +450,6 @@ class BaselineAggLSTM4(BaseModel):
             params.pop('initializer', None))
 
         return params_dict
-
-    @overrides
-    def get_metrics(self, reset: bool = False) -> Dict[str, Any]:
-        return super().get_metrics(reset)
 
 
 class LSTMDecoder(nn.Module):
