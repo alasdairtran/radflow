@@ -349,11 +349,11 @@ class BaselineAggLSTM4(BaseModel):
             s = s[start:start+self.total_length]
             series_list.append(s)
 
-        series = torch.stack(series_list, dim=0)
+        raw_series = torch.stack(series_list, dim=0)
         # series.shape == [batch_size, seq_len]
 
         if self.log:
-            series = torch.log1p(series)
+            series = torch.log1p(raw_series)
 
         X, preds, targets = self._forward(series)
         # X.shape == [batch_size, seq_len, hidden_size]
@@ -371,8 +371,8 @@ class BaselineAggLSTM4(BaseModel):
             # preds.shape == [batch_size, seq_len]
 
         if self.log and self.opt_smape:
-            preds = torch.exp(preds) - 1
-            targets = torch.exp(targets) - 1
+            preds = torch.exp(preds)
+            targets = raw_series[:, 1:]
             numerator = torch.abs(targets - preds)
             denominator = torch.abs(targets) + torch.abs(preds)
             loss = numerator / denominator
@@ -414,7 +414,7 @@ class BaselineAggLSTM4(BaseModel):
                     [series, current_views.unsqueeze(-1)], dim=-1)
 
             if self.log:
-                preds = torch.exp(preds) - 1
+                preds = torch.exp(preds)
             smape, daily_errors = get_smape(targets, preds)
 
             out_dict['smapes'] = smape
