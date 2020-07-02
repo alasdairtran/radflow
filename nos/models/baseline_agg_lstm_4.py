@@ -258,22 +258,22 @@ class BaselineAggLSTM4(BaseModel):
 
         for key in keys:
             if key in self.in_degrees:
-                sources = self.in_degrees[key][:self.max_neighbours]
+                neighs = self.in_degrees[key][:self.max_neighbours]
             else:
-                sources = []
-            neighbor_lens.append(len(sources))
-            for s in sources:
+                neighs = []
+            neighbor_lens.append(len(neighs))
+            for s in neighs:
                 s_series = self.series[s]
                 s_series = s_series[start:start+total_len]
                 source_list.append(s_series)
 
-        sources = torch.stack(source_list, dim=0)
-        # sources.shape == [batch_size * n_neighbors, seq_len]
+        neighs = torch.stack(source_list, dim=0)
+        # neighs.shape == [batch_size * n_neighbors, seq_len]
 
         if self.log:
-            sources = torch.log1p(sources)
+            neighs = torch.log1p(neighs)
 
-        X_neighbors, _ = self._forward_full(sources)
+        X_neighbors, _ = self._forward_full(neighs)
         if self.peek:
             X_neighbors = X_neighbors[:, 1:]
         else:
