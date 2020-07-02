@@ -68,7 +68,7 @@ class BaselineAggLSTM3(BaseModel):
             self.fc = GehringLinear(self.hidden_size * 2, 1)
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
-            self.sources, _, self.series = pickle.load(f)
+            self.in_degrees, _, self.series = pickle.load(f)
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -82,13 +82,13 @@ class BaselineAggLSTM3(BaseModel):
             self.series[k] = np.asarray(v).astype(float)
 
         # Sort by view counts
-        for node, neighs in self.sources.items():
+        for node, neighs in self.in_degrees.items():
             counts = []
             for neigh in neighs:
                 count = self.series[neigh][:self.backcast_length].sum()
                 counts.append(count)
             keep_idx = np.argsort(counts)[::-1][:self.max_neighbours]
-            self.sources[node] = np.array(neighs)[keep_idx]
+            self.in_degrees[node] = np.array(neighs)[keep_idx]
 
         for k, v in self.series.items():
             v_array = np.asarray(v)
@@ -138,8 +138,8 @@ class BaselineAggLSTM3(BaseModel):
         source_list = []
 
         for key in keys:
-            if key in self.sources:
-                sources = self.sources[key][:self.max_neighbours]
+            if key in self.in_degrees:
+                sources = self.in_degrees[key][:self.max_neighbours]
             else:
                 sources = []
             neighbor_lens.append(len(sources))
