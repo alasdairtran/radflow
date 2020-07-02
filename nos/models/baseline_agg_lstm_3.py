@@ -233,8 +233,7 @@ class BaselineAggLSTM3(BaseModel):
         series = torch.stack(series_list, dim=0)
         # series.shape == [batch_size, seq_len]
 
-        if self.log:
-            series = torch.log1p(series)
+        series = torch.log1p(raw_series) if self.log else raw_series
 
         X, preds, targets = self._forward(series)
         # X.shape == [batch_size, seq_len, hidden_size]
