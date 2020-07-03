@@ -89,8 +89,9 @@ class BaselineAggLSTM2(BaseModel):
         # Sort by view counts
         for node, neighs in self.in_degrees.items():
             counts = []
-            for neigh in neighs:
-                count = self.series[neigh][:self.backcast_length].sum()
+            for n in neighs:
+                n['mask'] = p.new_tensor(np.asarray(n['mask']))
+                count = self.series[n['id']][:self.backcast_length].sum()
                 counts.append(count)
             keep_idx = np.argsort(counts)[::-1][:self.max_neighbours]
             self.in_degrees[node] = np.array(neighs)[keep_idx]
@@ -144,69 +145,76 @@ class BaselineAggLSTM2(BaseModel):
         if self.agg_type == 'none':
             return X
 
-        neighbor_lens = []
-        source_list = []
+        B, T, _ = X.shape
+        N = self.max_neighbours
 
-        for key in keys:
+        # We plus one to give us option to either peek or not
+        masks = X.new_ones(B, N, total_len).bool()
+        neighs = X.new_zeros(B, N, total_len)
+
+        for b, key in enumerate(keys):
+            # in_degrees maps node_id to a sorted list of dicts
+            # a dict key looks like: {'id': 123, 'mask'; [0, 0, 1]}
             if key in self.in_degrees:
-                neighs = self.in_degrees[key][:self.max_neighbours]
-            else:
-                neighs = []
-            neighbor_lens.append(len(neighs))
-            for s in neighs:
-                s_series = self.series[s]
-                s_series = s_series[start:start+total_len]
-                source_list.append(s_series)
+                for i in range(N):
+                    if i >= len(self.in_degrees[key]):
+                        break
+                    n = self.in_degrees[key][i]
+                    neighs[b, i] = self.series[n['id']][start:start+total_len]
+                    masks[b, i] = n['mask'][start:start+total_len]
 
-        neighs = torch.stack(source_list, dim=0)
-        # neighs.shape == [batch_size * n_neighbors, seq_len]
+        # neighs.shape == [batch_size, n_neighbors, seq_len]
+        # masks.shape == [batch_size, n_neighbors, seq_len]
 
         if self.log:
             neighs = torch.log1p(neighs)
 
-        X_neighbors = self._forward_full(neighs)
+        neighs = neighs.reshape(B * N, total_len)
+        Xn = self._forward_full(neighs)
+
+        if not self.log:
+            Xn = Xn.reshape(B, N, total_len - 1, -1)
+            masks = masks[:, :, 1:]
+        else:
+            Xn = Xn.reshape(B, N, total_len, -1)
+
         if self.peek:
-            X_neighbors = X_neighbors[:, 1:]
+            Xn = Xn[:, :, 1:]
+            masks = masks[:, :, 1:]
         else:
-            X_neighbors = X_neighbors[:, :-1]
+            Xn = Xn[:, :, :-1]
+            masks = masks[:, :, -1:]
 
-        # X_neighbors.shape == [batch_size * n_neighbors, seq_len, hidden_size]
+        X_out = self._aggregate(X, Xn, masks)
+        return X_out
 
-        # Go through each element in the batch
-        cursor = 0
-        X_full_list = []
-        for n_neighbors, X_i in zip(neighbor_lens, X):
-            X_neighbors_i = X_neighbors[cursor:cursor + n_neighbors]
-            # X_neighbors_i == [n_neighbors, seq_len, hidden_size]
+    def _aggregate(self, X, Xn, masks):
+        # X.shape == [batch_size, seq_len, hidden_size]
+        # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
+        # masks.shape == [batch_size, n_neighs, seq_len]
 
-            X_full = self._aggregate(X_neighbors_i, X_i)
-            X_full_list.append(X_full)
+        # Mask out irrelevant values.
+        Xn = Xn.clone()
+        Xn[masks] = 0
 
-            cursor += n_neighbors
+        # Let's just take the average
+        Xn = Xn.sum(dim=1)
+        # Xn.shape == [batch_size, seq_len, hidden_size]
 
-        X_full = torch.cat(X_full_list, dim=0)
-        # X_full.shape [batch_size, seq_len, hidden_size]
+        n_neighs = (~masks).sum(dim=1).unsqueeze(-1)
+        # n_neighs.shape == [batch_size, seq_len, 1]
 
-        return X_full
+        Xn = Xn / n_neighs
+        # Xn.shape == [batch_size, seq_len, hidden_size]
 
-    def _aggregate(self, X_neighbors_i, X_i):
-        # X_neighbors_i.shape = [n_neighbors, seq_len, hidden_size]
-        # X_i.shape == [seq_len, hidden_size]
+        # Take care of empty neighbours
+        Xn = Xn.clone()
+        Xn[Xn.ne(Xn)] = 0
 
-        X_i = X_i.unsqueeze(0)
-        # X_i.shape == [1, seq_len, hidden_size]
+        X_out = torch.cat([X, Xn], dim=-1)
+        # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
 
-        if X_neighbors_i.shape[0] == 0:
-            X_out = X_i.new_zeros(*X_i.shape)
-        else:
-            X_out = X_neighbors_i.mean(dim=0).unsqueeze(0)
-            # X_out.shape == [1, seq_len, hidden_size]
-
-        # Combine own embedding with neighbor embedding
-        X_full = torch.cat([X_i, X_out], dim=-1)
-        # X_full.shape == [1, seq_len, 2 * hidden_size]
-
-        return X_full
+        return X_out
 
     def forward(self, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute

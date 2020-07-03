@@ -84,8 +84,8 @@ class BaselineAggLSTM3(BaseModel):
         # Sort by view counts
         for node, neighs in self.in_degrees.items():
             counts = []
-            for neigh in neighs:
-                count = self.series[neigh][:self.backcast_length].sum()
+            for n in neighs:
+                count = self.series[n['id']][:self.backcast_length].sum()
                 counts.append(count)
             keep_idx = np.argsort(counts)[::-1][:self.max_neighbours]
             self.in_degrees[node] = np.array(neighs)[keep_idx]
