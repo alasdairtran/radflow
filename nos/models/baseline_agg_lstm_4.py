@@ -149,7 +149,7 @@ class BaselineAggLSTM4(BaseModel):
                  forecast_length: int = 7,
                  backcast_length: int = 42,
                  test_lengths: List[int] = [7],
-                 peek: bool = False,
+                 peek: bool = True,
                  seed_word: str = 'vevo',
                  num_layers: int = 8,
                  hidden_size: int = 128,
