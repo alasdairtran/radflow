@@ -299,6 +299,8 @@ class BaselineAggLSTM4(BaseModel):
             Xn = Xn[:, :, :-1]
             masks = masks[:, :, -1:]
 
+        Xn = Xn.detach()
+
         X_out = self._aggregate(X, Xn, masks)
         return X_out
 

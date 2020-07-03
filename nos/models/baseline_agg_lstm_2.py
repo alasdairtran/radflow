@@ -214,6 +214,8 @@ class BaselineAggLSTM2(BaseModel):
         Xn = Xn / n_neighs
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
+        Xn = Xn.detach()
+
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
 
