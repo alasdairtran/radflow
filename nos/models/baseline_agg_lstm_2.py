@@ -151,7 +151,9 @@ class BaselineAggLSTM2(BaseModel):
 
         # We plus one to give us option to either peek or not
         masks = X.new_ones(B, N, total_len).bool()
-        neighs = X.new_zeros(B, N, total_len)
+        # We set neighs to be full precision since some view counts are
+        # bigger than 65504
+        neighs = X.new_zeros(B, N, total_len, dtype=torch.float32)
 
         for b, key in enumerate(keys):
             # in_degrees maps node_id to a sorted list of dicts
