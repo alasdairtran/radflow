@@ -9,6 +9,8 @@ from typing import Dict, List
 import pandas as pd
 from tqdm import tqdm
 
+from nos.utils import keystoint
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,6 +90,31 @@ def relabel_networks():
     # snapshot_path = os.path.join(data_dir, 'snapshots.json')
     # with open(snapshot_path, 'w') as f:
     #     json.dump(snapshots, f)
+
+    new_in_degrees = {}
+    for key in sources.keys():
+        new_in_degrees[key] = {}
+
+    n_days = len(snapshots.keys())
+
+    for day, snapshot in tqdm(snapshots.items()):
+        for key, neighs in snapshot.items():
+            if key not in new_in_degrees:
+                continue
+            for neigh in neighs:
+                if neigh not in new_in_degrees[key]:
+                    new_in_degrees[key][neigh] = {
+                        'id': neigh,
+                        'mask': [True] * n_days,
+                    }
+                new_in_degrees[key][neigh]['mask'][day] = False
+
+    for k, v in new_in_degrees.items():
+        new_in_degrees[k] = sorted(v.values(), key=lambda x: sum(
+            series[x['id']][:7]), reverse=True)
+
+    with open(f'data/wiki/subgraphs/vevo.pkl', 'wb') as f:
+        pickle.dump([new_in_degrees, {}, series], f)
 
     tags = ['acoustic', 'alternative', 'audio', 'blue', 'classical', 'country',
             'cover', 'dance', 'electronic', 'gospel', 'guitar', 'hd', 'hip hop',
