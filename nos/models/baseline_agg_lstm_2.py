@@ -87,7 +87,8 @@ class BaselineAggLSTM2(BaseModel):
             self.series[k] = np.asarray(v).astype(float)
 
         # Sort by view counts
-        for node, neighs in self.in_degrees.items():
+        logger.info('Processing edges')
+        for node, neighs in tqdm(self.in_degrees.items()):
             counts = []
             for n in neighs:
                 n['mask'] = p.new_tensor(np.asarray(n['mask']))
@@ -96,7 +97,8 @@ class BaselineAggLSTM2(BaseModel):
             keep_idx = np.argsort(counts)[::-1][:self.max_neighbours]
             self.in_degrees[node] = np.array(neighs)[keep_idx]
 
-        for k, v in self.series.items():
+        logger.info('Processing series')
+        for k, v in tqdm(self.series.items()):
             v_array = np.asarray(v)
             self.series[k] = p.new_tensor(v_array)
 
