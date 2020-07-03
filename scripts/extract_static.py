@@ -180,9 +180,49 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
     for link in outlinks:
         outlinks[link] = list(filter(lambda n: n in outlinks, outlinks[link]))
 
+    n_days = len(next(iter(series.values())))
+    inlinks = get_dynamic_info(inlinks, n_days, db)
+
     os.makedirs('data/wiki/subgraphs', exist_ok=True)
     with open(output_path, 'wb') as f:
         pickle.dump([inlinks, outlinks, series], f)
+
+
+def get_dynamic_info(in_degrees, n_days, db):
+    origin = datetime(2015, 7, 1)
+    endpoint = datetime(2020, 6, 9)  # includes endpoint
+
+    new_in_degrees = {k: [] for k in in_degrees.keys()}
+    for k, neighs in tqdm(in_degrees.items()):
+        title = db.pages.find_one({'i': int(k)}, projection=['title'])['title']
+        for n in neighs:
+            new_in_degrees[k].append({
+                'id': n,
+                'mask': [True] * n_days,
+            })
+
+            p = db.pages.find_one({'i': int(n)})
+            periods = None
+            for link in p['links']:
+                if link['n'] == title:
+                    periods = link['t']
+                    break
+            for period in periods:
+                start = (period['s'] - origin).days
+                start = max(0, start)
+
+                if 'e' not in period:
+                    end = n_days
+                else:
+                    end = (period['e'] - origin).days
+                    if end < 0:
+                        continue
+                    end += 1  # since we need to exclude endpoint
+
+                new_in_degrees[k][-1]['mask'][start:end] = [False] * \
+                    (end - start)
+
+    return new_in_degrees
 
 
 def get_subgraph_traffic_from_dump(topic):
