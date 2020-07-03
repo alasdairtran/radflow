@@ -208,8 +208,7 @@ class BaselineAggLSTM4(BaseModel):
             keep_idx = np.argsort(counts)[::-1][:self.max_neighbours]
             self.in_degrees[node] = np.array(neighs)[keep_idx]
 
-        logger.info('Processing series')
-        for k, v in tqdm(self.series.items()):
+        for k, v in self.series.items():
             v_array = np.asarray(v)
             self.series[k] = p.new_tensor(v_array)
 
@@ -281,7 +280,9 @@ class BaselineAggLSTM4(BaseModel):
             neighs = torch.log1p(neighs)
 
         neighs = neighs.reshape(B * N, total_len)
-        Xn, _ = self._forward_full(neighs)
+        # Detach as we won't back-propagate to the neighbours
+        # This will also prevent gradient overflow in mixed precision training
+        Xn, _ = self._forward_full(neighs).detach()
 
         if not self.log:
             Xn = Xn.reshape(B, N, total_len - 1, -1)
@@ -313,14 +314,12 @@ class BaselineAggLSTM4(BaseModel):
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
         n_neighs = (~masks).sum(dim=1).unsqueeze(-1)
+        # Avoid division by zero
+        n_neighs = n_neighs.clamp(min=1)
         # n_neighs.shape == [batch_size, seq_len, 1]
 
         Xn = Xn / n_neighs
         # Xn.shape == [batch_size, seq_len, hidden_size]
-
-        # Take care of empty neighbours
-        Xn = Xn.clone()
-        Xn[Xn.ne(Xn)] = 0
 
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
