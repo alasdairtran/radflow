@@ -157,6 +157,7 @@ class BaselineAggLSTM4(BaseModel):
                  log: bool = False,
                  opt_smape: bool = False,
                  max_neighbours: int = 8,
+                 detach: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = LSTMDecoder(hidden_size, num_layers, dropout)
@@ -170,6 +171,7 @@ class BaselineAggLSTM4(BaseModel):
         self.test_lengths = test_lengths
         self.log = log
         self.opt_smape = opt_smape
+        self.detach = detach
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -284,7 +286,9 @@ class BaselineAggLSTM4(BaseModel):
         neighs = neighs.reshape(B * N, total_len)
         # Detach as we won't back-propagate to the neighbours
         # This will also prevent gradient overflow in mixed precision training
-        Xn, _ = self._forward_full(neighs).detach()
+        Xn, _ = self._forward_full(neighs)
+        if self.detach:
+            Xn = Xn.detach()
 
         if not self.log:
             Xn = Xn.reshape(B, N, total_len - 1, -1)
@@ -324,6 +328,9 @@ class BaselineAggLSTM4(BaseModel):
 
         Xn = Xn / n_neighs
         # Xn.shape == [batch_size, seq_len, hidden_size]
+
+        if self.detach:
+            Xn = Xn.detach()
 
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]

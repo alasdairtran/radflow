@@ -46,10 +46,11 @@ class BaselineAggLSTM2(BaseModel):
                  log: bool = False,
                  opt_smape: bool = False,
                  max_neighbours: int = 8,
+                 attn: bool = False,
+                 detach: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
-        self.decoder = nn.LSTM(1, hidden_size, num_layers,
-                               bias=True, batch_first=True, dropout=dropout)
+        self.attn = attn
         self.mse = nn.MSELoss()
         self.hidden_size = hidden_size
         self.peek = peek
@@ -61,7 +62,15 @@ class BaselineAggLSTM2(BaseModel):
         self.log = log
         self.opt_smape = opt_smape
         self.max_start = None
+        self.detach = detach
         self.rs = np.random.RandomState(1234)
+
+        if not attn:
+            self.decoder = nn.LSTM(1, hidden_size, num_layers,
+                                   bias=True, batch_first=True, dropout=dropout)
+        else:
+            self.decoder = TransformerDecoder(
+                hidden_size, num_layers, dropout, self.total_length)
 
         assert agg_type in ['mean', 'none']
         self.agg_type = agg_type
@@ -175,7 +184,9 @@ class BaselineAggLSTM2(BaseModel):
         neighs = neighs.reshape(B * N, total_len)
         # Detach as we won't back-propagate to the neighbours
         # This will also prevent gradient overflow in mixed precision training
-        Xn = self._forward_full(neighs).detach()
+        Xn = self._forward_full(neighs)
+        if self.detach:
+            Xn = Xn.detach()
 
         if not self.log:
             Xn = Xn.reshape(B, N, total_len - 1, -1)
@@ -214,7 +225,8 @@ class BaselineAggLSTM2(BaseModel):
         Xn = Xn / n_neighs
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
-        Xn = Xn.detach()
+        if self.detach:
+            Xn = Xn.detach()
 
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
@@ -338,3 +350,65 @@ class BaselineAggLSTM2(BaseModel):
                 self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
 
         return out_dict
+
+
+class TransformerDecoder(nn.Module):
+    def __init__(self, hidden_size, n_layers, dropout, total_len):
+        super().__init__()
+        self.in_proj = GehringLinear(1, hidden_size)
+        self.pos_embeds = nn.Embedding(total_len, hidden_size)
+        self.dropout = nn.Dropout(dropout)
+        self.layers = nn.ModuleList([])
+        self.ln1s, self.ln2s = nn.ModuleList([]), nn.ModuleList([])
+        self.attns, self.ffs = nn.ModuleList([]), nn.ModuleList([])
+        for _ in range(n_layers):
+            self.attns.append(nn.MultiheadAttention(
+                hidden_size, 4, dropout=dropout))
+            self.ffs.append(nn.Sequential(
+                GehringLinear(hidden_size, hidden_size * 4),
+                nn.GELU(),
+                GehringLinear(hidden_size * 4, hidden_size),
+            ))
+            self.ln1s.append(nn.LayerNorm(hidden_size))
+            self.ln2s.append(nn.LayerNorm(hidden_size))
+
+    def forward(self, X):
+        B, T, _ = X.shape
+        # X.shape == [batch_size, seq_len, 1]
+
+        X = self.in_proj(X)
+        # X.shape == [batch_size, seq_len, hidden_size]
+
+        X = X.transpose(0, 1)
+        # X.shape == [seq_len, batch_size, hidden_size]
+
+        pos = torch.arange(T, device=X.device).unsqueeze(-1)
+        # pos.shape = [seq_len, 1]
+
+        pos_embeds = self.pos_embeds(pos).expand_as(X)
+        # pos.shape = [seq_len, batch_size, hidden_size]
+
+        X = X + pos_embeds
+        X = self.dropout(X)
+        # X.shape == [seq_len, batch_size, hidden_size]
+
+        # Only the upper triangle (excl. the diagonal) is inf. We can
+        # attend to ourselves.
+        attn_mask = X.new_ones((T, T)).bool()
+        attn_mask = torch.triu(attn_mask, diagonal=1)
+
+        for ln1, attn, ln2, ff in zip(self.ln1s, self.attns, self.ln2s, self.ffs):
+            X = ln1(X)
+            Xa, _ = attn(X, X, X, attn_mask=attn_mask, need_weights=False)
+            Xa = self.dropout(Xa)
+            X = X + Xa
+
+            Xb = ln2(X)
+            X = ff(Xb)
+            X = self.dropout(X)
+            X = X + Xb
+
+        X = X.transpose(0, 1)
+        # X.shape == [batch_size, seq_len, hidden_size]
+
+        return X, None
