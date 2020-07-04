@@ -378,12 +378,12 @@ class TransformerDecoder(nn.Module):
         pos_embeds = self.pos_embeds(pos).expand_as(X)
         # pos.shape = [seq_len, batch_size, hidden_size]
 
-        X = X + pos_embeds
-        X = self.dropout(X)
+        # X = X + pos_embeds
+        # X = self.dropout(X)
         # X.shape == [seq_len, batch_size, hidden_size]
 
         for layer in self.layers:
-            X = layer(X)
+            X = layer(X, pos_embeds)
 
         X = X.transpose(0, 1)
         # X.shape == [batch_size, seq_len, hidden_size]
@@ -403,12 +403,12 @@ class TBEATLayer(nn.Module):
         self.norm_1 = nn.LayerNorm(hidden_size)
         self.norm_2 = nn.LayerNorm(hidden_size)
 
-        self.linear_1 = GehringLinear(hidden_size, hidden_size * 4)
-        self.linear_2 = GehringLinear(hidden_size * 4, hidden_size)
+        self.linear_1 = GehringLinear(hidden_size, hidden_size * 2)
+        self.linear_2 = GehringLinear(hidden_size * 2, hidden_size)
 
         self.activation = F.gelu
 
-    def forward(self, X):
+    def forward(self, X, pos_embeds):
         # We can't attend positions which are True
         T, B, E = X.shape
         attn_mask = X.new_ones(T, T)
@@ -416,6 +416,8 @@ class TBEATLayer(nn.Module):
         # We can attend to ourselves and the past
         attn_mask = torch.triu(attn_mask, diagonal=1)
         # attn_mask.shape == [T, T]
+
+        X = X + pos_embeds
 
         X_1, _ = self.attn(X, X, X, need_weights=False, attn_mask=attn_mask)
         # X.shape == [seq_len, batch_size, hidden_size]
