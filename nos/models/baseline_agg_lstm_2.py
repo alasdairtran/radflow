@@ -359,18 +359,8 @@ class TransformerDecoder(nn.Module):
         self.pos_embeds = nn.Embedding(total_len, hidden_size)
         self.dropout = nn.Dropout(dropout)
         self.layers = nn.ModuleList([])
-        self.ln1s, self.ln2s = nn.ModuleList([]), nn.ModuleList([])
-        self.attns, self.ffs = nn.ModuleList([]), nn.ModuleList([])
         for _ in range(n_layers):
-            self.attns.append(nn.MultiheadAttention(
-                hidden_size, 4, dropout=dropout))
-            self.ffs.append(nn.Sequential(
-                GehringLinear(hidden_size, hidden_size * 4),
-                nn.GELU(),
-                GehringLinear(hidden_size * 4, hidden_size),
-            ))
-            self.ln1s.append(nn.LayerNorm(hidden_size))
-            self.ln2s.append(nn.LayerNorm(hidden_size))
+            self.layers.append(TBEATLayer(hidden_size, dropout, 4))
 
     def forward(self, X):
         B, T, _ = X.shape
@@ -392,23 +382,50 @@ class TransformerDecoder(nn.Module):
         X = self.dropout(X)
         # X.shape == [seq_len, batch_size, hidden_size]
 
-        # Only the upper triangle (excl. the diagonal) is inf. We can
-        # attend to ourselves.
-        attn_mask = X.new_ones((T, T)).bool()
-        attn_mask = torch.triu(attn_mask, diagonal=1)
-
-        for ln1, attn, ln2, ff in zip(self.ln1s, self.attns, self.ln2s, self.ffs):
-            X = ln1(X)
-            Xa, _ = attn(X, X, X, attn_mask=attn_mask, need_weights=False)
-            Xa = self.dropout(Xa)
-            X = X + Xa
-
-            Xb = ln2(X)
-            X = ff(Xb)
-            X = self.dropout(X)
-            X = X + Xb
+        for layer in self.layers:
+            X = layer(X)
 
         X = X.transpose(0, 1)
         # X.shape == [batch_size, seq_len, hidden_size]
 
         return X, None
+
+
+class TBEATLayer(nn.Module):
+    def __init__(self, hidden_size, dropout, n_heads):
+        super().__init__()
+        self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
+
+        self.dropout_1 = nn.Dropout(dropout)
+        self.dropout_2 = nn.Dropout(dropout)
+        self.dropout_3 = nn.Dropout(dropout)
+
+        self.norm_1 = nn.LayerNorm(hidden_size)
+        self.norm_2 = nn.LayerNorm(hidden_size)
+
+        self.linear_1 = GehringLinear(hidden_size, hidden_size * 4)
+        self.linear_2 = GehringLinear(hidden_size * 4, hidden_size)
+
+        self.activation = F.gelu
+
+    def forward(self, X):
+        # We can't attend positions which are True
+        T, B, E = X.shape
+        attn_mask = X.new_ones(T, T)
+        # Zero out the diagonal and everything below
+        # We can attend to ourselves and the past
+        attn_mask = torch.triu(attn_mask, diagonal=1)
+        # attn_mask.shape == [T, T]
+
+        X_1, _ = self.attn(X, X, X, need_weights=False, attn_mask=attn_mask)
+        # X.shape == [seq_len, batch_size, hidden_size]
+
+        X = X + self.dropout_1(X_1)
+        X = self.norm_1(X)
+
+        X_2 = self.linear_2(self.dropout_2(self.activation(self.linear_1(X))))
+        X = X + self.dropout_3(X_2)
+        X = self.norm_2(X)
+        # X.shape == [seq_len, batch_size, hidden_size]
+
+        return X
