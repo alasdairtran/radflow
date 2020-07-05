@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import pickle
 from collections import defaultdict
@@ -356,11 +357,55 @@ class TransformerDecoder(nn.Module):
     def __init__(self, hidden_size, n_layers, dropout, total_len):
         super().__init__()
         self.in_proj = GehringLinear(1, hidden_size)
-        self.pos_embeds = nn.Embedding(total_len, hidden_size)
         self.dropout = nn.Dropout(dropout)
         self.layers = nn.ModuleList([])
         for _ in range(n_layers):
             self.layers.append(TBEATLayer(hidden_size, dropout, 4))
+
+        pos_weights = self._get_embedding(256, hidden_size)
+        self.register_buffer('pos_weights', pos_weights)
+
+    @staticmethod
+    def _get_embedding(n_embeds, embed_dim, padding_idx=0):
+        """Build sinusoidal embeddings.
+
+        This matches the implementation in tensor2tensor, but differs slightly
+        from the description in Section 3.5 of "Attention Is All You Need".
+        """
+        max_ts = 256
+        min_ts = 1
+        n_timescales = embed_dim // 2
+        increment = math.log(max_ts / min_ts) / (n_timescales - 1)
+        # Example increment: 9 / 384 = 0.024
+
+        timescales = torch.arange(n_timescales, dtype=torch.float)
+
+        # inv_timescales ranges from 1 to 1/10000 with log spacing
+        inv_timescales = min_ts * torch.exp(timescales * -increment)
+        # inv_timescales.shape == [embed_size // 2]
+
+        positions = torch.arange(n_embeds, dtype=torch.float).unsqueeze(1)
+        # positions.shape ==  [n_embeds, 1]
+
+        inv_timescales = inv_timescales.unsqueeze(0)
+        # inv_timescales.shape == [1, embed_size // 2]
+
+        scaled_time = positions * inv_timescales
+        # scaled_time.shape == [n_embeds, embed_size // 2]
+
+        sin_signal = torch.sin(scaled_time)
+        cos_signal = torch.cos(scaled_time)
+        signal = torch.cat([sin_signal, cos_signal], dim=1)
+        # signal.shape == [n_embeds, embed_dim]
+
+        # Ensure that embed_dim is even
+        if embed_dim % 2 == 1:
+            signal = torch.cat([signal, torch.zeros(n_embeds, 1)], dim=1)
+
+        if padding_idx is not None:
+            signal[padding_idx, :] = 0
+
+        return signal
 
     def forward(self, X):
         B, T, _ = X.shape
@@ -372,15 +417,12 @@ class TransformerDecoder(nn.Module):
         X = X.transpose(0, 1)
         # X.shape == [seq_len, batch_size, hidden_size]
 
-        pos = torch.arange(T, device=X.device).unsqueeze(-1)
-        # pos.shape = [seq_len, 1]
+        pos = torch.arange(1, T + 1, device=X.device).unsqueeze(-1)
+        pos = pos.expand(-1, B)
+        # pos.shape = [seq_len, batch_size]
 
-        pos_embeds = self.pos_embeds(pos).expand_as(X)
-        # pos.shape = [seq_len, batch_size, hidden_size]
-
-        # X = X + pos_embeds
-        # X = self.dropout(X)
-        # X.shape == [seq_len, batch_size, hidden_size]
+        pos_embeds = self.pos_weights.index_select(0, pos.reshape(-1))
+        pos_embeds = pos_embeds.reshape(T, B, -1)
 
         for layer in self.layers:
             X = layer(X, pos_embeds)
