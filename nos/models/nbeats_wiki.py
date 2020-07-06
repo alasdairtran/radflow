@@ -37,16 +37,18 @@ class NaiveWiki(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  data_dir: str,
-                 seed_word: str = 'programming',
+                 seed_word: str = 'vevo',
                  method: str = 'previous_day',
                  forecast_length: int = 28,
                  backcast_length: int = 224,
+                 test_lengths: List[int] = [7],
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = backcast_length + forecast_length
+        self.test_lengths = test_lengths
         self.rs = np.random.RandomState(1234)
         self.device = torch.device('cuda:0')
         self.method = method
@@ -109,7 +111,10 @@ class NaiveWiki(BaseModel):
         for key in keys:
             s = self.series[key]
             if split in ['train', 'valid']:
-                start = self.rs.randint(0, self.max_start)
+                if self.max_start == 0:
+                    start = 0
+                else:
+                    start = self.rs.randint(0, self.max_start)
                 s = s[start:start+self.total_length]
             elif split == 'test':
                 s = s[-self.total_length:]
@@ -162,6 +167,7 @@ class NBEATSWiki(BaseModel):
                  seed_word: str = 'programming',
                  forecast_length: int = 28,
                  backcast_length: int = 224,
+                 test_lengths: List[int] = [7],
                  max_neighbours: int = 0,
                  hidden_size: int = 128,
                  dropout: float = 0.2,
@@ -179,6 +185,7 @@ class NBEATSWiki(BaseModel):
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = backcast_length + forecast_length
+        self.test_lengths = test_lengths
         self.rs = np.random.RandomState(1234)
         self.hidden_size = hidden_size
         self.device = torch.device('cuda:0')
@@ -188,7 +195,7 @@ class NBEATSWiki(BaseModel):
         initializer(self)
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
-            self.in_degrees, _, self.series = pickle.load(f)
+            self.in_degrees, _, self.series, self.neighs = pickle.load(f)
 
         if net == 'nbeats':
             self.net = NBeatsNet(device=torch.device('cuda:0'),
@@ -228,8 +235,8 @@ class NBEATSWiki(BaseModel):
             return
 
         # Check how long the time series is
-        series_len = len(next(iter(self.series.values())))
-        n_weeks = series_len // 7 + 1
+        # series_len = len(next(iter(self.series.values())))
+        # n_weeks = series_len // 7 + 1
 
         # Remove trends using the first year of data
         # train_len = self.backcast_length
@@ -244,10 +251,6 @@ class NBEATSWiki(BaseModel):
         #     self.diff[k] = diff
         #     # self.diff[k] = max(v[:train_len])
 
-        p = next(self.parameters())
-        for k, v in self.series.items():
-            self.series[k] = np.asarray(v).astype(float)
-
         # Compute correlation
         # for node, neighs in self.in_degrees.items():
         #     x = self.series[node][:self.backcast_length]
@@ -259,32 +262,43 @@ class NBEATSWiki(BaseModel):
         #     keep_idx = np.argsort(corrs)[::-1][:self.max_neighbours]
         #     self.in_degrees[node] = np.array(neighs)[keep_idx]
 
+        p = next(self.parameters())
+        for k, v in self.series.items():
+            self.series[k] = np.asarray(v).astype(float)
+
+        for k, v in self.neighs.items():
+            for t in v.keys():
+                self.neighs[k][t] = self.neighs[k][t][:self.max_neighbours]
+
         # Sort by view counts
-        for node, neighs in self.in_degrees.items():
-            counts = []
-            for neigh in neighs:
-                count = self.series[neigh][:self.backcast_length].sum()
-                counts.append(count)
-            keep_idx = np.argsort(counts)[::-1][:self.max_neighbours]
-            self.in_degrees[node] = np.array(neighs)[keep_idx]
+        logger.info('Processing edges')
+        for node, neighs in tqdm(self.in_degrees.items()):
+            neigh_dict = {}
+            for n in neighs:
+                neigh_dict[n['id']] = p.new_tensor(np.asarray(n['mask']))
+            self.in_degrees[node] = neigh_dict
 
         for k, v in self.series.items():
-            if self.missing_p > 0:
-                size = len(v) - self.forecast_length
-                indices = self.rs.choice(np.arange(1, size), replace=False,
-                                         size=int(size * self.missing_p))
-                self.series[k][indices] = np.nan
-
-                mask = np.isnan(self.series[k])
-                idx = np.where(~mask, np.arange(len(mask)), 0)
-                np.maximum.accumulate(idx, out=idx)
-                self.series[k][mask] = self.series[k][idx[mask]]
-
-            self.series[k] = p.new_tensor(self.series[k])
-            # self.diff[k] = p.new_tensor(self.diff[k])
+            v_array = np.asarray(v)
+            self.series[k] = p.new_tensor(v_array)
 
         self.max_start = len(
             self.series[k]) - self.forecast_length * 2 - self.total_length
+
+        # for k, v in self.series.items():
+        #     if self.missing_p > 0:
+        #         size = len(v) - self.forecast_length
+        #         indices = self.rs.choice(np.arange(1, size), replace=False,
+        #                                  size=int(size * self.missing_p))
+        #         self.series[k][indices] = np.nan
+
+        #         mask = np.isnan(self.series[k])
+        #         idx = np.where(~mask, np.arange(len(mask)), 0)
+        #         np.maximum.accumulate(idx, out=idx)
+        #         self.series[k][mask] = self.series[k][idx[mask]]
+
+        #     self.series[k] = p.new_tensor(self.series[k])
+        #     # self.diff[k] = p.new_tensor(self.diff[k])
 
     def _get_neighbours(self, keys, split, start):
         # neighbor_lens = []
@@ -347,7 +361,10 @@ class NBEATSWiki(BaseModel):
         for key in keys:
             s = self.series[key]
             if split == 'train':
-                start = self.rs.randint(0, self.max_start)
+                if self.max_start == 0:
+                    start = 0
+                else:
+                    start = self.rs.randint(0, self.max_start)
             elif split == 'valid':
                 start = self.max_start + self.forecast_length
             elif split == 'test':
@@ -384,7 +401,7 @@ class NBEATSWiki(BaseModel):
         # X.shape == [batch_size, forecast_len]
 
         # loss = self.mse(X, torch.log1p(targets.clamp(min=0)))
-        preds = torch.exp(X) - 1
+        preds = torch.exp(X)
         numerator = torch.abs(targets - preds)
         denominator = torch.abs(targets) + torch.abs(preds)
         loss = numerator / denominator
@@ -395,13 +412,18 @@ class NBEATSWiki(BaseModel):
         out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
-        if splits[0] in ['test']:
+        if splits[0] in ['valid', 'test']:
             smapes, daily_errors = get_smape(targets, preds)
 
             out_dict['smapes'] = smapes
             out_dict['daily_errors'] = daily_errors
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
+            self.history['_n_samples'] += len(keys)
+            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+
+            for k in self.test_lengths:
+                self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
 
         return out_dict
 
