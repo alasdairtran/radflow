@@ -23,6 +23,7 @@ model:
   test_lengths: [7, 14, 21, 28]
   log: true
   opt_smape: true
+  max_neighbours: 4
   initializer:
     - - ^decoder.weight*
       - type: orthogonal
