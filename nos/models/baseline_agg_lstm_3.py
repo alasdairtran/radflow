@@ -1,10 +1,11 @@
+import copy
 import logging
 import math
 import os
 import pickle
 from collections import defaultdict
 from copy import deepcopy
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -16,6 +17,7 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
+from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn import SAGEConv
 from tqdm import tqdm
@@ -49,6 +51,8 @@ class BaselineAggLSTM3(BaseModel):
                  max_neighbours: int = 8,
                  attn: bool = False,
                  detach: bool = True,
+                 n_heads: int = 4,
+                 arch: str = 'lstm',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.attn = attn
@@ -69,9 +73,14 @@ class BaselineAggLSTM3(BaseModel):
         if not attn:
             self.decoder = nn.LSTM(1, hidden_size, num_layers,
                                    bias=True, batch_first=True, dropout=dropout)
-        else:
-            self.decoder = TransformerDecoder(
-                hidden_size, num_layers, dropout, self.total_length)
+        elif arch == 'transformer':
+            self.decoder = SeriesTransformer(
+                hidden_size, num_layers, num_layers, n_heads, dropout,
+                forecast_length, backcast_length)
+        elif arch == 'lstm':
+            self.decoder = SeriesBiLSTM(
+                hidden_size, num_layers, num_layers, n_heads, dropout,
+                forecast_length, backcast_length)
 
         assert agg_type in ['mean', 'none']
         self.agg_type = agg_type
@@ -124,9 +133,13 @@ class BaselineAggLSTM3(BaseModel):
             diff = training_series[:, 1:] / training_series[:, :-1]
             targets = diff[:, 1:]
             inputs = diff[:, :-1]
+            if self.attn:
+                targets = series[:, -self.forecast_length+1:]
         else:
             inputs = series[:, :-1]
             targets = series[:, 1:]
+            if self.attn:
+                targets = series[:, -self.forecast_length:]
 
         X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len - 1, 1]
@@ -293,7 +306,7 @@ class BaselineAggLSTM3(BaseModel):
 
         if self.log and self.opt_smape:
             preds = torch.exp(preds)
-            if split in ['valid', 'test']:
+            if split in ['valid', 'test'] or self.attn:
                 targets = raw_series[:, -self.forecast_length:]
             else:
                 targets = raw_series[:, 1:]
@@ -353,17 +366,176 @@ class BaselineAggLSTM3(BaseModel):
         return out_dict
 
 
-class TransformerDecoder(nn.Module):
-    def __init__(self, hidden_size, n_layers, dropout, total_len):
+class SeriesBiLSTM(nn.Module):
+    def __init__(self, hidden_size, n_encoder_layers, n_decoder_layers, n_heads, dropout, forecast_length, backcast_length):
         super().__init__()
         self.in_proj = GehringLinear(1, hidden_size)
         self.dropout = nn.Dropout(dropout)
-        self.layers = nn.ModuleList([])
-        for _ in range(n_layers):
-            self.layers.append(TBEATLayer(hidden_size, dropout, 4))
+        # self.layers = nn.ModuleList([])
+        # for _ in range(n_layers):
+        #     self.layers.append(TBEATLayer(hidden_size, dropout, 4))
 
-        pos_weights = self._get_embedding(256, hidden_size)
-        self.register_buffer('pos_weights', pos_weights)
+        self.encoder = nn.LSTM(hidden_size, hidden_size, n_encoder_layers, bidirectional=True,
+                               bias=True, batch_first=True, dropout=dropout)
+
+        self.decoder = LSTMDecoder(n_decoder_layers, hidden_size, dropout)
+
+        self.forecast_length = forecast_length
+        self.backcast_length = backcast_length
+        self.total_length = forecast_length + backcast_length
+
+    def forward(self, X):
+        B, T, _ = X.shape
+        # X.shape == [batch_size, seq_len, 1]
+
+        X = self.in_proj(X)
+        # X.shape == [batch_size, seq_len, hidden_size]
+
+        backcast_seq = X[:, :self.backcast_length]
+        # Use the last step in encoder as seed to decoder
+        forecast_seq = X[:, self.backcast_length-1:]
+
+        X_backcast, _ = self.encoder(backcast_seq)
+        # X_backcast.shape == [backcast_len, batch_size, hidden_size]
+
+        X_forecast = self.decoder(forecast_seq, X_backcast)
+        # X_forecast.shape == [backcast_len, batch_size, hidden_size]
+
+        return X_forecast, None
+
+
+def LSTMCell(input_size, hidden_size, **kwargs):
+    m = nn.LSTMCell(input_size, hidden_size, **kwargs)
+    for name, param in m.named_parameters():
+        if 'weight' in name or 'bias' in name:
+            param.data.uniform_(-0.1, 0.1)
+    return m
+
+
+class AttentionLayer(nn.Module):
+    def __init__(self, input_embed_dim, source_embed_dim, output_embed_dim, bias=False):
+        super().__init__()
+
+        self.input_proj = GehringLinear(
+            input_embed_dim, source_embed_dim, bias=bias)
+        self.output_proj = GehringLinear(
+            input_embed_dim + source_embed_dim, output_embed_dim, bias=bias)
+
+    def forward(self, input, source_hids, encoder_padding_mask):
+        # input: bsz x input_embed_dim
+        # source_hids: srclen x bsz x output_embed_dim
+
+        # x: bsz x output_embed_dim
+        x = self.input_proj(input)
+
+        # compute attention
+        attn_scores = (source_hids * x.unsqueeze(0)).sum(dim=2)
+        # attn_scores.shape == [src_len, bsz]
+
+        # don't attend over padding
+        if encoder_padding_mask is not None:
+            encoder_padding_mask = encoder_padding_mask.transpose(0, 1)
+            # encoder_padding_mask.shape == [src_len, bsz]
+            attn_scores = attn_scores.float().masked_fill_(
+                encoder_padding_mask,
+                float('-inf')
+            ).type_as(attn_scores)  # FP16 support: cast to float and back
+
+        attn_scores = F.softmax(attn_scores, dim=0)  # srclen x bsz
+
+        # sum weighted sources
+        x = (attn_scores.unsqueeze(2) * source_hids).sum(dim=0)
+
+        x = torch.tanh(self.output_proj(torch.cat((x, input), dim=1)))
+        return x, attn_scores
+
+
+class LSTMDecoder(nn.Module):
+    def __init__(self, num_layers, hidden_size, dropout):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.dropout = dropout
+        self.layers = nn.ModuleList([])
+        self.h = nn.ParameterList([])
+        self.c = nn.ParameterList([])
+        for layer in range(num_layers):
+            input_size = hidden_size * 2 if layer == 0 else hidden_size
+            rnn = LSTMCell(input_size=input_size, hidden_size=hidden_size)
+            self.layers.append(rnn)
+            self.h.append(nn.Parameter(torch.zeros(1, hidden_size)))
+            self.c.append(nn.Parameter(torch.zeros(1, hidden_size)))
+
+        self.context_attention = AttentionLayer(
+            hidden_size, hidden_size * 2, hidden_size, bias=True)
+
+    def forward(self, X, context, context_mask=None):
+        # B x T x C -> T x B x C
+        X = X.transpose(0, 1)
+        context = context.transpose(0, 1)
+
+        T, B, _ = X.shape
+        S = context.shape[0]
+        n_layers = len(self.layers)
+
+        prev_hiddens = [self.h[i].expand(B, -1) for i in range(n_layers)]
+        prev_cells = [self.c[i].expand(B, -1) for i in range(n_layers)]
+        input_feed = X.new_zeros(B, self.hidden_size)
+        attn_scores = X.new_zeros(S, T, B)
+        outs = []
+
+        for step in range(T):
+            # input feeding: concatenate context vector from previous time step
+            rnn_input = torch.cat((X[step, :, :], input_feed), dim=1)
+            for i, rnn in enumerate(self.layers):
+                # recurrent cell
+                hidden, cell = rnn(rnn_input, (prev_hiddens[i], prev_cells[i]))
+
+                # hidden state becomes the input to the next layer
+                rnn_input = F.dropout(hidden, p=self.dropout,
+                                      training=self.training)
+
+                # save state for next time step
+                prev_hiddens[i] = hidden
+                prev_cells[i] = cell
+
+            out, attn_scores[:, step, :] = self.context_attention(
+                hidden, context, context_mask)
+
+            out = F.dropout(out, p=self.dropout, training=self.training)
+            # out.shape == [B, hidden_size * 2]
+
+            input_feed = out
+            outs.append(out)
+
+        # collect outputs across time steps
+        X = torch.cat(outs, dim=0).view(T, B, self.hidden_size)
+
+        # T x B x C -> B x T x C
+        X = X.transpose(1, 0)
+
+        return X
+
+
+class SeriesTransformer(nn.Module):
+    def __init__(self, hidden_size, n_encoder_layers, n_decoder_layers, n_heads, dropout, forecast_length, backcast_length):
+        super().__init__()
+        self.in_proj = GehringLinear(1, hidden_size)
+        self.dropout = nn.Dropout(dropout)
+        # self.layers = nn.ModuleList([])
+        # for _ in range(n_layers):
+        #     self.layers.append(TBEATLayer(hidden_size, dropout, 4))
+
+        self.transformer = nn.Transformer(
+            hidden_size, n_heads, n_encoder_layers, n_decoder_layers,
+            hidden_size * 4, dropout, 'gelu')
+
+        self.forecast_length = forecast_length
+        self.backcast_length = backcast_length
+        self.total_length = forecast_length + backcast_length
+
+        self.embed_pos = nn.Embedding(self.total_length, hidden_size)
+        # pos_weights = self._get_embedding(256, hidden_size)
+        # self.register_buffer('pos_weights', pos_weights)
 
     @staticmethod
     def _get_embedding(n_embeds, embed_dim, padding_idx=0):
@@ -421,55 +593,37 @@ class TransformerDecoder(nn.Module):
         pos = pos.expand(-1, B)
         # pos.shape = [seq_len, batch_size]
 
-        pos_embeds = self.pos_weights.index_select(0, pos.reshape(-1))
-        pos_embeds = pos_embeds.reshape(T, B, -1)
+        # pos_embeds = self.pos_weights.index_select(0, pos.reshape(-1))
+        # pos_embeds = pos_embeds.reshape(T, B, -1)
 
-        for layer in self.layers:
-            X = layer(X, pos_embeds)
-
-        X = X.transpose(0, 1)
-        # X.shape == [batch_size, seq_len, hidden_size]
-
-        return X, None
-
-
-class TBEATLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, n_heads):
-        super().__init__()
-        self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
-
-        self.dropout_1 = nn.Dropout(dropout)
-        self.dropout_2 = nn.Dropout(dropout)
-        self.dropout_3 = nn.Dropout(dropout)
-
-        self.norm_1 = nn.LayerNorm(hidden_size)
-        self.norm_2 = nn.LayerNorm(hidden_size)
-
-        self.linear_1 = GehringLinear(hidden_size, hidden_size * 2)
-        self.linear_2 = GehringLinear(hidden_size * 2, hidden_size)
-
-        self.activation = F.gelu
-
-    def forward(self, X, pos_embeds):
-        # We can't attend positions which are True
-        T, B, E = X.shape
-        attn_mask = X.new_ones(T, T)
-        # Zero out the diagonal and everything below
-        # We can attend to ourselves and the past
-        attn_mask = torch.triu(attn_mask, diagonal=1)
-        # attn_mask.shape == [T, T]
-
+        pos_embeds = self.embed_pos(pos)
         X = X + pos_embeds
 
-        X_1, _ = self.attn(X, X, X, need_weights=False, attn_mask=attn_mask)
-        # X.shape == [seq_len, batch_size, hidden_size]
+        backcast_seq = X[:self.backcast_length]
+        # Use the last step in encoder as seed to decoder
+        forecast_seq = X[self.backcast_length-1:]
 
-        X = X + self.dropout_1(X_1)
-        X = self.norm_1(X)
+        # We can't attend positions which are True
+        T, B, E = forecast_seq.shape
+        tgt_mask = X.new_ones(T, T)
+        # Zero out the diagonal and everything below
+        # We can attend to ourselves and the past
+        tgt_mask = torch.triu(tgt_mask, diagonal=1)
+        # tgt_mask.shape == [T, T]
 
-        X_2 = self.linear_2(self.dropout_2(self.activation(self.linear_1(X))))
-        X = X + self.dropout_3(X_2)
-        X = self.norm_2(X)
-        # X.shape == [seq_len, batch_size, hidden_size]
+        # Call transformer
+        forecast_embeds = self.transformer(src=backcast_seq,
+                                           src_mask=None,  # encoder can attend to all positions
+                                           src_key_padding_mask=None,  # all backcast seqs have the same length
+                                           tgt=forecast_seq,
+                                           tgt_mask=tgt_mask,  # Prevent decoder from attending to future
+                                           tgt_key_padding_mask=None,  # All forecast seqs have same length
+                                           memory_mask=None,  # Decoder can attend everywhere in history
+                                           memory_key_padding_mask=None,  # all backcast seqs have the same length
+                                           )
+        # forecast_embeds.shape == [forecast_len, batch_size, hidden_size]
 
-        return X
+        forecast_embeds = forecast_embeds.transpose(0, 1)
+        # forecast_embeds.shape == [batch_size, forecast_len, hidden_size]
+
+        return forecast_embeds, None

@@ -11,7 +11,7 @@ test_data_path: test
 vocabulary:
   type: empty_vocab
 model:
-  type: baseline_agg_lstm_2
+  type: baseline_agg_lstm_3
   agg_type: none
   peek: true
   data_dir: "./data/wiki/subgraphs"
@@ -22,8 +22,8 @@ model:
   backcast_length: 42
   forecast_length: 7
   test_lengths: [7]
-  log: false
-  opt_smape: false
+  log: true
+  opt_smape: true
   attn: true
   detach: false
   # initializer:
