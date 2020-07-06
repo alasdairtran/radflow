@@ -183,9 +183,19 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
     n_days = len(next(iter(series.values())))
     inlinks = get_dynamic_info(inlinks, n_days, db)
 
+    neighs = {k: {} for k in inlinks.keys()}
+    max_days = len(next(iter(series.values())))
+    for t in tqdm(range(max_days)):
+        for k, v in inlinks.items():
+            k_neighs = [n['id'] for n in v if n['mask'][t] == 0]
+            k_views = [series[n['id']][t]
+                       for n in v if n['mask'][t] == 0]
+            k_neighs = [x for _, x in sorted(zip(k_views, k_neighs))]
+            neighs[k][t] = k_neighs
+
     os.makedirs('data/wiki/subgraphs', exist_ok=True)
     with open(output_path, 'wb') as f:
-        pickle.dump([inlinks, outlinks, series], f)
+        pickle.dump([inlinks, outlinks, series, neighs], f)
 
 
 def get_dynamic_info(in_degrees, n_days, db):

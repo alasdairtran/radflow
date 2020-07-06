@@ -182,8 +182,7 @@ class BaselineAggLSTM4(BaseModel):
             self.fc = GehringLinear(self.hidden_size * 2, 1)
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
-            self.in_degrees, _, self.series = pickle.load(f)
-        self.neighs = None
+            self.in_degrees, _, self.series, self.neighs = pickle.load(f)
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -198,16 +197,9 @@ class BaselineAggLSTM4(BaseModel):
         for k, v in self.series.items():
             self.series[k] = np.asarray(v).astype(float)
 
-        logger.info('Caching top neighbours per day')
-        self.neighs = {k: {} for k in self.in_degrees.keys()}
-        max_days = len(next(iter(self.series.values())))
-        for t in tqdm(range(max_days)):
-            for k, v in self.in_degrees.items():
-                k_neighs = [n['id'] for n in v if n['mask'][t] == 0]
-                k_views = [self.series[n['id']][t]
-                           for n in v if n['mask'][t] == 0]
-                k_neighs = [x for _, x in sorted(zip(k_views, k_neighs))]
-                self.neighs[k][t] = k_neighs[:self.max_neighbours]
+        for k, v in self.neighs.items():
+            for t in v.keys():
+                self.neighs[k][t] = self.neighs[k][t][:self.max_neighbours]
 
         # Sort by view counts
         logger.info('Processing edges')

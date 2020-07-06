@@ -30,7 +30,7 @@ class SubWikivNetworkReader(DatasetReader):
         self.dtype = np.float16 if fp16 else np.float32
 
         with open(f'data/wiki/subgraphs/{seed_word}.pkl', 'rb') as f:
-            in_degrees, _, self.series = pickle.load(f)
+            in_degrees, _, self.series, _ = pickle.load(f)
 
         random.seed(1234)
         self.rs = np.random.RandomState(1234)
