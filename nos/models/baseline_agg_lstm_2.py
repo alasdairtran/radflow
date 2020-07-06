@@ -82,6 +82,7 @@ class BaselineAggLSTM2(BaseModel):
 
         with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
             self.in_degrees, _, self.series = pickle.load(f)
+        self.neighs = None
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -96,16 +97,24 @@ class BaselineAggLSTM2(BaseModel):
         for k, v in self.series.items():
             self.series[k] = np.asarray(v).astype(float)
 
+        logger.info('Caching top neighbours per day')
+        self.neighs = {k: {} for k in self.in_degrees.keys()}
+        max_days = len(next(iter(self.series.values())))
+        for t in tqdm(range(max_days)):
+            for k, v in self.in_degrees.items():
+                k_neighs = [n['id'] for n in v if n['mask'][t] == 0]
+                k_views = [self.series[n['id']][t]
+                           for n in v if n['mask'][t] == 0]
+                k_neighs = [x for _, x in sorted(zip(k_views, k_neighs))]
+                self.neighs[k][t] = k_neighs[:self.max_neighbours]
+
         # Sort by view counts
         logger.info('Processing edges')
         for node, neighs in tqdm(self.in_degrees.items()):
-            counts = []
+            neigh_dict = {}
             for n in neighs:
-                n['mask'] = p.new_tensor(np.asarray(n['mask']))
-                count = self.series[n['id']][:self.backcast_length].sum()
-                counts.append(count)
-            keep_idx = np.argsort(counts)[::-1][:self.max_neighbours]
-            self.in_degrees[node] = np.array(neighs)[keep_idx]
+                neigh_dict[n['id']] = p.new_tensor(np.asarray(n['mask']))
+            self.in_degrees[node] = neigh_dict
 
         for k, v in self.series.items():
             v_array = np.asarray(v)
@@ -156,53 +165,65 @@ class BaselineAggLSTM2(BaseModel):
         if self.agg_type == 'none':
             return X
 
-        B, T, _ = X.shape
-        N = self.max_neighbours
+        B, T, E = X.shape
+
+        # First iteration: grab the top neighbours from each sample
+        key_neighs = {}
+        max_n_neighs = 1
+        all_neigh_keys = set()
+        for key in keys:
+            if key in self.neighs:
+                kn = set()
+                for day in range(start, start+total_len):
+                    kn |= set(self.neighs[key][day])
+                key_neighs[key] = kn
+                all_neigh_keys |= kn
+                max_n_neighs = max(max_n_neighs, len(kn))
+
+        all_neigh_keys = list(all_neigh_keys)
+        all_neigh_dict = {k: i for i, k in enumerate(all_neigh_keys)}
+        neigh_series_list = []
+        for key in all_neigh_keys:
+            neigh_series_list.append(self.series[key][start:start+total_len])
+        neighs = torch.stack(neigh_series_list, dim=0)
+        # neighs.shape == [batch_size * max_n_neighs, seq_len]
+
+        if self.log:
+            neighs = torch.log1p(neighs)
+        Xn = self._forward_full(neighs)
+        # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
+
+        if self.detach:
+            Xn = Xn.detach()
+
+        if self.peek:
+            Xn = Xn[:, 1:]
+        else:
+            Xn = Xn[:, :-1]
+
+        _, S, E = Xn.shape
 
         # We plus one to give us option to either peek or not
-        masks = X.new_ones(B, N, total_len).bool()
-        # We set neighs to be full precision since some view counts are
-        # bigger than 65504
-        neighs = X.new_zeros(B, N, total_len, dtype=torch.float32)
+        masks = X.new_ones(B, max_n_neighs, S).bool()
+        Xm = X.new_zeros(B, max_n_neighs, S, E)
 
         for b, key in enumerate(keys):
             # in_degrees maps node_id to a sorted list of dicts
             # a dict key looks like: {'id': 123, 'mask'; [0, 0, 1]}
-            if key in self.in_degrees:
-                for i in range(N):
-                    if i >= len(self.in_degrees[key]):
-                        break
-                    n = self.in_degrees[key][i]
-                    neighs[b, i] = self.series[n['id']][start:start+total_len]
-                    masks[b, i] = n['mask'][start:start+total_len]
+            if key in key_neighs:
+                for i, k in enumerate(key_neighs[key]):
+                    Xm[b, i] = Xn[all_neigh_dict[k]]
+                    mask = self.in_degrees[key][k]
+                    mask = mask[start:start+total_len]
+                    if not self.log:
+                        mask = mask[1:]
+                    if self.peek:
+                        mask = mask[1:]
+                    else:
+                        mask = mask[:-1]
+                    masks[b, i] = mask
 
-        # neighs.shape == [batch_size, n_neighbors, seq_len]
-        # masks.shape == [batch_size, n_neighbors, seq_len]
-
-        if self.log:
-            neighs = torch.log1p(neighs)
-
-        neighs = neighs.reshape(B * N, total_len)
-        # Detach as we won't back-propagate to the neighbours
-        # This will also prevent gradient overflow in mixed precision training
-        Xn = self._forward_full(neighs)
-        if self.detach:
-            Xn = Xn.detach()
-
-        if not self.log:
-            Xn = Xn.reshape(B, N, total_len - 1, -1)
-            masks = masks[:, :, 1:]
-        else:
-            Xn = Xn.reshape(B, N, total_len, -1)
-
-        if self.peek:
-            Xn = Xn[:, :, 1:]
-            masks = masks[:, :, 1:]
-        else:
-            Xn = Xn[:, :, :-1]
-            masks = masks[:, :, -1:]
-
-        X_out = self._aggregate(X, Xn, masks)
+        X_out = self._aggregate(X, Xm, masks)
         return X_out
 
     def _aggregate(self, X, Xn, masks):
