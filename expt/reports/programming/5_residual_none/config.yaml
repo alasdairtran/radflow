@@ -23,7 +23,6 @@ model:
   log: true
   opt_smape: true
   peek: false
-  detach: false
   max_neighbours: 8
   initializer:
     - - ^decoder.layers.*.layer.weight*

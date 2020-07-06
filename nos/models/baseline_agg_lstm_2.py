@@ -48,7 +48,6 @@ class BaselineAggLSTM2(BaseModel):
                  opt_smape: bool = False,
                  max_neighbours: int = 8,
                  attn: bool = False,
-                 detach: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.attn = attn
@@ -63,7 +62,6 @@ class BaselineAggLSTM2(BaseModel):
         self.log = log
         self.opt_smape = opt_smape
         self.max_start = None
-        self.detach = detach
         self.rs = np.random.RandomState(1234)
 
         if not attn:
@@ -193,9 +191,6 @@ class BaselineAggLSTM2(BaseModel):
         Xn = self._forward_full(neighs)
         # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
 
-        if self.detach:
-            Xn = Xn.detach()
-
         if self.peek:
             Xn = Xn[:, 1:]
         else:
@@ -246,9 +241,6 @@ class BaselineAggLSTM2(BaseModel):
 
         Xn = Xn / n_neighs
         # Xn.shape == [batch_size, seq_len, hidden_size]
-
-        if self.detach:
-            Xn = Xn.detach()
 
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]

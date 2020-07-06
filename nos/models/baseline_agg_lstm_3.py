@@ -50,7 +50,7 @@ class BaselineAggLSTM3(BaseModel):
                  opt_smape: bool = False,
                  max_neighbours: int = 8,
                  attn: bool = False,
-                 detach: bool = True,
+                 detach: bool = False,
                  n_heads: int = 4,
                  arch: str = 'lstm',
                  initializer: InitializerApplicator = InitializerApplicator()):

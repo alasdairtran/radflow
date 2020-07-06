@@ -157,7 +157,6 @@ class BaselineAggLSTM4(BaseModel):
                  log: bool = False,
                  opt_smape: bool = False,
                  max_neighbours: int = 8,
-                 detach: bool = True,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = LSTMDecoder(hidden_size, num_layers, dropout)
@@ -171,7 +170,6 @@ class BaselineAggLSTM4(BaseModel):
         self.test_lengths = test_lengths
         self.log = log
         self.opt_smape = opt_smape
-        self.detach = detach
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -294,9 +292,6 @@ class BaselineAggLSTM4(BaseModel):
         Xn, _ = self._forward_full(neighs)
         # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
 
-        if self.detach:
-            Xn = Xn.detach()
-
         if self.peek:
             Xn = Xn[:, 1:]
         else:
@@ -347,9 +342,6 @@ class BaselineAggLSTM4(BaseModel):
 
         Xn = Xn / n_neighs
         # Xn.shape == [batch_size, seq_len, hidden_size]
-
-        if self.detach:
-            Xn = Xn.detach()
 
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
