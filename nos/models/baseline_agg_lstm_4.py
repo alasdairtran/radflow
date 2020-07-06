@@ -270,9 +270,9 @@ class BaselineAggLSTM4(BaseModel):
             # in_degrees maps node_id to a sorted list of dicts
             # a dict key looks like: {'id': 123, 'mask'; [0, 0, 1]}
             if key in self.in_degrees:
-                if i >= len(self.in_degrees[key]):
-                    break
                 for i in range(N):
+                    if i >= len(self.in_degrees[key]):
+                        break
                     n = self.in_degrees[key][i]
                     neighs[b, i] = self.series[n['id']][start:start+total_len]
                     masks[b, i] = n['mask'][start:start+total_len]
@@ -469,6 +469,8 @@ class LSTMDecoder(nn.Module):
             self.layers.append(LSTMLayer(hidden_size, dropout))
 
         self.out_proj = GehringLinear(hidden_size * n_layers, hidden_size)
+        self.proj_f = GehringLinear(hidden_size, hidden_size)
+        self.out_f = GehringLinear(hidden_size, 1)
 
     def forward(self, X):
         # X.shape == [batch_size, seq_len]
@@ -480,7 +482,7 @@ class LSTMDecoder(nn.Module):
         X = self.in_proj(X)
         # X.shape == [batch_size, seq_len, hidden_size]
 
-        forecast = X.new_zeros(X.shape[0], X.shape[1])
+        forecast = X.new_zeros(*X.shape)
         h_list = []
         for layer in self.layers:
             h, b, f = layer(X)
@@ -494,6 +496,8 @@ class LSTMDecoder(nn.Module):
         h = self.out_proj(h)
         # h.shape == [batch_size, seq_len, hidden_size]
 
+        f = self.out_f(F.gelu(self.proj_f(X))).squeeze(-1)
+
         return h, f
 
 
@@ -505,7 +509,7 @@ class LSTMLayer(nn.Module):
         self.proj_f = GehringLinear(hidden_size, hidden_size)
         self.proj_b = GehringLinear(hidden_size, hidden_size)
 
-        self.out_f = GehringLinear(hidden_size, 1)
+        self.out_f = GehringLinear(hidden_size, hidden_size)
         self.out_b = GehringLinear(hidden_size, hidden_size)
 
     def forward(self, X):
@@ -516,7 +520,7 @@ class LSTMLayer(nn.Module):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         b = self.out_b(F.gelu(self.proj_b(X)))
-        f = self.out_f(F.gelu(self.proj_f(X))).squeeze(-1)
-        # b.shape == f.shape == [batch_size, seq_len]
+        f = self.out_f(F.gelu(self.proj_f(X)))
+        # b.shape == f.shape == [batch_size, seq_len, hidden_size]
 
         return X, b, f
