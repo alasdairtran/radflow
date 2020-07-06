@@ -301,7 +301,7 @@ class BaselineAggLSTM4(BaseModel):
             masks = masks[:, :, 1:]
         else:
             Xn = Xn[:, :, :-1]
-            masks = masks[:, :, -1:]
+            masks = masks[:, :, :-1]
 
         Xn = Xn.detach()
 
@@ -468,7 +468,6 @@ class LSTMDecoder(nn.Module):
         for i in range(n_layers):
             self.layers.append(LSTMLayer(hidden_size, dropout))
 
-        self.out_proj = GehringLinear(hidden_size * n_layers, hidden_size)
         self.proj_f = GehringLinear(hidden_size, hidden_size)
         self.out_f = GehringLinear(hidden_size, 1)
 
@@ -483,22 +482,23 @@ class LSTMDecoder(nn.Module):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         forecast = X.new_zeros(*X.shape)
-        h_list = []
+        hidden = X.new_zeros(*X.shape)
         for layer in self.layers:
             h, b, f = layer(X)
             X = X - b
-            h_list.append(h)
+            hidden = hidden + h
             forecast = forecast + f
+        hidden = hidden / len(self.layers)
 
-        h = torch.cat(h_list,  dim=-1)
+        # h = torch.cat(h_list, dim=-1)
         # h.shape == [batch_size, seq_len, n_layers * hidden_size]
 
-        h = self.out_proj(h)
+        # h = self.out_proj(h)
         # h.shape == [batch_size, seq_len, hidden_size]
 
         f = self.out_f(F.gelu(self.proj_f(X))).squeeze(-1)
 
-        return h, f
+        return hidden, f
 
 
 class LSTMLayer(nn.Module):
