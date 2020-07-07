@@ -157,9 +157,10 @@ class BaselineAggLSTM4(BaseModel):
                  log: bool = False,
                  opt_smape: bool = False,
                  max_neighbours: int = 8,
+                 variant: str = 'full',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
-        self.decoder = LSTMDecoder(hidden_size, num_layers, dropout)
+        self.decoder = LSTMDecoder(hidden_size, num_layers, dropout, variant)
         self.mse = nn.MSELoss()
         self.hidden_size = hidden_size
         self.peek = peek
@@ -464,12 +465,13 @@ class BaselineAggLSTM4(BaseModel):
 
 
 class LSTMDecoder(nn.Module):
-    def __init__(self, hidden_size, n_layers, dropout):
+    def __init__(self, hidden_size, n_layers, dropout, variant):
         super().__init__()
+        self.variant = variant
         self.in_proj = GehringLinear(1, hidden_size)
         self.layers = nn.ModuleList([])
         for i in range(n_layers):
-            self.layers.append(LSTMLayer(hidden_size, dropout))
+            self.layers.append(LSTMLayer(hidden_size, dropout, variant))
 
         self.proj_f = GehringLinear(hidden_size, hidden_size)
         self.out_f = GehringLinear(hidden_size, 1)
@@ -485,7 +487,11 @@ class LSTMDecoder(nn.Module):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         forecast = X.new_zeros(*X.shape)
-        hidden = X.new_zeros(*X.shape)
+        if self.variant == 'direct':
+            hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
+        else:
+            hidden = X.new_zeros(*X.shape)
+
         for layer in self.layers:
             h, b, f = layer(X)
             X = X - b
@@ -505,15 +511,25 @@ class LSTMDecoder(nn.Module):
 
 
 class LSTMLayer(nn.Module):
-    def __init__(self, hidden_size, dropout):
+    def __init__(self, hidden_size, dropout, variant):
         super().__init__()
-        self.layer = nn.LSTM(hidden_size, hidden_size, 1,
-                             batch_first=True, dropout=dropout)
-        self.proj_f = GehringLinear(hidden_size, hidden_size)
-        self.proj_b = GehringLinear(hidden_size, hidden_size)
+        self.variant = variant
 
-        self.out_f = GehringLinear(hidden_size, hidden_size)
-        self.out_b = GehringLinear(hidden_size, hidden_size)
+        if variant in ['full', 'half']:
+            self.layer = nn.LSTM(hidden_size, hidden_size, 1,
+                                 batch_first=True, dropout=dropout)
+        elif variant == 'direct':
+            self.layer = nn.LSTM(hidden_size, hidden_size * 2, 1,
+                                 batch_first=True, dropout=dropout)
+
+        if variant == 'full':
+            self.proj_f = GehringLinear(hidden_size, hidden_size)
+            self.proj_b = GehringLinear(hidden_size, hidden_size)
+            self.out_f = GehringLinear(hidden_size, hidden_size)
+            self.out_b = GehringLinear(hidden_size, hidden_size)
+        elif variant == 'half':
+            self.out_f = GehringLinear(hidden_size, hidden_size)
+            self.out_b = GehringLinear(hidden_size, hidden_size)
 
     def forward(self, X):
         # X.shape == [batch_size, seq_len]
@@ -522,8 +538,14 @@ class LSTMLayer(nn.Module):
         X, _ = self.layer(X)
         # X.shape == [batch_size, seq_len, hidden_size]
 
-        b = self.out_b(F.gelu(self.proj_b(X)))
-        f = self.out_f(F.gelu(self.proj_f(X)))
-        # b.shape == f.shape == [batch_size, seq_len, hidden_size]
+        if self.variant == 'full':
+            b = self.out_b(F.gelu(self.proj_b(X)))
+            f = self.out_f(F.gelu(self.proj_f(X)))
+            # b.shape == f.shape == [batch_size, seq_len, hidden_size]
+        elif self.variant == 'half':
+            b = self.out_b(X)
+            f = self.out_f(X)
+        elif self.variant == 'direct':
+            b, f = torch.chunk(X, 2, dim=-1)
 
         return X, b, f
