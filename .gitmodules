@@ -5,3 +5,4 @@
 [submodule "wdsm2021"]
 	path = wdsm2021
 	url = https://git.overleaf.com/5f03d7e3c5e80b0001882af6
+	ignore = dirty
