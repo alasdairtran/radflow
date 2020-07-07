@@ -415,8 +415,8 @@ class NBEATSWiki(BaseModel):
         if splits[0] in ['valid', 'test']:
             smapes, daily_errors = get_smape(targets, preds)
 
-            out_dict['smapes'] = smapes
-            out_dict['daily_errors'] = daily_errors
+            out_dict['smapes'] = smapes.tolist()
+            out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
             self.history['_n_samples'] += len(keys)
