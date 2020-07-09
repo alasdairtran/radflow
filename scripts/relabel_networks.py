@@ -161,6 +161,29 @@ def relabel_networks():
     with open(vevo_tag_path, 'w') as f:
         json.dump(vevo_tags, f)
 
+    # We also save static graph
+    static_in_degrees = {k: [] for k in sources.keys()}
+    for k in static_in_degrees:
+        for n in sources[k]:
+            mask = [0] * n_days
+            static_in_degrees[k].append({'id': n, 'mask': mask})
+
+    neighs = {k: {} for k in sources.keys()}
+    for t in tqdm(range(n_days)):
+        for k, v in sources.items():
+            neighs[k][t] = v
+
+    output_dir = 'data/wiki/subgraphs/vevo_static'
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, 'in_degrees.pkl'), 'wb') as f:
+        pickle.dump(static_in_degrees, f)
+    with open(os.path.join(output_dir, 'out_degrees.pkl'), 'wb') as f:
+        pickle.dump({}, f)
+    with open(os.path.join(output_dir, 'series.pkl'), 'wb') as f:
+        pickle.dump(series, f)
+    with open(os.path.join(output_dir, 'neighs.pkl'), 'wb') as f:
+        pickle.dump(neighs, f)
+
 
 def main():
     relabel_networks()
