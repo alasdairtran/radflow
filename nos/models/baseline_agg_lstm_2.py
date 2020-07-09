@@ -78,8 +78,20 @@ class BaselineAggLSTM2(BaseModel):
         elif agg_type in ['mean']:
             self.fc = GehringLinear(self.hidden_size * 2, 1)
 
-        with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
-            self.in_degrees, _, self.series, self.neighs = pickle.load(f)
+        in_degrees_path = f'{data_dir}/{seed_word}/in_degrees.pkl'
+        logger.info(f'Loading {in_degrees_path} into model')
+        with open(in_degrees_path, 'rb') as f:
+            self.in_degrees = pickle.load(f)
+
+        series_path = f'{data_dir}/{seed_word}/series.pkl'
+        logger.info(f'Loading {series_path} into model')
+        with open(series_path, 'rb') as f:
+            self.series = pickle.load(f)
+
+        neighs_path = f'{data_dir}/{seed_word}/neighs.pkl'
+        logger.info(f'Loading {neighs_path} into model')
+        with open(neighs_path, 'rb') as f:
+            self.neighs = pickle.load(f)
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))

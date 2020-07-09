@@ -113,8 +113,26 @@ def relabel_networks():
         new_in_degrees[k] = sorted(v.values(), key=lambda x: sum(
             series[x['id']][:7]), reverse=True)
 
-    with open(f'data/wiki/subgraphs/vevo.pkl', 'wb') as f:
-        pickle.dump([new_in_degrees, {}, series], f)
+    neighs = {k: {} for k in new_in_degrees.keys()}
+    max_days = len(next(iter(series.values())))
+    for t in tqdm(range(max_days)):
+        for k, v in new_in_degrees.items():
+            k_neighs = [n['id'] for n in v if n['mask'][t] == 0]
+            k_views = [series[n['id']][t]
+                       for n in v if n['mask'][t] == 0]
+            k_neighs = [x for _, x in sorted(zip(k_views, k_neighs))]
+            neighs[k][t] = k_neighs
+
+    output_dir = 'data/wiki/subgraphs/vevo'
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, 'in_degrees.pkl'), 'wb') as f:
+        pickle.dump(new_in_degrees, f)
+    with open(os.path.join(output_dir, 'out_degrees.pkl'), 'wb') as f:
+        pickle.dump({}, f)
+    with open(os.path.join(output_dir, 'series.pkl'), 'wb') as f:
+        pickle.dump(series, f)
+    with open(os.path.join(output_dir, 'neighs.pkl'), 'wb') as f:
+        pickle.dump(neighs, f)
 
     tags = ['acoustic', 'alternative', 'audio', 'blue', 'classical', 'country',
             'cover', 'dance', 'electronic', 'gospel', 'guitar', 'hd', 'hip hop',

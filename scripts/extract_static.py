@@ -113,8 +113,8 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
     csr_matric = matrix.tocsr()  # 1.3GB!
     csc_matric = matrix.tocsc()
 
-    output_path = f'data/wiki/subgraphs/{key}.pkl'
-    if os.path.exists(output_path):
+    output_dir = f'data/wiki/subgraphs/{key}'
+    if os.path.exists(output_dir):
         return
 
     inlinks = {}
@@ -193,9 +193,15 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
             k_neighs = [x for _, x in sorted(zip(k_views, k_neighs))]
             neighs[k][t] = k_neighs
 
-    os.makedirs('data/wiki/subgraphs', exist_ok=True)
-    with open(output_path, 'wb') as f:
-        pickle.dump([inlinks, outlinks, series, neighs], f)
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, 'in_degrees.pkl'), 'wb') as f:
+        pickle.dump(inlinks, f)
+    with open(os.path.join(output_dir, 'out_degrees.pkl'), 'wb') as f:
+        pickle.dump(outlinks, f)
+    with open(os.path.join(output_dir, 'series.pkl'), 'wb') as f:
+        pickle.dump(series, f)
+    with open(os.path.join(output_dir, 'neighs.pkl'), 'wb') as f:
+        pickle.dump(neighs, f)
 
 
 def get_dynamic_info(in_degrees, n_days, db):

@@ -29,23 +29,23 @@ class SubWikivNetworkReader(DatasetReader):
         self.data_dir = data_dir
         self.dtype = np.float16 if fp16 else np.float32
 
-        with open(f'data/wiki/subgraphs/{seed_word}.pkl', 'rb') as f:
-            in_degrees, _, self.series, _ = pickle.load(f)
-
         random.seed(1234)
         self.rs = np.random.RandomState(1234)
 
-        if use_edge:
-            keys = sorted(in_degrees.keys())
-        else:
-            keys = sorted(self.series.keys())
-        self.rs.shuffle(keys)
-        self.keys = list(keys)
-        # self.valid_keys = keys[:200]
-        # self.train_keys = keys[200:]
+        in_degrees_path = f'data/wiki/subgraphs/{seed_word}/in_degrees.pkl'
+        logger.info(f'Loading {in_degrees_path} into dataset reader')
+        with open(in_degrees_path, 'rb') as f:
+            in_degrees = pickle.load(f)
 
-        # Check for reproducibility
-        # assert sum(self.valid_keys) == 2939816
+        series_path = f'data/wiki/subgraphs/{seed_word}/series.pkl'
+        logger.info(f'Loading {series_path} into dataset reader')
+        with open(series_path, 'rb') as f:
+            series = pickle.load(f)
+
+        connected_keys = set(in_degrees.keys())
+        all_keys = set(series.keys())
+        self.keys = sorted(connected_keys) if use_edge else sorted(all_keys)
+        self.rs.shuffle(self.keys)
 
     @overrides
     def _read(self, split: str):
