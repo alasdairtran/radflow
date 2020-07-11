@@ -45,6 +45,7 @@ class BaselineAggLSTM2(BaseModel):
                  hidden_size: int = 128,
                  dropout: float = 0.1,
                  log: bool = False,
+                 diff: bool = False,
                  opt_smape: bool = False,
                  max_neighbours: int = 8,
                  attn: bool = False,
@@ -60,6 +61,7 @@ class BaselineAggLSTM2(BaseModel):
         self.total_length = forecast_length + backcast_length
         self.test_lengths = test_lengths
         self.log = log
+        self.diff = diff
         self.opt_smape = opt_smape
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -78,20 +80,21 @@ class BaselineAggLSTM2(BaseModel):
         elif agg_type in ['mean']:
             self.fc = GehringLinear(self.hidden_size * 2, 1)
 
-        in_degrees_path = f'{data_dir}/{seed_word}/in_degrees.pkl'
-        logger.info(f'Loading {in_degrees_path} into model')
-        with open(in_degrees_path, 'rb') as f:
-            self.in_degrees = pickle.load(f)
-
         series_path = f'{data_dir}/{seed_word}/series.pkl'
         logger.info(f'Loading {series_path} into model')
         with open(series_path, 'rb') as f:
             self.series = pickle.load(f)
 
-        neighs_path = f'{data_dir}/{seed_word}/neighs.pkl'
-        logger.info(f'Loading {neighs_path} into model')
-        with open(neighs_path, 'rb') as f:
-            self.neighs = pickle.load(f)
+        if self.agg_type != 'none':
+            in_degrees_path = f'{data_dir}/{seed_word}/in_degrees.pkl'
+            logger.info(f'Loading {in_degrees_path} into model')
+            with open(in_degrees_path, 'rb') as f:
+                self.in_degrees = pickle.load(f)
+
+            neighs_path = f'{data_dir}/{seed_word}/neighs.pkl'
+            logger.info(f'Loading {neighs_path} into model')
+            with open(neighs_path, 'rb') as f:
+                self.neighs = pickle.load(f)
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -106,17 +109,18 @@ class BaselineAggLSTM2(BaseModel):
         for k, v in self.series.items():
             self.series[k] = np.asarray(v).astype(float)
 
-        for k, v in self.neighs.items():
-            for t in v.keys():
-                self.neighs[k][t] = self.neighs[k][t][:self.max_neighbours]
+        if self.agg_type != 'none':
+            for k, v in self.neighs.items():
+                for t in v.keys():
+                    self.neighs[k][t] = self.neighs[k][t][:self.max_neighbours]
 
-        # Sort by view counts
-        logger.info('Processing edges')
-        for node, neighs in tqdm(self.in_degrees.items()):
-            neigh_dict = {}
-            for n in neighs:
-                neigh_dict[n['id']] = p.new_tensor(np.asarray(n['mask']))
-            self.in_degrees[node] = neigh_dict
+            # Sort by view counts
+            logger.info('Processing edges')
+            for node, neighs in tqdm(self.in_degrees.items()):
+                neigh_dict = {}
+                for n in neighs:
+                    neigh_dict[n['id']] = p.new_tensor(np.asarray(n['mask']))
+                self.in_degrees[node] = neigh_dict
 
         for k, v in self.series.items():
             v_array = np.asarray(v)
@@ -133,6 +137,10 @@ class BaselineAggLSTM2(BaseModel):
             training_series = series.clone().detach()
             training_series[training_series == 0] = 1
             diff = training_series[:, 1:] / training_series[:, :-1]
+            targets = diff[:, 1:]
+            inputs = diff[:, :-1]
+        elif self.diff:
+            diff = series[:, 1:] - series[:, :-1]
             targets = diff[:, 1:]
             inputs = diff[:, :-1]
         else:
@@ -153,6 +161,8 @@ class BaselineAggLSTM2(BaseModel):
             training_series = series.clone().detach()
             training_series[training_series == 0] = 1
             inputs = training_series[:, 1:] / training_series[:, :-1]
+        elif self.diff:
+            inputs = series[:, 1:] - series[:, :-1]
         else:
             inputs = series
 
@@ -214,7 +224,7 @@ class BaselineAggLSTM2(BaseModel):
                     Xm[b, i] = Xn[all_neigh_dict[k]]
                     mask = self.in_degrees[key][k]
                     mask = mask[start:start+total_len]
-                    if not self.log:
+                    if not self.log or self.diff:
                         mask = mask[1:]
                     if self.peek:
                         mask = mask[1:]
@@ -231,8 +241,8 @@ class BaselineAggLSTM2(BaseModel):
         # masks.shape == [batch_size, n_neighs, seq_len]
 
         # Mask out irrelevant values.
-        Xn = Xn.clone()
-        Xn[masks] = 0
+        # Xn = Xn.clone()
+        # Xn[masks] = 0
 
         # Let's just take the average
         Xn = Xn.sum(dim=1)
@@ -308,7 +318,7 @@ class BaselineAggLSTM2(BaseModel):
             preds = preds[:, -self.forecast_length:]
             targets = targets[:, -self.forecast_length:]
 
-        if self.log and self.opt_smape:
+        if self.log and self.opt_smape and not self.diff:
             preds = torch.exp(preds)
             if split in ['valid', 'test']:
                 targets = raw_series[:, -self.forecast_length:]
@@ -348,6 +358,8 @@ class BaselineAggLSTM2(BaseModel):
 
                 if not self.log:
                     current_views = current_views * pred
+                elif self.diff:
+                    current_views = current_views + pred
                 else:
                     current_views = pred
                 preds[:, i] = current_views

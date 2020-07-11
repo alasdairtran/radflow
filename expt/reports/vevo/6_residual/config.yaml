@@ -2,7 +2,7 @@
 dataset_reader:
   type: subwiki_network
   data_dir: "./data/wiki/subgraphs"
-  seed_word: vevo_static
+  seed_word: vevo
   use_edge: true
   fp16: false
 train_data_path: train
@@ -11,24 +11,24 @@ test_data_path: test
 vocabulary:
   type: empty_vocab
 model:
-  type: baseline_agg_lstm_2
-  agg_type: mean
-  peek: true
+  type: baseline_agg_lstm_4
+  agg_type: none
   data_dir: "./data/wiki/subgraphs"
-  seed_word: vevo_static
+  seed_word: vevo
   num_layers: 8
   hidden_size: 128
   dropout: 0.1
-  backcast_length: 42
   forecast_length: 7
+  backcast_length: 42
   test_lengths: [7]
-  log: true
-  opt_smape: true
+  log: false
+  opt_smape: false
+  peek: false
   max_neighbours: 4
   initializer:
-    - - ^decoder.weight*
+    - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
-    - - ^decoder.bias*
+    - - ^decoder.layers.*.layer.bias
       - type: zero
 iterator:
   type: basic
@@ -48,14 +48,32 @@ trainer:
     lr: 0.0001
     weight_decay: 0.0001
     warmup: 0.05
-    t_total: 81920 # 4096 batches per epoch
+    t_total: 163840 # 8192 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
-      - - - ^decoder
+      - - - ^decoder.in_proj
+        - {}
+      - - - ^decoder.layers.0
+        - {}
+      - - - ^decoder.layers.1
+        - {}
+      - - - ^decoder.layers.2
+        - {}
+      - - - ^decoder.layers.3
+        - {}
+      - - - ^decoder.layers.4
+        - {}
+      - - - ^decoder.layers.5
+        - {}
+      - - - ^decoder.layers.6
+        - {}
+      - - - ^decoder.layers.7
+        - {}
+      - - - ^decoder.out_proj
         - {}
       - - - ^fc
         - {}
-  num_epochs: 10
+  num_epochs: 20
   cuda_device: 0
   shuffle: false
   callbacks:

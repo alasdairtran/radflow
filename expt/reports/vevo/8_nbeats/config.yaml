@@ -2,7 +2,8 @@
 dataset_reader:
   type: subwiki_network
   data_dir: "./data/wiki/subgraphs"
-  seed_word: programming
+  seed_word: vevo
+  use_edge: true
   fp16: false
 train_data_path: train
 validation_data_path: valid
@@ -10,25 +11,17 @@ test_data_path: test
 vocabulary:
   type: empty_vocab
 model:
-  type: baseline_agg_lstm_2
-  agg_type: mean
-  peek: true
+  type: nbeats_wiki
   data_dir: "./data/wiki/subgraphs"
-  seed_word: programming
-  num_layers: 8
-  hidden_size: 160
+  seed_word: vevo
+  n_stacks: 8
+  hidden_size: 192
+  thetas_dims: 192
+  forecast_length: 7
+  backcast_length: 42
+  test_lengths: [7]
   dropout: 0.1
-  backcast_length: 112
-  forecast_length: 28
-  test_lengths: [7, 14, 21, 28]
-  log: true
-  opt_smape: true
-  max_neighbours: 4
-  initializer:
-    - - ^decoder.weight*
-      - type: orthogonal
-    - - ^decoder.bias*
-      - type: zero
+  max_neighbours: 0
 iterator:
   type: basic
   batch_size: 64
@@ -50,9 +43,21 @@ trainer:
     t_total: 163840 # 8192 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
-      - - - ^decoder
+      - - - ^net.stacks.0
         - {}
-      - - - ^fc
+      - - - ^net.stacks.1
+        - {}
+      - - - ^net.stacks.2
+        - {}
+      - - - ^net.stacks.3
+        - {}
+      - - - ^net.stacks.4
+        - {}
+      - - - ^net.stacks.5
+        - {}
+      - - - ^net.stacks.6
+        - {}
+      - - - ^net.stacks.7
         - {}
   num_epochs: 20
   cuda_device: 0
