@@ -2,7 +2,7 @@
 dataset_reader:
   type: subwiki_network
   data_dir: "./data/wiki/subgraphs"
-  seed_word: vevo
+  seed_word: vevo_static
   use_edge: true
   fp16: false
 train_data_path: train
@@ -15,7 +15,7 @@ model:
   agg_type: mean
   peek: true
   data_dir: "./data/wiki/subgraphs"
-  seed_word: vevo
+  seed_word: vevo_static
   num_layers: 8
   hidden_size: 124
   dropout: 0.1
@@ -25,6 +25,7 @@ model:
   log: true
   opt_smape: true
   max_neighbours: 4
+  detach: true
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal

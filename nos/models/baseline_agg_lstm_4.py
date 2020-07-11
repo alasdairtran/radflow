@@ -159,7 +159,8 @@ class BaselineAggLSTM4(BaseModel):
                  log: bool = False,
                  diff: bool = False,
                  opt_smape: bool = False,
-                 max_neighbours: int = 8,
+                 max_neighbours: int = 4,
+                 detach: bool = False,
                  variant: str = 'full',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -175,6 +176,7 @@ class BaselineAggLSTM4(BaseModel):
         self.log = log
         self.diff = diff
         self.opt_smape = opt_smape
+        self.detach = detach
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -292,6 +294,18 @@ class BaselineAggLSTM4(BaseModel):
         if self.agg_type == 'none':
             return X
 
+        if self.detach:
+            with torch.no_grad():
+                Xm, masks = self._construct_neighs(X, keys, start, total_len)
+                Xm = self._aggregate(Xm, masks)
+        else:
+            Xm, masks = self._construct_neighs(X, keys, start, total_len)
+            Xm = self._aggregate(Xm, masks)
+
+        X_out = self._pool(X, Xm)
+        return X_out
+
+    def _construct_neighs(self, X, keys, start, total_len):
         B, T, E = X.shape
 
         # First iteration: grab the top neighbours from each sample
@@ -348,10 +362,13 @@ class BaselineAggLSTM4(BaseModel):
                         mask = mask[:-1]
                     masks[b, i] = mask
 
-        X_out = self._aggregate(X, Xm, masks)
+        return Xm, masks
+
+    def _pool(self, X, Xn):
+        X_out = torch.cat([X, Xn], dim=-1)
         return X_out
 
-    def _aggregate(self, X, Xn, masks):
+    def _aggregate(self, Xn, masks):
         # X.shape == [batch_size, seq_len, hidden_size]
         # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
         # masks.shape == [batch_size, n_neighs, seq_len]
@@ -372,10 +389,7 @@ class BaselineAggLSTM4(BaseModel):
         Xn = Xn / n_neighs
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
-        X_out = torch.cat([X, Xn], dim=-1)
-        # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
-
-        return X_out
+        return Xn
 
     def forward(self, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
