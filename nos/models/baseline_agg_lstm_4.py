@@ -209,7 +209,7 @@ class BaselineAggLSTM4(BaseModel):
         initializer(self)
 
     def _initialize_series(self):
-        if isinstance(next(iter(self.series.values())), torch.Tensor):
+        if isinstance(self.series, torch.Tensor):
             return
 
         p = next(self.parameters())
@@ -234,12 +234,17 @@ class BaselineAggLSTM4(BaseModel):
                 self.in_degrees[node] = neigh_dict
                 self.mask_dict[node] = p.new_tensor(node_masks)
 
-        for k, v in self.series.items():
-            v_array = np.asarray(v)
-            self.series[k] = p.new_tensor(v_array)
+        logger.info('Processing series')
+        series_matrix = np.zeros((len(self.series),
+                                  len(self.series[k])))
+        self.series_map = {}
+        for i, (k, v) in enumerate(tqdm(self.series.items())):
+            series_matrix[i] = np.asarray(v)
+            self.series_map[k] = i
+        self.series = p.new_tensor(series_matrix)
 
         self.max_start = len(
-            self.series[k]) - self.forecast_length * 2 - self.total_length
+            self.series[i]) - self.forecast_length * 2 - self.total_length
 
     def _forward(self, series):
         # series.shape == [batch_size, seq_len]
@@ -306,7 +311,8 @@ class BaselineAggLSTM4(BaseModel):
         all_neigh_dict = {k: i for i, k in enumerate(all_neigh_keys)}
         neigh_series_list = []
         for key in all_neigh_keys:
-            neigh_series_list.append(self.series[key][start:start+total_len])
+            neigh_series_list.append(
+                self.series[self.series_map[key], start:start+total_len])
         neighs = torch.stack(neigh_series_list, dim=0)
         # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
@@ -393,7 +399,7 @@ class BaselineAggLSTM4(BaseModel):
 
         series_list = []
         for key in keys:
-            s = self.series[key]
+            s = self.series[self.series_map[key]]
             if split == 'train':
                 if self.max_start == 0:
                     start = 0
@@ -451,7 +457,7 @@ class BaselineAggLSTM4(BaseModel):
             for key in keys:
                 s = start + self.backcast_length
                 e = s + self.forecast_length
-                target_list.append(self.series[key][s:e])
+                target_list.append(self.series[self.series_map[key], s:e])
             targets = torch.stack(target_list, dim=0)
             # targets.shape == [batch_size, forecast_len]
 
