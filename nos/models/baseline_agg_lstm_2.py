@@ -75,10 +75,10 @@ class BaselineAggLSTM2(BaseModel):
 
         assert agg_type in ['mean', 'none']
         self.agg_type = agg_type
-        if agg_type in ['none']:
-            self.fc = GehringLinear(self.hidden_size, 1)
-        elif agg_type in ['mean']:
-            self.fc = GehringLinear(self.hidden_size * 2, 1)
+        self.fc = GehringLinear(self.hidden_size, 1)
+        if agg_type in ['mean']:
+            self.out_proj = GehringLinear(
+                self.hidden_size * 2, self.hidden_size)
 
         series_path = f'{data_dir}/{seed_word}/series.pkl'
         logger.info(f'Loading {series_path} into model')
@@ -270,6 +270,9 @@ class BaselineAggLSTM2(BaseModel):
 
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
+
+        X_out = F.relu(self.out_proj(X_out))
+        # Xn.shape == [batch_size, seq_len, hidden_size]
 
         return X_out
 

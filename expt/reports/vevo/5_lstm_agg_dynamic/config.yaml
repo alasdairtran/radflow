@@ -53,7 +53,7 @@ trainer:
     parameter_groups:
       - - - ^decoder
         - {}
-      - - - ^fc
+      - - - ^(fc|out_proj)
         - {}
   num_epochs: 20
   cuda_device: 0

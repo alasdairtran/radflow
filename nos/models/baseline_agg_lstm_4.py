@@ -181,10 +181,10 @@ class BaselineAggLSTM4(BaseModel):
 
         assert agg_type in ['mean', 'none']
         self.agg_type = agg_type
-        if agg_type in ['none']:
+        if agg_type in ['mean']:
+            self.out_proj = GehringLinear(
+                6 * self.hidden_size, self.hidden_size)
             self.fc = GehringLinear(self.hidden_size, 1)
-        elif agg_type in ['mean']:
-            self.fc = GehringLinear(self.hidden_size * 2, 1)
 
         series_path = f'{data_dir}/{seed_word}/series.pkl'
         logger.info(f'Loading {series_path} into model')
@@ -426,7 +426,7 @@ class BaselineAggLSTM4(BaseModel):
                 X, keys, start, self.total_length)
             # X_full.shape == [batch_size, seq_len, out_hidden_size]
 
-            X_full = self.fc(X_full)
+            X_full = self.fc(F.gelu(self.out_proj(X_full)))
             # X_full.shape == [batch_size, seq_len, 1]
 
             preds = preds + X_full.squeeze(-1)
@@ -528,12 +528,12 @@ class LSTMDecoder(nn.Module):
         if self.variant == 'direct':
             hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
         else:
-            hidden = X.new_zeros(*X.shape)
+            hidden = X.new_zeros(X.shape[0], X.shape[1], 3 * X.shape[2])
 
         for layer in self.layers:
             h, b, f = layer(X)
             X = X - b
-            hidden = hidden + h
+            hidden = hidden + torch.cat([h, b, f], dim=-1)
             forecast = forecast + f
         hidden = hidden / len(self.layers)
 

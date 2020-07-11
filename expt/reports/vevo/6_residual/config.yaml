@@ -71,8 +71,6 @@ trainer:
         - {}
       - - - ^decoder.out_proj
         - {}
-      - - - ^fc
-        - {}
   num_epochs: 20
   cuda_device: 0
   shuffle: false

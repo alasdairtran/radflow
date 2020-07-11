@@ -70,7 +70,7 @@ trainer:
         - {}
       - - - ^decoder.out_proj
         - {}
-      - - - ^fc
+      - - - ^(fc|out_proj)
         - {}
   num_epochs: 20
   cuda_device: 0
