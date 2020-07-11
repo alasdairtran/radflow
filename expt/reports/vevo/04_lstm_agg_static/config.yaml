@@ -17,7 +17,7 @@ model:
   data_dir: "./data/wiki/subgraphs"
   seed_word: vevo_static
   num_layers: 8
-  hidden_size: 164
+  hidden_size: 160
   dropout: 0.1
   backcast_length: 42
   forecast_length: 7
