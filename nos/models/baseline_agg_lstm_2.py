@@ -95,6 +95,7 @@ class BaselineAggLSTM2(BaseModel):
             logger.info(f'Loading {neighs_path} into model')
             with open(neighs_path, 'rb') as f:
                 self.neighs = pickle.load(f)
+        self.mask_dict = None
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -116,11 +117,16 @@ class BaselineAggLSTM2(BaseModel):
 
             # Sort by view counts
             logger.info('Processing edges')
+            self.mask_dict = {}
             for node, neighs in tqdm(self.in_degrees.items()):
                 neigh_dict = {}
-                for n in neighs:
-                    neigh_dict[n['id']] = p.new_tensor(np.asarray(n['mask']))
+                node_masks = np.ones((len(neighs), len(self.series[node])),
+                                     dtype=bool)
+                for i, n in enumerate(neighs):
+                    node_masks[i] = n['mask']
+                    neigh_dict[n['id']] = i
                 self.in_degrees[node] = neigh_dict
+                self.mask_dict[node] = p.new_tensor(node_masks)
 
         for k, v in self.series.items():
             v_array = np.asarray(v)
@@ -222,7 +228,7 @@ class BaselineAggLSTM2(BaseModel):
             if key in key_neighs:
                 for i, k in enumerate(key_neighs[key]):
                     Xm[b, i] = Xn[all_neigh_dict[k]]
-                    mask = self.in_degrees[key][k]
+                    mask = self.mask_dict[key][self.in_degrees[key][k]]
                     mask = mask[start:start+total_len]
                     if not self.log or self.diff:
                         mask = mask[1:]
