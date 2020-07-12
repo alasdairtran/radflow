@@ -2,11 +2,9 @@
 dataset_reader:
   type: subwiki_network
   data_dir: "./data/wiki/subgraphs"
-  seed_word: vevo
+  seed_word: vevo_static
   use_edge: true
   fp16: false
-  batch_size: 64
-  sampling: subgraph
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -17,12 +15,12 @@ model:
   agg_type: mean
   peek: true
   data_dir: "./data/wiki/subgraphs"
-  seed_word: vevo
+  seed_word: vevo_static
   num_layers: 8
   hidden_size: 160
   dropout: 0.1
-  backcast_length: 42
   forecast_length: 7
+  backcast_length: 42
   test_lengths: [7]
   max_neighbours: 4
   initializer:
