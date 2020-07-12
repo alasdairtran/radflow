@@ -46,6 +46,17 @@ python scripts/extract_static.py -r cray # dijsktra
 ## Training
 
 ```sh
+# Some experiments don't utilize the whole GPU, so we can run many parallel
+# experiments on the same GPU.
+nvidia-smi -i 0,1 -c EXCLUSIVE_PROCESS # does not persist across reboot
+CUDA_VISIBLE_DEVICES=0,1 \
+    CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps \
+    CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log \
+    nvidia-cuda-mps-control -f
+
+export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps
+export CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log
+
 # Naive baselines (no training is needed)
 CUDA_VISIBLE_DEVICES=0 nos evaluate expt/1_naive_previous_day/config.yaml
 CUDA_VISIBLE_DEVICES=0 nos evaluate expt/2_naive_seasonal/config.yaml
