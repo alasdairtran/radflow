@@ -44,7 +44,6 @@ class BaselineAggLSTM2(BaseModel):
                  num_layers: int = 8,
                  hidden_size: int = 128,
                  dropout: float = 0.1,
-                 opt_smape: bool = False,
                  max_neighbours: int = 4,
                  detach: bool = False,
                  batch_as_subgraph: bool = False,
@@ -60,7 +59,6 @@ class BaselineAggLSTM2(BaseModel):
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
         self.test_lengths = test_lengths
-        self.opt_smape = opt_smape
         self.detach = detach
         self.batch_as_subgraph = batch_as_subgraph
         self.max_start = None
@@ -323,25 +321,22 @@ class BaselineAggLSTM2(BaseModel):
         # X_agg.shape == [batch_size, seq_len, 1]
 
         preds = X_agg.squeeze(-1)
+        preds = torch.exp(preds)
         # preds.shape == [batch_size, seq_len]
 
         if split in ['valid', 'test']:
             preds = preds[:, -self.forecast_length:]
             targets = targets[:, -self.forecast_length:]
 
-        if self.opt_smape:
-            preds = torch.exp(preds)
-            if split in ['valid', 'test']:
-                targets = raw_series[:, -self.forecast_length:]
-            else:
-                targets = raw_series[:, 1:]
-            numerator = torch.abs(targets - preds)
-            denominator = torch.abs(targets) + torch.abs(preds)
-            loss = numerator / denominator
-            loss[torch.isnan(loss)] = 0
-            loss = loss.mean()
+        if split in ['valid', 'test']:
+            targets = raw_series[:, -self.forecast_length:]
         else:
-            loss = self.mse(preds, targets)
+            targets = raw_series[:, 1:]
+        numerator = torch.abs(targets - preds)
+        denominator = torch.abs(targets) + torch.abs(preds)
+        loss = numerator / denominator
+        loss[torch.isnan(loss)] = 0
+        loss = loss.mean()
         out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
