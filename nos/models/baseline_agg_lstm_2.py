@@ -152,23 +152,26 @@ class BaselineAggLSTM2(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len):
+    def _get_neighbour_embeds(self, X, keys, start, total_len, X_cache=None):
         if self.agg_type == 'none':
             return X
 
         if self.detach:
             with torch.no_grad():
-                Xm, masks = self._construct_neighs(X, keys, start, total_len)
+                Xm, masks = self._construct_neighs(
+                    X, keys, start, total_len, X_cache)
                 Xm = self._aggregate(Xm, masks)
         else:
-            Xm, masks = self._construct_neighs(X, keys, start, total_len)
+            Xm, masks = self._construct_neighs(
+                X, keys, start, total_len, X_cache)
             Xm = self._aggregate(Xm, masks)
 
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len):
+    def _construct_neighs(self, X, keys, start, total_len, X_cache):
         B, T, E = X.shape
+        batch_set = set(keys)
 
         # First iteration: grab the top neighbours from each sample
         key_neighs = {}
@@ -178,23 +181,34 @@ class BaselineAggLSTM2(BaseModel):
             if key in self.neighs:
                 kn = set()
                 for day in range(start, start+total_len):
-                    kn |= set(self.neighs[key][day])
+                    if self.training and self.batch_as_subgraph:
+                        kn |= set(self.neighs[key][day]) & batch_set
+                    else:
+                        kn |= set(self.neighs[key][day])
                 key_neighs[key] = kn
                 all_neigh_keys |= kn
                 max_n_neighs = max(max_n_neighs, len(kn))
 
         all_neigh_keys = list(all_neigh_keys)
         all_neigh_dict = {k: i for i, k in enumerate(all_neigh_keys)}
-        neigh_series_list = []
-        for key in all_neigh_keys:
-            neigh_series_list.append(
-                self.series[self.series_map[key], start:start+total_len])
-        neighs = torch.stack(neigh_series_list, dim=0)
-        # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
-        neighs = torch.log1p(neighs)
-        Xn = self._forward_full(neighs)
-        # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
+        if self.training and self.batch_as_subgraph and X_cache is not None:
+            cache_pos = {k: i for i, k in enumerate(keys)}
+            Xn_list = []
+            for key in all_neigh_keys:
+                Xn_list.append(X_cache[cache_pos[key]])
+            Xn = torch.stack(Xn_list, dim=0)
+        else:
+            neigh_series_list = []
+            for key in all_neigh_keys:
+                neigh_series_list.append(
+                    self.series[self.series_map[key], start:start+total_len])
+            neighs = torch.stack(neigh_series_list, dim=0)
+            # neighs.shape == [batch_size * max_n_neighs, seq_len]
+
+            neighs = torch.log1p(neighs)
+            Xn = self._forward_full(neighs)
+            # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
 
         if self.peek:
             Xn = Xn[:, 1:]
@@ -295,13 +309,14 @@ class BaselineAggLSTM2(BaseModel):
 
         series = torch.log1p(raw_series)
 
-        X = self._forward_full(series)
-        X = X[:, :-1]
+        X_full = self._forward_full(series)
+        X = X_full[:, :-1]
         targets = series[:, 1:]
         # X.shape == [batch_size, seq_len, hidden_size]
         # targets.shape == [batch_size, seq_len]
 
-        X_agg = self._get_neighbour_embeds(X, keys, start, self.total_length)
+        X_agg = self._get_neighbour_embeds(
+            X, keys, start, self.total_length, X_full)
         # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
         X_agg = self.fc(X_agg)
