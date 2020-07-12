@@ -156,11 +156,10 @@ class BaselineAggLSTM4(BaseModel):
                  num_layers: int = 8,
                  hidden_size: int = 128,
                  dropout: float = 0.1,
-                 log: bool = False,
-                 diff: bool = False,
                  opt_smape: bool = False,
                  max_neighbours: int = 4,
                  detach: bool = False,
+                 batch_as_subgraph: bool = False,
                  variant: str = 'full',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -173,10 +172,9 @@ class BaselineAggLSTM4(BaseModel):
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
         self.test_lengths = test_lengths
-        self.log = log
-        self.diff = diff
         self.opt_smape = opt_smape
         self.detach = detach
+        self.batch_as_subgraph = batch_as_subgraph
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -252,19 +250,8 @@ class BaselineAggLSTM4(BaseModel):
         # series.shape == [batch_size, seq_len]
 
         # Take the difference
-        if not self.log:
-            training_series = series.clone().detach()
-            training_series[training_series == 0] = 1
-            diff = training_series[:, 1:] / training_series[:, :-1]
-            targets = diff[:, 1:]
-            inputs = diff[:, :-1]
-        elif self.diff:
-            diff = series[:, 1:] - series[:, :-1]
-            targets = diff[:, 1:]
-            inputs = diff[:, :-1]
-        else:
-            inputs = series[:, :-1]
-            targets = series[:, 1:]
+        inputs = series[:, :-1]
+        targets = series[:, 1:]
 
         X = inputs
         # X.shape == [batch_size, seq_len - 1]
@@ -276,14 +263,7 @@ class BaselineAggLSTM4(BaseModel):
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
 
-        if not self.log:
-            training_series = series.clone().detach()
-            training_series[training_series == 0] = 1
-            X = training_series[:, 1:] / training_series[:, :-1]
-        elif self.diff:
-            X = series[:, 1:] - series[:, :-1]
-        else:
-            X = series
+        X = series
         # X.shape == [batch_size, seq_len]
 
         X, forecast = self.decoder(X)
@@ -330,8 +310,7 @@ class BaselineAggLSTM4(BaseModel):
         neighs = torch.stack(neigh_series_list, dim=0)
         # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
-        if self.log:
-            neighs = torch.log1p(neighs)
+        neighs = torch.log1p(neighs)
         Xn, _ = self._forward_full(neighs)
         # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
 
@@ -354,8 +333,6 @@ class BaselineAggLSTM4(BaseModel):
                     Xm[b, i] = Xn[all_neigh_dict[k]]
                     mask = self.mask_dict[key][self.in_degrees[key][k]]
                     mask = mask[start:start+total_len]
-                    if not self.log or self.diff:
-                        mask = mask[1:]
                     if self.peek:
                         mask = mask[1:]
                     else:
@@ -429,7 +406,7 @@ class BaselineAggLSTM4(BaseModel):
         raw_series = torch.stack(series_list, dim=0)
         # series.shape == [batch_size, seq_len]
 
-        series = torch.log1p(raw_series) if self.log else raw_series
+        series = torch.log1p(raw_series)
 
         X, preds, targets = self._forward(series)
         # X.shape == [batch_size, seq_len, hidden_size]
@@ -450,7 +427,7 @@ class BaselineAggLSTM4(BaseModel):
             preds = preds[:, -self.forecast_length:]
             targets = targets[:, -self.forecast_length:]
 
-        if self.log and self.opt_smape and not self.diff:
+        if self.opt_smape:
             preds = torch.exp(preds)
             if split in ['valid', 'test']:
                 targets = raw_series[:, -self.forecast_length:]
@@ -490,18 +467,12 @@ class BaselineAggLSTM4(BaseModel):
                     pred = pred + X_full.squeeze(-1)[:, -1]
                     # delta.shape == [batch_size]
 
-                if not self.log:
-                    current_views = current_views * pred
-                elif self.diff:
-                    current_views = current_views + pred
-                else:
-                    current_views = pred
+                current_views = pred
                 preds[:, i] = current_views
                 series = torch.cat(
                     [series, current_views.unsqueeze(-1)], dim=-1)
 
-            if self.log:
-                preds = torch.exp(preds)
+            preds = torch.exp(preds)
             smapes, daily_errors = get_smape(targets, preds)
 
             out_dict['smapes'] = smapes.tolist()

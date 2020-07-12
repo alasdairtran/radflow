@@ -22,7 +22,6 @@ model:
   forecast_length: 7
   backcast_length: 42
   test_lengths: [7]
-  log: true
   opt_smape: true
   max_neighbours: 4
   initializer:
