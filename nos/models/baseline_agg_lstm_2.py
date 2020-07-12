@@ -140,20 +140,6 @@ class BaselineAggLSTM2(BaseModel):
         self.max_start = len(
             self.series[i]) - self.forecast_length * 2 - self.total_length
 
-    def _forward(self, series):
-        # series.shape == [batch_size, seq_len]
-
-        # Take the difference
-        inputs = series[:, :-1]
-        targets = series[:, 1:]
-
-        X = inputs.unsqueeze(-1)
-        # X.shape == [batch_size, seq_len - 1, 1]
-
-        X, _ = self.decoder(X)
-
-        return X, targets
-
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
 
@@ -309,7 +295,9 @@ class BaselineAggLSTM2(BaseModel):
 
         series = torch.log1p(raw_series)
 
-        X, targets = self._forward(series)
+        X = self._forward_full(series)
+        X = X[:, :-1]
+        targets = series[:, 1:]
         # X.shape == [batch_size, seq_len, hidden_size]
         # targets.shape == [batch_size, seq_len]
 
