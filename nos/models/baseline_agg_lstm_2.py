@@ -301,13 +301,13 @@ class BaselineAggLSTM2(BaseModel):
         # X.shape == [batch_size, seq_len, hidden_size]
         # targets.shape == [batch_size, seq_len]
 
-        X_full = self._get_neighbour_embeds(X, keys, start, self.total_length)
-        # X_full.shape == [batch_size, seq_len, out_hidden_size]
+        X_agg = self._get_neighbour_embeds(X, keys, start, self.total_length)
+        # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
-        X_full = self.fc(X_full)
-        # X_full.shape == [batch_size, seq_len, 1]
+        X_agg = self.fc(X_agg)
+        # X_agg.shape == [batch_size, seq_len, 1]
 
-        preds = X_full.squeeze(-1)
+        preds = X_agg.squeeze(-1)
         # preds.shape == [batch_size, seq_len]
 
         if split in ['valid', 'test']:
@@ -346,10 +346,10 @@ class BaselineAggLSTM2(BaseModel):
             for i in range(self.forecast_length):
                 X = self._forward_full(series)
                 seq_len = self.total_length - self.forecast_length + i + 1
-                X_full = self._get_neighbour_embeds(
+                X_agg = self._get_neighbour_embeds(
                     X, keys, start, seq_len)
-                X_full = self.fc(X_full)
-                pred = X_full.squeeze(-1)[:, -1]
+                X_agg = self.fc(X_agg)
+                pred = X_agg.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
 
                 current_views = pred

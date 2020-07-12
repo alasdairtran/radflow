@@ -402,14 +402,14 @@ class BaselineAggLSTM4(BaseModel):
         # targets.shape == [batch_size, seq_len]
 
         if self.agg_type != 'none':
-            X_full = self._get_neighbour_embeds(
+            X_agg = self._get_neighbour_embeds(
                 X, keys, start, self.total_length)
-            # X_full.shape == [batch_size, seq_len, out_hidden_size]
+            # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
-            X_full = self.fc(F.gelu(self.out_proj(X_full)))
-            # X_full.shape == [batch_size, seq_len, 1]
+            X_agg = self.fc(F.gelu(self.out_proj(X_agg)))
+            # X_agg.shape == [batch_size, seq_len, 1]
 
-            preds = preds + X_full.squeeze(-1)
+            preds = preds + X_agg.squeeze(-1)
             # preds.shape == [batch_size, seq_len]
 
         if split in ['valid', 'test']:
@@ -450,10 +450,10 @@ class BaselineAggLSTM4(BaseModel):
                 pred = pred[:, -1]
                 if self.agg_type != 'none':
                     seq_len = self.total_length - self.forecast_length + i + 1
-                    X_full = self._get_neighbour_embeds(
+                    X_agg = self._get_neighbour_embeds(
                         X, keys, start, seq_len)
-                    X_full = self.fc(F.gelu(self.out_proj(X_full)))
-                    pred = pred + X_full.squeeze(-1)[:, -1]
+                    X_agg = self.fc(F.gelu(self.out_proj(X_agg)))
+                    pred = pred + X_agg.squeeze(-1)[:, -1]
                     # delta.shape == [batch_size]
 
                 current_views = pred
