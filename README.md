@@ -48,7 +48,11 @@ python scripts/extract_static.py -r cray # dijsktra
 ```sh
 # Some experiments don't utilize the whole GPU, so we can run many parallel
 # experiments on the same GPU.
-nvidia-smi -i 0,1 -c EXCLUSIVE_PROCESS # does not persist across reboot
+# When using MPS it is recommended to use EXCLUSIVE_PROCESS mode to ensure that
+# only a single MPS server is using the GPU, which provides additional insurance that the
+# MPS server is the single point of arbitration between all CUDA processes for that GPU.
+# Setting this does not persist across reboot
+sudo nvidia-smi -i 0,1 -c EXCLUSIVE_PROCESS
 CUDA_VISIBLE_DEVICES=0,1 \
     CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps \
     CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log \
