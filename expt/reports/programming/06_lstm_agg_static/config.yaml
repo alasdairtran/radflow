@@ -46,22 +46,22 @@ trainer:
     lr: 0.0001
     weight_decay: 0.0001
     warmup: 0.05
-    t_total: 163840 # 8192 batches per epoch
+    t_total: 81920 # 8192 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
       - - - ^decoder
         - {}
       - - - ^(fc|out_proj)
         - {}
-  num_epochs: 20
+  num_epochs: 10
   cuda_device: 0
   shuffle: false
   callbacks:
     - type: checkpoint
     # - type: archive
     - type: track_metrics
-      patience: 100
-      validation_metric: "-loss"
+      patience: 10
+      validation_metric: "-smape_28"
     - type: validate
     - type: log_to_tensorboard
       summary_interval: 100
