@@ -25,7 +25,6 @@ model:
   backcast_length: 42
   test_lengths: [7]
   max_neighbours: 4
-  batch_as_subgraph: true
   initializer:
     - - ^decoder.weight*
       - type: orthogonal
