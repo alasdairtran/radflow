@@ -222,7 +222,7 @@ class BaselineAggLSTM4(BaseModel):
         if self.agg_type != 'none':
             for k, v in self.neighs.items():
                 for t in v.keys():
-                    self.neighs[k][t] = self.neighs[k][t][:self.max_neighbours]
+                    self.neighs[k][t] = self.neighs[k][t]
 
             # Sort by view counts
             logger.info('Processing edges')
@@ -291,7 +291,7 @@ class BaselineAggLSTM4(BaseModel):
                     if self.training and self.batch_as_subgraph:
                         kn |= set(self.neighs[key][day]) & batch_set
                     else:
-                        kn |= set(self.neighs[key][day])
+                        kn |= set(self.neighs[key][day][:self.max_neighbours])
                 key_neighs[key] = kn
                 all_neigh_keys |= kn
                 max_n_neighs = max(max_n_neighs, len(kn))
