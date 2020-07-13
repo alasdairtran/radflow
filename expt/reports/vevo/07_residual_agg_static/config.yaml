@@ -79,7 +79,7 @@ trainer:
     # - type: archive
     - type: track_metrics
       patience: 100
-      validation_metric: "-smape_7"
+      validation_metric: "-loss"
     - type: validate
     - type: log_to_tensorboard
       summary_interval: 100
