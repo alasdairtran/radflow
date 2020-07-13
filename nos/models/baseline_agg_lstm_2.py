@@ -49,6 +49,7 @@ class BaselineAggLSTM2(BaseModel):
                  batch_as_subgraph: bool = False,
                  max_train_forecast_len: int = 1,
                  t_total: int = 163840,
+                 static_graph: bool = False,
                  attn: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -67,6 +68,7 @@ class BaselineAggLSTM2(BaseModel):
         self.max_train_forecast_len = max_train_forecast_len
         self.t_total = t_total
         self.current_t = 0
+        self.static_graph = static_graph
         self.rs = np.random.RandomState(1234)
 
         if not attn:
@@ -182,12 +184,23 @@ class BaselineAggLSTM2(BaseModel):
         all_neigh_keys = set()
         for key in keys:
             if key in self.neighs:
-                kn = set()
+                kn = set(self.neighs[key][start]) \
+                    if self.static_graph else set()
                 for day in range(start, start+total_len):
                     if self.training and self.batch_as_subgraph:
                         kn |= set(self.neighs[key][day]) & batch_set
+                    elif self.static_graph:
+                        kn &= set(self.neighs[key][day])
                     else:
                         kn |= set(self.neighs[key][day][:self.max_neighbours])
+
+                if self.static_graph:
+                    views = {k: self.series[self.series_map[k],
+                                            start:start+self.backcast_length].sum().cpu().item()
+                             for k in kn}
+                    sorted_kn = sorted(views.items(), key=lambda x: x[1])
+                    kn = set(p[0] for p in sorted_kn[:self.max_neighbours])
+
                 key_neighs[key] = kn
                 all_neigh_keys |= kn
                 max_n_neighs = max(max_n_neighs, len(kn))
