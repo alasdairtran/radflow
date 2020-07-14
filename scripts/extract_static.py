@@ -130,7 +130,7 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
             continue
 
         s = get_traffic_for_page(page['title'], int(p), db)
-        if s is None or -1 in s:
+        if s is None or -1 in s or sum(s) / len(s) < 100:
             continue
 
         outlinks[p] = list(csr_matric.getrow(p).nonzero()[1])
@@ -147,7 +147,7 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
 
     # This between 5-30 minutes
     pbar = tqdm(total=10000, desc=key, position=i)
-    pbar.update(len(seeds))
+    pbar.update(len(inlinks))
     while len(inlinks) < 10000:
         p = counter.most_common(1)[0][0]
         del counter[p]
@@ -158,7 +158,7 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
             continue
 
         s = get_traffic_for_page(page['title'], int(p), db)
-        if s is None or -1 in s:
+        if s is None or -1 in s or sum(s) / len(s) < 100:
             continue
 
         pbar.update(1)
@@ -378,9 +378,15 @@ def extract_all(mongo_host, redis_host):
     seeds = {}
     seeds['programming'] = get_seeds_from_cat('Programming languages', db)
     seeds['star_wars'] = get_seeds_from_title('Star Wars', db, csr_matric)
-    seeds['stats'] = get_seeds_from_title('Statistics', db, csr_matric)
-    seeds['flu'] = get_seeds_from_title('2009 swine flu pandemic',
-                                        db, csr_matric)
+    # seeds['stats'] = get_seeds_from_title('Statistics', db, csr_matric)
+    # seeds['flu'] = get_seeds_from_title('2009 swine flu pandemic',
+    #                                     db, csr_matric)
+    seeds['biology'] = get_seeds_from_title('Biology', db, csr_matric)
+    seeds['philosophy'] = get_seeds_from_title('Philosophy', db, csr_matric)
+    seeds['mathematics'] = get_seeds_from_title('Mathematics', db, csr_matric)
+    seeds['music'] = get_seeds_from_title('Music', db, csr_matric)
+    seeds['computer_science'] = get_seeds_from_title(
+        'Computer science', db, csr_matric)
 
     with Parallel(n_jobs=8, backend='loky') as parallel:
         parallel(delayed(grow_from_seeds)(key, seeds, mongo_host, matrix_path, i)
