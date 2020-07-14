@@ -50,6 +50,7 @@ class BaselineAggLSTM2(BaseModel):
                  max_train_forecast_len: int = 1,
                  t_total: int = 163840,
                  static_graph: bool = False,
+                 end_offset: int = 0,
                  attn: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -69,6 +70,7 @@ class BaselineAggLSTM2(BaseModel):
         self.t_total = t_total
         self.current_t = 0
         self.static_graph = static_graph
+        self.end_offset = end_offset
         self.rs = np.random.RandomState(1234)
 
         if not attn:
@@ -143,7 +145,7 @@ class BaselineAggLSTM2(BaseModel):
         self.series = p.new_tensor(series_matrix)
 
         self.max_start = len(
-            self.series[i]) - self.forecast_length * 2 - self.total_length
+            self.series[i]) - self.forecast_length * 2 - self.total_length - self.end_offset
 
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]

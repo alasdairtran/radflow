@@ -39,6 +39,7 @@ class NewNaive(BaseModel):
                  forecast_length: int = 7,
                  backcast_length: int = 42,
                  test_lengths: List[int] = [7],
+                 end_offset: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -49,6 +50,7 @@ class NewNaive(BaseModel):
         self.rs = np.random.RandomState(1234)
         self.device = torch.device('cuda:0')
         self.method = method
+        self.end_offset = end_offset
 
         assert method in ['previous_day', 'previous_week']
 
@@ -72,7 +74,7 @@ class NewNaive(BaseModel):
             self.series[k] = self._float.new_tensor(v_array)
 
         self.max_start = len(
-            self.series[k]) - self.forecast_length * 2 - self.total_length
+            self.series[k]) - self.forecast_length * 2 - self.total_length - self.end_offset
 
     def forward(self, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
@@ -163,6 +165,7 @@ class BaselineAggLSTM4(BaseModel):
                  t_total: int = 163840,
                  variant: str = 'full',
                  static_graph: bool = False,
+                 end_offset: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = LSTMDecoder(hidden_size, num_layers, dropout, variant)
@@ -180,6 +183,7 @@ class BaselineAggLSTM4(BaseModel):
         self.t_total = t_total
         self.current_t = 0
         self.static_graph = static_graph
+        self.end_offset = end_offset
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -249,7 +253,7 @@ class BaselineAggLSTM4(BaseModel):
         self.series = p.new_tensor(series_matrix)
 
         self.max_start = len(
-            self.series[i]) - self.forecast_length * 2 - self.total_length
+            self.series[i]) - self.forecast_length * 2 - self.total_length - self.end_offset
 
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]

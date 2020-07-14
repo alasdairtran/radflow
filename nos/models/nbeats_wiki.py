@@ -178,6 +178,7 @@ class NBEATSWiki(BaseModel):
                  share_weights_in_stack: bool = False,
                  peek: bool = False,
                  net: str = 'nbeats',
+                 end_offset: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -191,11 +192,25 @@ class NBEATSWiki(BaseModel):
         self.device = torch.device('cuda:0')
         self.max_start = None
         self.missing_p = missing_p
+        self.end_offset = end_offset
         # self.diff = {}
         initializer(self)
 
-        with open(f'{data_dir}/{seed_word}.pkl', 'rb') as f:
-            self.in_degrees, _, self.series, self.neighs = pickle.load(f)
+        series_path = f'{data_dir}/{seed_word}/series.pkl'
+        logger.info(f'Loading {series_path} into model')
+        with open(series_path, 'rb') as f:
+            self.series = pickle.load(f)
+
+        if max_neighbours > 0:
+            in_degrees_path = f'{data_dir}/{seed_word}/in_degrees.pkl'
+            logger.info(f'Loading {in_degrees_path} into model')
+            with open(in_degrees_path, 'rb') as f:
+                self.in_degrees = pickle.load(f)
+
+            neighs_path = f'{data_dir}/{seed_word}/neighs.pkl'
+            logger.info(f'Loading {neighs_path} into model')
+            with open(neighs_path, 'rb') as f:
+                self.neighs = pickle.load(f)
 
         if net == 'nbeats':
             self.net = NBeatsNet(device=torch.device('cuda:0'),
@@ -266,24 +281,30 @@ class NBEATSWiki(BaseModel):
         for k, v in self.series.items():
             self.series[k] = np.asarray(v).astype(float)
 
-        for k, v in self.neighs.items():
-            for t in v.keys():
-                self.neighs[k][t] = self.neighs[k][t][:self.max_neighbours]
+        if self.max_neighbours > 0:
+            for k, v in self.neighs.items():
+                for t in v.keys():
+                    self.neighs[k][t] = self.neighs[k][t]
 
-        # Sort by view counts
-        logger.info('Processing edges')
-        for node, neighs in tqdm(self.in_degrees.items()):
-            neigh_dict = {}
-            for n in neighs:
-                neigh_dict[n['id']] = p.new_tensor(np.asarray(n['mask']))
-            self.in_degrees[node] = neigh_dict
+            # Sort by view counts
+            logger.info('Processing edges')
+            self.mask_dict = {}
+            for node, neighs in tqdm(self.in_degrees.items()):
+                neigh_dict = {}
+                node_masks = np.ones((len(neighs), len(self.series[node])),
+                                     dtype=bool)
+                for i, n in enumerate(neighs):
+                    node_masks[i] = n['mask']
+                    neigh_dict[n['id']] = i
+                self.in_degrees[node] = neigh_dict
+                self.mask_dict[node] = p.new_tensor(node_masks)
 
         for k, v in self.series.items():
             v_array = np.asarray(v)
             self.series[k] = p.new_tensor(v_array)
 
         self.max_start = len(
-            self.series[k]) - self.forecast_length * 2 - self.total_length
+            self.series[k]) - self.forecast_length * 2 - self.total_length - self.end_offset
 
         # for k, v in self.series.items():
         #     if self.missing_p > 0:
