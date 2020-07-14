@@ -508,6 +508,7 @@ class BaselineAggLSTM4(BaseModel):
             out_dict['smapes'] = smapes.tolist()
             out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
+            out_dict['preds'] = preds.cpu().numpy().tolist()
             self.history['_n_samples'] += len(keys)
             self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
 
