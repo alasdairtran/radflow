@@ -37,12 +37,12 @@ class SubWikivNetworkReader(DatasetReader):
         random.seed(1234)
         self.rs = np.random.RandomState(1234)
 
-        in_degrees_path = f'data/wiki/subgraphs/{seed_word}/in_degrees.pkl'
+        in_degrees_path = f'{data_dir}/{seed_word}/in_degrees.pkl'
         logger.info(f'Loading {in_degrees_path} into dataset reader')
         with open(in_degrees_path, 'rb') as f:
             in_degrees = pickle.load(f)
 
-        series_path = f'data/wiki/subgraphs/{seed_word}/series.pkl'
+        series_path = f'{data_dir}/{seed_word}/series.pkl'
         logger.info(f'Loading {series_path} into dataset reader')
         with open(series_path, 'rb') as f:
             series = pickle.load(f)
