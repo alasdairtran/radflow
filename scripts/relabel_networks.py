@@ -84,8 +84,8 @@ def relabel_networks():
 
     #     for key, values in obj.items():
     #         values = sorted(values, key=lambda x: x[2], reverse=True)
-    #         sources = [v[0] for v in values]
-    #         snapshots[i][key] = sources
+    #         s = [v[0] for v in values]
+    #         snapshots[i][key] = s
 
     # snapshot_path = os.path.join(data_dir, 'snapshots.json')
     # with open(snapshot_path, 'w') as f:
