@@ -190,7 +190,7 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
             k_neighs = [n['id'] for n in v if n['mask'][t] == 0]
             k_views = [series[n['id']][t]
                        for n in v if n['mask'][t] == 0]
-            k_neighs = [x for _, x in sorted(zip(k_views, k_neighs))]
+            k_neighs = [x for _, x in sorted(zip(k_views, k_neighs), reverse=True)]
             neighs[k][t] = k_neighs
 
     os.makedirs(output_dir, exist_ok=True)
