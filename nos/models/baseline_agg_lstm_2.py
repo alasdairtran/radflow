@@ -118,10 +118,6 @@ class BaselineAggLSTM2(BaseModel):
             self.series[k] = np.asarray(v).astype(float)
 
         if self.agg_type != 'none':
-            for k, v in self.neighs.items():
-                for t in v.keys():
-                    self.neighs[k][t] = self.neighs[k][t]
-
             # Sort by view counts
             logger.info('Processing edges')
             self.mask_dict = {}
