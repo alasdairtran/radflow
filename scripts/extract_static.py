@@ -206,7 +206,8 @@ def grow_from_seeds(key, seeds, mongo_host, matrix_path, i):
 
 def get_dynamic_info(in_degrees, n_days, db):
     origin = datetime(2015, 7, 1)
-    endpoint = datetime(2020, 6, 9)  # includes endpoint
+    # endpoint = datetime(2020, 6, 9)  # includes endpoint
+    endpoint = datetime(2020, 7, 13)  # includes endpoint
 
     new_in_degrees = {k: [] for k in in_degrees.keys()}
     for k, neighs in tqdm(in_degrees.items()):
