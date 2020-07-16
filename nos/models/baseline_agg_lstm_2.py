@@ -48,6 +48,7 @@ class BaselineAggLSTM2(BaseModel):
                  detach: bool = False,
                  batch_as_subgraph: bool = False,
                  max_train_forecast_len: int = 1,
+                 neigh_sample: bool = False,
                  t_total: int = 163840,
                  static_graph: bool = False,
                  end_offset: int = 0,
@@ -71,7 +72,9 @@ class BaselineAggLSTM2(BaseModel):
         self.current_t = 0
         self.static_graph = static_graph
         self.end_offset = end_offset
+        self.neigh_sample = neigh_sample
         self.rs = np.random.RandomState(1234)
+        self.sample_rs = np.random.RandomState(3456)
 
         if not attn:
             self.decoder = nn.LSTM(1, hidden_size, num_layers,
@@ -189,6 +192,14 @@ class BaselineAggLSTM2(BaseModel):
                         kn |= set(self.neighs[key][day]) & batch_set
                     elif self.static_graph:
                         kn &= set(self.neighs[key][day])
+                    elif self.neigh_sample and self.training:
+                        kn |= set(self.sample_rs.choice(
+                            self.neighs[key][day],
+                            min(len(self.neighs[key][day]),
+                                self.max_neighbours),
+                            replace=False))
+                    elif self.neigh_sample:
+                        kn |= set(self.neighs[key][day])
                     else:
                         kn |= set(self.neighs[key][day][:self.max_neighbours])
 

@@ -162,6 +162,7 @@ class BaselineAggLSTM4(BaseModel):
                  detach: bool = False,
                  batch_as_subgraph: bool = False,
                  max_train_forecast_len: int = 1,
+                 neigh_sample: bool = False,
                  t_total: int = 163840,
                  variant: str = 'full',
                  static_graph: bool = False,
@@ -184,9 +185,11 @@ class BaselineAggLSTM4(BaseModel):
         self.current_t = 0
         self.static_graph = static_graph
         self.end_offset = end_offset
+        self.neigh_sample = neigh_sample
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
+        self.sample_rs = np.random.RandomState(3456)
 
         assert agg_type in ['mean', 'none']
         self.agg_type = agg_type
@@ -295,6 +298,14 @@ class BaselineAggLSTM4(BaseModel):
                         kn |= set(self.neighs[key][day]) & batch_set
                     elif self.static_graph:
                         kn &= set(self.neighs[key][day])
+                    elif self.neigh_sample and self.training:
+                        kn |= set(self.sample_rs.choice(
+                            self.neighs[key][day],
+                            min(len(self.neighs[key][day]),
+                                self.max_neighbours),
+                            replace=False))
+                    elif self.neigh_sample:
+                        kn |= set(self.neighs[key][day])
                     else:
                         kn |= set(self.neighs[key][day][:self.max_neighbours])
 
