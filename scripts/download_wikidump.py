@@ -21,7 +21,7 @@ def add_months(sourcedate, months):
 
 def download_wiki():
     # This takes a few days
-    main_url = 'https://dumps.wikimedia.org/enwiki/20200201/'
+    main_url = 'https://dumps.wikimedia.org/enwiki/20200701/'
     page = requests.get(main_url)
     assert page.status_code == 200
 
