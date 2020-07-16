@@ -40,7 +40,11 @@ python scripts/get_traffic.py -m dijkstra -b 1 -t 3 # cray
 python scripts/get_traffic.py -m dijkstra -b 2 -t 3 # braun
 
 # Extract static subgraphs for our first round of experiment
-python scripts/extract_static.py -r cray # dijsktra
+python scripts/extract_wiki_subgraph.py -e 2020013100 -d 10 "Global warming"
+python scripts/extract_wiki_subgraph.py -e 2020013100 -d 10 "Star Wars"
+python scripts/extract_wiki_subgraph.py -e 2020013100 -d 10 "Global health"
+python scripts/extract_wiki_subgraph.py -e 2020013100 -d 10 "Programming languages"
+python scripts/extract_wiki_subgraph.py -e 2020013100 -d 10 "Artificial intelligence"
 ```
 
 ## Training
