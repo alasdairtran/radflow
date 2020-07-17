@@ -277,7 +277,7 @@ class BaselineAggLSTM4(BaseModel):
 
         Xm, masks = self._construct_neighs(
             X, keys, start, total_len, X_cache)
-        Xm = self._aggregate(Xm, masks)
+        Xm = self._aggregate_mean(Xm, masks)
 
         X_out = self._pool(X, Xm)
         return X_out
@@ -383,7 +383,7 @@ class BaselineAggLSTM4(BaseModel):
         X_out = torch.cat([X, Xn], dim=-1)
         return X_out
 
-    def _aggregate(self, Xn, masks):
+    def _aggregate_mean(self, Xn, masks):
         # X.shape == [batch_size, seq_len, hidden_size]
         # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
         # masks.shape == [batch_size, n_neighs, seq_len]
