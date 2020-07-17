@@ -4,8 +4,6 @@ dataset_reader:
   data_dir: "./data/wiki/subgraphs"
   seed_word: programming_languages
   fp16: false
-  batch_size: 64
-  sampling: subgraph
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -24,6 +22,7 @@ model:
   backcast_length: 112
   test_lengths: [7, 14, 21, 28]
   max_neighbours: 4
+  neigh_sample: true
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
