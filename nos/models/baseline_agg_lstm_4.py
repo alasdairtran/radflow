@@ -159,7 +159,6 @@ class BaselineAggLSTM4(BaseModel):
                  hidden_size: int = 128,
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
-                 detach: bool = False,
                  batch_as_subgraph: bool = False,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
@@ -177,7 +176,6 @@ class BaselineAggLSTM4(BaseModel):
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
         self.test_lengths = test_lengths
-        self.detach = detach
         self.batch_as_subgraph = batch_as_subgraph
         self.t_total = t_total
         self.current_t = 0
@@ -277,15 +275,9 @@ class BaselineAggLSTM4(BaseModel):
         if self.agg_type == 'none':
             return X
 
-        if self.detach:
-            with torch.no_grad():
-                Xm, masks = self._construct_neighs(
-                    X, keys, start, total_len, X_cache)
-                Xm = self._aggregate(Xm, masks)
-        else:
-            Xm, masks = self._construct_neighs(
-                X, keys, start, total_len, X_cache)
-            Xm = self._aggregate(Xm, masks)
+        Xm, masks = self._construct_neighs(
+            X, keys, start, total_len, X_cache)
+        Xm = self._aggregate(Xm, masks)
 
         X_out = self._pool(X, Xm)
         return X_out
