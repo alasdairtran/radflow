@@ -379,12 +379,11 @@ class BaselineAggLSTM2(BaseModel):
         series = torch.log1p(raw_series)
 
         X_full = self._forward_full(series)
-        X_full = X_full[:, i:]
         X = X_full[:, :-1]
         # X.shape == [batch_size, seq_len, hidden_size]
 
         X_agg = self._get_neighbour_embeds(
-            X, keys, start + i, self.total_length - i, X_full)
+            X, keys, start, self.total_length, X_full)
         # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
         X_agg = self.fc(X_agg)
@@ -394,7 +393,7 @@ class BaselineAggLSTM2(BaseModel):
         preds = torch.exp(preds)
         # preds.shape == [batch_size, seq_len]
 
-        targets = raw_series[:, 1+i:]
+        targets = raw_series[:, 1:]
         numerator = torch.abs(targets - preds)
         denominator = torch.abs(targets) + torch.abs(preds)
         loss = numerator / denominator

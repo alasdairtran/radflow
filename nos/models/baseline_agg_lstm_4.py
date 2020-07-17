@@ -196,7 +196,7 @@ class BaselineAggLSTM4(BaseModel):
             self.fc = GehringLinear(self.hidden_size, 1)
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
-                self.hidden_size, 4, dropout=0.1, bias=True,
+                hidden_size * 3, 4, dropout=0.1, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
 
         series_path = f'{data_dir}/{seed_word}/series.pkl'
@@ -427,7 +427,7 @@ class BaselineAggLSTM4(BaseModel):
         Xn = Xn.transpose(0, 1).reshape(N, B * T, E)
         # Xn.shape == [n_neighs, batch_size * seq_len, hidden_size]
 
-        key_padding_mask = masks.transpose(0, 1).reshape(N, B * T)
+        key_padding_mask = masks.transpose(1, 2).reshape(B * T, N)
         # key_padding_mask.shape == [n_neighs, batch_size  * seq_len]
 
         X_attn, _ = self.attn(X, Xn, Xn, key_padding_mask, False)
@@ -480,16 +480,13 @@ class BaselineAggLSTM4(BaseModel):
         series = torch.log1p(raw_series)
 
         X_full, preds_full = self._forward_full(series)
-        X_full = X_full[:, i:]
-        preds_full = preds_full[:, i:]
-
         X = X_full[:, :-1]
         preds = preds_full[:, :-1]
         # X.shape == [batch_size, seq_len, hidden_size]
 
         if self.agg_type != 'none':
             X_agg = self._get_neighbour_embeds(
-                X, keys, start + i, self.total_length - i, X_full)
+                X, keys, start, self.total_length, X_full)
             # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
             X_agg = self.fc(F.gelu(self.out_proj(X_agg)))
@@ -500,7 +497,7 @@ class BaselineAggLSTM4(BaseModel):
 
         preds = torch.exp(preds)
 
-        targets = raw_series[:, 1+i:]
+        targets = raw_series[:, 1:]
         numerator = torch.abs(targets - preds)
         denominator = torch.abs(targets) + torch.abs(preds)
         loss = numerator / denominator
