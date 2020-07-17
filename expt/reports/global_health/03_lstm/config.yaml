@@ -1,0 +1,67 @@
+# Number of trainable parameters:
+dataset_reader:
+  type: subwiki_network
+  data_dir: "./data/wiki/subgraphs"
+  seed_word: global_health
+  fp16: false
+train_data_path: train
+validation_data_path: valid
+test_data_path: test
+vocabulary:
+  type: empty_vocab
+model:
+  type: baseline_agg_lstm_2
+  agg_type: none
+  peek: true
+  data_dir: "./data/wiki/subgraphs"
+  seed_word: global_health
+  num_layers: 8
+  hidden_size: 164
+  dropout: 0.1
+  backcast_length: 112
+  forecast_length: 28
+  test_lengths: [7, 14, 21, 28]
+  initializer:
+    - - ^decoder.weight*
+      - type: orthogonal
+    - - ^decoder.bias*
+      - type: zero
+iterator:
+  type: basic
+  batch_size: 64
+  cache_instances: false
+  instances_per_epoch: 524288
+validation_iterator:
+  type: basic
+  batch_size: 64
+  cache_instances: false
+trainer:
+  type: callback_apex
+  apex_opt_level: O1
+  keep_batchnorm_fp32: None
+  optimizer:
+    type: bert_adam
+    lr: 0.0001
+    weight_decay: 0.0001
+    warmup: 0.05
+    t_total: 81920 # 8192 batches per epoch
+    max_grad_norm: 0.1
+    parameter_groups:
+      - - - ^decoder
+        - {}
+      - - - ^fc
+        - {}
+  num_epochs: 10
+  cuda_device: 0
+  shuffle: false
+  callbacks:
+    - type: checkpoint
+    # - type: archive
+    - type: track_metrics
+      patience: 10
+      validation_metric: "-smape_28"
+    - type: validate
+    - type: log_to_tensorboard
+      summary_interval: 100
+      should_log_parameter_statistics: false
+      log_batch_size_period: 1000
