@@ -45,6 +45,7 @@ class BaselineAggLSTM2(BaseModel):
                  hidden_size: int = 128,
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
+                 max_agg_neighbours: int = 4,
                  batch_as_subgraph: bool = False,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
@@ -58,6 +59,7 @@ class BaselineAggLSTM2(BaseModel):
         self.hidden_size = hidden_size
         self.peek = peek
         self.max_neighbours = max_neighbours
+        self.max_agg_neighbours = max_agg_neighbours
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
@@ -221,7 +223,7 @@ class BaselineAggLSTM2(BaseModel):
                 elif self.neigh_sample and not self.evaluate_mode:
                     kn = set(self.sample_rs.choice(
                         list(kn), min(len(kn),
-                                      self.max_neighbours),
+                                      self.max_agg_neighbours),
                         replace=False))
 
                 key_neighs[key] = kn
