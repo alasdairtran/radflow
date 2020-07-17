@@ -47,7 +47,6 @@ class BaselineAggLSTM2(BaseModel):
                  max_neighbours: int = 4,
                  detach: bool = False,
                  batch_as_subgraph: bool = False,
-                 max_train_forecast_len: int = 1,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
                  static_graph: bool = False,
@@ -67,7 +66,6 @@ class BaselineAggLSTM2(BaseModel):
         self.detach = detach
         self.batch_as_subgraph = batch_as_subgraph
         self.max_start = None
-        self.max_train_forecast_len = max_train_forecast_len
         self.t_total = t_total
         self.current_t = 0
         self.static_graph = static_graph
@@ -355,39 +353,31 @@ class BaselineAggLSTM2(BaseModel):
 
         log_raw_series = torch.log1p(raw_series)
 
-        loss = 0
-        cur_forcast_len = max(1, int(round((self.current_t / self.t_total) *
-                                           self.max_train_forecast_len)))
-        current_series = raw_series.clone().detach()
-        for i in range(cur_forcast_len):
-            series = torch.log1p(current_series)
+        series = torch.log1p(raw_series)
 
-            X_full = self._forward_full(series)
-            X_full = X_full[:, i:]
-            X = X_full[:, :-1]
-            # X.shape == [batch_size, seq_len, hidden_size]
+        X_full = self._forward_full(series)
+        X_full = X_full[:, i:]
+        X = X_full[:, :-1]
+        # X.shape == [batch_size, seq_len, hidden_size]
 
-            X_agg = self._get_neighbour_embeds(
-                X, keys, start + i, self.total_length - i, X_full)
-            # X_agg.shape == [batch_size, seq_len, out_hidden_size]
+        X_agg = self._get_neighbour_embeds(
+            X, keys, start + i, self.total_length - i, X_full)
+        # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
-            X_agg = self.fc(X_agg)
-            # X_agg.shape == [batch_size, seq_len, 1]
+        X_agg = self.fc(X_agg)
+        # X_agg.shape == [batch_size, seq_len, 1]
 
-            preds = X_agg.squeeze(-1)
-            preds = torch.exp(preds)
-            # preds.shape == [batch_size, seq_len]
+        preds = X_agg.squeeze(-1)
+        preds = torch.exp(preds)
+        # preds.shape == [batch_size, seq_len]
 
-            targets = raw_series[:, 1+i:]
-            numerator = torch.abs(targets - preds)
-            denominator = torch.abs(targets) + torch.abs(preds)
-            loss_i = numerator / denominator
-            loss_i[torch.isnan(loss_i)] = 0
-            loss = loss + loss_i.mean()
-
-            current_series = torch.cat([current_series[:, :1+i], preds], dim=1)
-
-        out_dict['loss'] = loss / cur_forcast_len
+        targets = raw_series[:, 1+i:]
+        numerator = torch.abs(targets - preds)
+        denominator = torch.abs(targets) + torch.abs(preds)
+        loss = numerator / denominator
+        loss[torch.isnan(loss)] = 0
+        loss = loss + loss.mean()
+        out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
         if split in ['valid', 'test']:
