@@ -247,10 +247,10 @@ class BaselineAggLSTM4(BaseModel):
             self.mask_dict = {}
             for node, neighs in tqdm(self.in_degrees.items()):
                 neigh_dict = {}
-                node_masks = np.ones((len(neighs), len(self.series[node])),
-                                     dtype=bool)
+                seq_len = len(self.series[node])
+                node_masks = np.ones((len(neighs), seq_len), dtype=bool)
                 for i, n in enumerate(neighs):
-                    node_masks[i] = n['mask']
+                    node_masks[i] = n['mask'][:seq_len]
                     neigh_dict[n['id']] = i
                 self.in_degrees[node] = neigh_dict
                 self.mask_dict[node] = p.new_tensor(node_masks)

@@ -54,7 +54,7 @@ def get_series(seed, series_path, cat_path, title2id_path, db, max_depth, end):
     logger.info(f'Getting series for {seed}')
     pbar = tqdm(position=0)
     with open(cat_path, 'w') as f:
-        f.write(f'{seed}\n')
+        f.write(f'{seed}\t0\n')
         while unexplored_queue:
             query = unexplored_queue.popleft()
             cat_titles, cat_title2id = get_titles_from_cat(query, db)
@@ -87,7 +87,7 @@ def get_series(seed, series_path, cat_path, title2id_path, db, max_depth, end):
                         d = cat_depths[query] + 1
                         if cat not in cats and d < max_depth:
                             cats.add(cat)
-                            f.write(f'{cat}\n')
+                            f.write(f'{cat}\t{d}\n')
                             unexplored_queue.append(cat)
                             cat_depths[cat] = d
 
@@ -168,6 +168,7 @@ def get_dynamic_edges(keys, title2id, n_days, db):
                         if end < 0:
                             continue
                         end += 1  # since we need to exclude endpoint
+                        end = min(n_days, end)
                     duration = end - start
                     in_degrees[v][-1]['mask'][start:end] = [False] * duration
 
