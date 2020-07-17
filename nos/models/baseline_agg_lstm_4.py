@@ -226,7 +226,17 @@ class BaselineAggLSTM4(BaseModel):
 
         p = next(self.parameters())
         for k, v in self.series.items():
-            self.series[k] = np.asarray(v).astype(float)
+            v = np.asarray(v).astype(float)
+            # Fill out missing values
+            mask = v == -1
+            idx = np.where(~mask, np.arange(len(mask)), 0)
+            np.maximum.accumulate(idx, out=idx)
+            v[mask] = v[idx[mask]]
+
+            # Replace remaining initial views with 0
+            v[v == -1] = 0
+
+            self.series[k] = v
 
         if self.agg_type != 'none':
             # Sort by view counts
