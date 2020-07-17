@@ -398,7 +398,7 @@ class BaselineAggLSTM2(BaseModel):
         denominator = torch.abs(targets) + torch.abs(preds)
         loss = numerator / denominator
         loss[torch.isnan(loss)] = 0
-        loss = loss + loss.mean()
+        loss = loss.mean()
         out_dict['loss'] = loss
 
         # During evaluation, we compute one time step at a time
