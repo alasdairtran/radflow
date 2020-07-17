@@ -75,6 +75,7 @@ class BaselineAggLSTM2(BaseModel):
         self.neigh_sample = neigh_sample
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
+        self.evaluate_mode = False
 
         if not attn:
             self.decoder = nn.LSTM(1, hidden_size, num_layers,
@@ -202,7 +203,7 @@ class BaselineAggLSTM2(BaseModel):
                         kn |= set(self.neighs[key][day]) & batch_set
                     elif self.static_graph:
                         kn &= set(self.neighs[key][day])
-                    elif self.neigh_sample and self.training:
+                    elif self.neigh_sample and not self.evaluate_mode:
                         kn |= set(self.sample_rs.choice(
                             self.neighs[key][day],
                             min(len(self.neighs[key][day]),
@@ -219,6 +220,11 @@ class BaselineAggLSTM2(BaseModel):
                              for k in kn}
                     sorted_kn = sorted(views.items(), key=lambda x: x[1])
                     kn = set(p[0] for p in sorted_kn[:self.max_neighbours])
+                elif self.neigh_sample and not self.evaluate_mode:
+                    kn = set(self.sample_rs.choice(
+                        list(kn), min(len(kn),
+                                      self.max_neighbours),
+                        replace=False))
 
                 key_neighs[key] = kn
                 all_neigh_keys |= kn

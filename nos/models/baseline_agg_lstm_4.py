@@ -186,6 +186,7 @@ class BaselineAggLSTM4(BaseModel):
         self.static_graph = static_graph
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
+        self.evaluate_mode = False
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -308,7 +309,7 @@ class BaselineAggLSTM4(BaseModel):
                         kn |= set(self.neighs[key][day]) & batch_set
                     elif self.static_graph:
                         kn &= set(self.neighs[key][day])
-                    elif self.neigh_sample and self.training:
+                    elif self.neigh_sample and not self.evaluate_mode:
                         kn |= set(self.sample_rs.choice(
                             self.neighs[key][day],
                             min(len(self.neighs[key][day]),
@@ -325,6 +326,11 @@ class BaselineAggLSTM4(BaseModel):
                              for k in kn}
                     sorted_kn = sorted(views.items(), key=lambda x: x[1])
                     kn = set(p[0] for p in sorted_kn[:self.max_neighbours])
+                elif self.neigh_sample and not self.evaluate_mode:
+                    kn = set(self.sample_rs.choice(
+                        list(kn), min(len(kn),
+                                      self.max_neighbours),
+                        replace=False))
 
                 key_neighs[key] = kn
                 all_neigh_keys |= kn
