@@ -80,12 +80,16 @@ class BaselineAggLSTM2(BaseModel):
             self.decoder = TransformerDecoder(
                 hidden_size, num_layers, dropout, self.total_length)
 
-        assert agg_type in ['mean', 'none']
+        assert agg_type in ['mean', 'none', 'attention']
         self.agg_type = agg_type
         self.fc = GehringLinear(self.hidden_size, 1)
-        if agg_type in ['mean']:
+        if agg_type in ['mean', 'attention']:
             self.out_proj = GehringLinear(
                 self.hidden_size * 2, self.hidden_size)
+        if agg_type == 'attention':
+            self.attn = nn.MultiheadAttention(
+                self.hidden_size, 4, dropout=0.1, bias=True,
+                add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
 
         series_path = f'{data_dir}/{seed_word}/series.pkl'
         logger.info(f'Loading {series_path} into model')
@@ -171,7 +175,11 @@ class BaselineAggLSTM2(BaseModel):
 
         Xm, masks = self._construct_neighs(
             X, keys, start, total_len, X_cache)
-        Xm = self._aggregate_mean(Xm, masks)
+
+        if self.agg_type == 'mean':
+            Xm = self._aggregate_mean(Xm, masks)
+        elif self.agg_type == 'attention':
+            Xm = self._aggregate_attn(X, Xm, masks)
 
         X_out = self._pool(X, Xm)
         return X_out
@@ -304,6 +312,29 @@ class BaselineAggLSTM2(BaseModel):
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
         return Xn
+
+    def _aggregate_attn(self, Xn, X, masks):
+        # X.shape == [batch_size, seq_len, hidden_size]
+        # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
+        # masks.shape == [batch_size, n_neighs, seq_len]
+
+        B, N, T, E = Xn.shape
+
+        X = X.reshape(1, B * T, E)
+        # X.shape == [1, batch_size * seq_len, hidden_size]
+
+        Xn = Xn.transpose(0, 1).reshape(N, B * T, E)
+        # Xn.shape == [n_neighs, batch_size * seq_len, hidden_size]
+
+        key_padding_mask = masks.transpose(0, 1).reshape(N, B * T)
+        # key_padding_mask.shape == [n_neighs, batch_size  * seq_len]
+
+        X_attn, _ = self.attn(X, Xn, Xn, key_padding_mask, False)
+        # X_attn.shape == [1, batch_size * seq_len, hidden_size]
+
+        X_out = X_attn.reshape(B, T, E)
+
+        return X_out
 
     def forward(self, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
