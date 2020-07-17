@@ -23,6 +23,7 @@ model:
   backcast_length: 42
   test_lengths: [7]
   max_neighbours: 4
+  neigh_sample: true
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
