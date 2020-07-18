@@ -43,7 +43,7 @@ def get_titles_from_cat(seed_word, db):
     return titles, title2id
 
 
-def get_series(seed, series_path, cat_path, title2id_path, neightitle2id_path, db, max_depth, end, matrix_path):
+def get_series(seed, series_path, cat_path, title2id_path, influence_path, neightitle2id_path, db, max_depth, end, matrix_path):
     series = {}
     title2id = {}
     id2title = {}
@@ -92,14 +92,17 @@ def get_series(seed, series_path, cat_path, title2id_path, neightitle2id_path, d
                             unexplored_queue.append(cat)
                             cat_depths[cat] = d
 
-    neightitle2id = grow_from_seeds(series, db, end, matrix_path)
-
     with open(series_path, 'wb') as f:
         pickle.dump(series, f)
     with open(title2id_path, 'wb') as f:
         pickle.dump(title2id, f)
+
+    neightitle2id, influence = grow_from_seeds(series, db, end, matrix_path)
+
     with open(neightitle2id_path, 'wb') as f:
         pickle.dump(neightitle2id, f)
+    with open(influence_path, 'wb') as f:
+        pickle.dump(influence, f)
 
 
 def grow_from_cats(key, seed, mongo_host, depth, end, matrix_path):
@@ -115,10 +118,11 @@ def grow_from_cats(key, seed, mongo_host, depth, end, matrix_path):
     title2id_path = os.path.join(output_dir, 'title2id.pkl')
     neightitle2id_path = os.path.join(output_dir, 'neightitle2id.pkl')
     neighs_path = os.path.join(output_dir, 'neighs.pkl')
+    influence_path = os.path.join(output_dir, 'influence.pkl')
 
     if not os.path.exists(series_path):
         get_series(seed, series_path, cat_path,
-                   title2id_path, neightitle2id_path, db, depth, end, matrix_path)
+                   title2id_path, influence_path, neightitle2id_path, db, depth, end, matrix_path)
     logger.info(f'Loading series from {series_path}')
     with open(series_path, 'rb') as f:
         series = pickle.load(f)
@@ -189,6 +193,7 @@ def grow_from_seeds(series, db, end, matrix_path):
     inlinks = {}
     counter = Counter()
     neightitle2id = {}
+    influence = {}
 
     for p in series:
         inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
@@ -203,9 +208,12 @@ def grow_from_seeds(series, db, end, matrix_path):
     pbar.update(len(inlinks))
     logger.info('Getting neighbouring nodes')
     while len(inlinks) < 10000:
-        p = counter.most_common(1)[0][0]
+        p, c = counter.most_common(1)[0]
         del counter[p]
         assert p not in inlinks
+
+        if c < 5:
+            break
 
         i = int(p)
         page = db.pages.find_one({'i': i}, projection=['title'])
@@ -220,6 +228,7 @@ def grow_from_seeds(series, db, end, matrix_path):
 
         inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
         series[p] = s
+        influence[p] = c
         neightitle2id[page['title']] = i
         for link in inlinks[p]:
             if link not in inlinks:
@@ -229,7 +238,7 @@ def grow_from_seeds(series, db, end, matrix_path):
     for link in inlinks:
         inlinks[link] = list(filter(lambda n: n in inlinks, inlinks[link]))
 
-    return neightitle2id
+    return neightitle2id, influence
 
 
 def get_traffic_for_page(o_title, i, db, end):
