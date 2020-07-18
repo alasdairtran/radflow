@@ -25,6 +25,7 @@ class SubWikivNetworkReader(DatasetReader):
                  seed_word: str = 'programming',
                  fp16: bool = True,
                  use_edge: bool = False,
+                 eval_edge: bool = False,
                  batch_size: int = 64,
                  sampling: str = 'random',
                  lazy: bool = True) -> None:
@@ -47,12 +48,13 @@ class SubWikivNetworkReader(DatasetReader):
         with open(series_path, 'rb') as f:
             series = pickle.load(f)
 
-        connected_keys = set(in_degrees.keys())
-        all_keys = set(series.keys())
-        self.keys = sorted(connected_keys) if use_edge else sorted(all_keys)
+        self.connected_keys = sorted(set(in_degrees.keys()))
+        self.all_keys = sorted(set(series.keys()))
+        self.keys = self.connected_keys if use_edge else self.all_keys
         self.rs.shuffle(self.keys)
         self.batch_size = batch_size
         self.in_degrees = in_degrees
+        self.eval_edge = eval_edge
 
     @overrides
     def _read(self, split: str):
@@ -78,7 +80,8 @@ class SubWikivNetworkReader(DatasetReader):
                             batch_set = set()
 
         elif split in ['valid', 'test']:
-            keys = sorted(self.keys)
+            keys = sorted(
+                self.connected_keys) if self.eval_edge else sorted(self.keys)
             for key in keys:
                 yield self.series_to_instance(key, split)
 
