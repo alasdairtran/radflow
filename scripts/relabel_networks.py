@@ -172,6 +172,8 @@ def relabel_networks():
     neighs = {k: {} for k in sources.keys()}
     for t in tqdm(range(n_days)):
         for k, v in sources.items():
+            k_views = [series[n][t] for n in v]
+            v = [x for _, x in sorted(zip(k_views, v), reverse=True)]
             neighs[k][t] = v
 
     output_dir = 'data/wiki/subgraphs/vevo_static'
