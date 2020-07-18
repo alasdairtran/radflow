@@ -15,11 +15,12 @@ import os
 import pickle
 import random
 import time
-from collections import deque
+from collections import Counter, deque
 from datetime import datetime, timedelta
 
 import ptvsd
 import requests
+import scipy.sparse as ss
 from bs4 import BeautifulSoup
 from docopt import docopt
 from pymongo import MongoClient
@@ -42,7 +43,7 @@ def get_titles_from_cat(seed_word, db):
     return titles, title2id
 
 
-def get_series(seed, series_path, cat_path, title2id_path, db, max_depth, end):
+def get_series(seed, series_path, cat_path, title2id_path, neightitle2id_path, db, max_depth, end, matrix_path):
     series = {}
     title2id = {}
     id2title = {}
@@ -91,13 +92,17 @@ def get_series(seed, series_path, cat_path, title2id_path, db, max_depth, end):
                             unexplored_queue.append(cat)
                             cat_depths[cat] = d
 
+    neightitle2id = grow_from_seeds(series, db, end, matrix_path)
+
     with open(series_path, 'wb') as f:
         pickle.dump(series, f)
     with open(title2id_path, 'wb') as f:
         pickle.dump(title2id, f)
+    with open(neightitle2id_path, 'wb') as f:
+        pickle.dump(neightitle2id, f)
 
 
-def grow_from_cats(key, seed, mongo_host, depth, end):
+def grow_from_cats(key, seed, mongo_host, depth, end, matrix_path):
     client = MongoClient(host=mongo_host, port=27017)
     db = client.wiki
 
@@ -108,20 +113,22 @@ def grow_from_cats(key, seed, mongo_host, depth, end):
     series_path = os.path.join(output_dir, 'series.pkl')
     in_degrees_path = os.path.join(output_dir, 'in_degrees.pkl')
     title2id_path = os.path.join(output_dir, 'title2id.pkl')
+    neightitle2id_path = os.path.join(output_dir, 'neightitle2id.pkl')
     neighs_path = os.path.join(output_dir, 'neighs.pkl')
 
     if not os.path.exists(series_path):
-        get_series(seed, series_path, cat_path, title2id_path, db, depth, end)
+        get_series(seed, series_path, cat_path,
+                   title2id_path, neightitle2id_path, db, depth, end, matrix_path)
     logger.info(f'Loading series from {series_path}')
     with open(series_path, 'rb') as f:
         series = pickle.load(f)
-    logger.info(f'Loading title2id from {series_path}')
+    logger.info(f'Loading title2id from {title2id_path}')
     with open(title2id_path, 'rb') as f:
         title2id = pickle.load(f)
 
     n_days = len(next(iter(series.values())))
     if not os.path.exists(in_degrees_path):
-        in_degrees = get_dynamic_edges(series.keys(), title2id, n_days, db)
+        in_degrees = get_dynamic_edges(title2id, n_days, db)
         with open(in_degrees_path, 'wb') as f:
             pickle.dump(in_degrees, f)
     logger.info(f'Loading dynamic edges from {in_degrees_path}')
@@ -143,10 +150,10 @@ def grow_from_cats(key, seed, mongo_host, depth, end):
             pickle.dump(neighs, f)
 
 
-def get_dynamic_edges(keys, title2id, n_days, db):
+def get_dynamic_edges(title2id, n_days, db):
     origin = datetime(2015, 7, 1)
 
-    in_degrees = {k: [] for k in keys}
+    in_degrees = {k: [] for k in title2id.values()}
     logger.info(f'Generating dynamic edges')
     for u in tqdm(in_degrees):
         page = db.pages.find_one({'i': u})
@@ -173,6 +180,56 @@ def get_dynamic_edges(keys, title2id, n_days, db):
                     in_degrees[v][-1]['mask'][start:end] = [False] * duration
 
     return in_degrees
+
+
+def grow_from_seeds(series, db, end, matrix_path):
+    matrix = ss.load_npz(matrix_path)
+    csc_matric = matrix.tocsc()
+
+    inlinks = {}
+    counter = Counter()
+    neightitle2id = {}
+
+    for p in series:
+        inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
+
+    for page in inlinks:
+        for link in inlinks[page]:
+            if link not in inlinks:
+                counter[link] += 1
+
+    # This between 5-30 minutes
+    pbar = tqdm(total=10000)
+    pbar.update(len(inlinks))
+    logger.info('Getting neighbouring nodes')
+    while len(inlinks) < 10000:
+        p = counter.most_common(1)[0][0]
+        del counter[p]
+        assert p not in inlinks
+
+        i = int(p)
+        page = db.pages.find_one({'i': i}, projection=['title'])
+        if page['title'].startswith('List of'):
+            continue
+
+        s = get_traffic_for_page(page['title'], i, db, end)
+        if s is None:
+            continue
+
+        pbar.update(1)
+
+        inlinks[p] = list(csc_matric.getcol(p).nonzero()[0])
+        series[p] = s
+        neightitle2id[page['title']] = i
+        for link in inlinks[p]:
+            if link not in inlinks:
+                counter[link] += 1
+    pbar.close()
+
+    for link in inlinks:
+        inlinks[link] = list(filter(lambda n: n in inlinks, inlinks[link]))
+
+    return neightitle2id
 
 
 def get_traffic_for_page(o_title, i, db, end):
@@ -239,8 +296,8 @@ def get_traffic_for_page(o_title, i, db, end):
             series.append(-1)
     assert len(series) == 1676
 
-    # The last 140 days must not contain missing data
-    if -1 in series[-140:]:
+    # Ignore pages containing missing data
+    if -1 in series:
         return None
 
     # Ignore low traffic pages
@@ -254,7 +311,8 @@ def get_traffic_for_page(o_title, i, db, end):
 
 def extract_all(mongo_host, seed, depth, end):
     key = seed.lower().replace(' ', '_')
-    grow_from_cats(key, seed, mongo_host, depth, end)
+    matrix_path = "data/wiki/static_edge_list_2015.npz"
+    grow_from_cats(key, seed, mongo_host, depth, end, matrix_path)
 
 
 def validate(args):
