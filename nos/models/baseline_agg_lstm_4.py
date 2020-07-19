@@ -162,6 +162,7 @@ class BaselineAggLSTM4(BaseModel):
                  max_agg_neighbours: int = 4,
                  batch_as_subgraph: bool = False,
                  neigh_sample: bool = False,
+                 equal_weight: bool = False,
                  t_total: int = 163840,
                  variant: str = 'full',
                  static_graph: bool = False,
@@ -184,6 +185,7 @@ class BaselineAggLSTM4(BaseModel):
         self.static_graph = static_graph
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
+        self.equal_weight = equal_weight
         self.evaluate_mode = False
 
         self.max_start = None
@@ -335,14 +337,21 @@ class BaselineAggLSTM4(BaseModel):
                 elif self.neigh_sample and not self.evaluate_mode:
                     pairs = counter.items()
                     candidates = np.array([p[0] for p in pairs])
-                    probs = np.array([p[1] for p in pairs])
-                    probs = probs / probs.sum()
-                    kn = set(self.sample_rs.choice(
-                        candidates,
-                        size=min(len(candidates), self.max_agg_neighbours),
-                        replace=False,
-                        p=probs,
-                    ))
+                    if self.equal_weight:
+                        kn = set(self.sample_rs.choice(
+                            candidates,
+                            size=min(len(candidates), self.max_agg_neighbours),
+                            replace=False,
+                        ))
+                    else:
+                        probs = np.array([p[1] for p in pairs])
+                        probs = probs / probs.sum()
+                        kn = set(self.sample_rs.choice(
+                            candidates,
+                            size=min(len(candidates), self.max_agg_neighbours),
+                            replace=False,
+                            p=probs,
+                        ))
                 # elif self.neigh_sample:
                 #     pairs = counter.most_common(self.max_agg_neighbours)
                 #     candidates = [p[0] for p in pairs]
