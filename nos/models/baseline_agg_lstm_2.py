@@ -209,8 +209,8 @@ class BaselineAggLSTM2(BaseModel):
                             min(len(self.neighs[key][day]),
                                 self.max_neighbours),
                             replace=False))
-                    elif self.neigh_sample:
-                        kn |= set(self.neighs[key][day])
+                    # elif self.neigh_sample:
+                    #     kn |= set(self.neighs[key][day])
                     else:
                         kn |= set(self.neighs[key][day][:self.max_neighbours])
 
