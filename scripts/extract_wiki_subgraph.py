@@ -97,7 +97,8 @@ def get_series(seed, series_path, cat_path, title2id_path, influence_path, count
     with open(title2id_path, 'wb') as f:
         pickle.dump(title2id, f)
 
-    neightitle2id, influence = grow_from_seeds(series, db, end, matrix_path, counter_path)
+    neightitle2id, influence = grow_from_seeds(
+        series, db, end, matrix_path, counter_path)
 
     with open(neightitle2id_path, 'wb') as f:
         pickle.dump(neightitle2id, f)
@@ -215,9 +216,6 @@ def grow_from_seeds(series, db, end, matrix_path, counter_path):
         p, c = counter.most_common(1)[0]
         del counter[p]
         assert p not in inlinks
-
-        if c < 5:
-            break
 
         i = int(p)
         page = db.pages.find_one({'i': i}, projection=['title'])
