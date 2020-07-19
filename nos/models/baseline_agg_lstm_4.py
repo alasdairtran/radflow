@@ -1,7 +1,7 @@
 import logging
 import os
 import pickle
-from collections import defaultdict
+from collections import Counter, defaultdict
 from copy import deepcopy
 from typing import Any, Dict, List
 
@@ -304,19 +304,15 @@ class BaselineAggLSTM4(BaseModel):
             if key in self.neighs:
                 kn = set(self.neighs[key][start]) \
                     if self.static_graph else set()
+                counter = Counter()
                 for day in range(start, start+total_len):
                     if self.training and self.batch_as_subgraph:
                         kn |= set(self.neighs[key][day]) & batch_set
                     elif self.static_graph:
                         kn &= set(self.neighs[key][day])
-                    elif self.neigh_sample and not self.evaluate_mode:
-                        kn |= set(self.sample_rs.choice(
-                            self.neighs[key][day],
-                            min(len(self.neighs[key][day]),
-                                self.max_neighbours),
-                            replace=False))
-                    # elif self.neigh_sample:
-                    #     kn |= set(self.neighs[key][day])
+                    elif self.neigh_sample:
+                        kn |= set(self.neighs[key][day])
+                        counter.update(self.neighs[key][day])
                     else:
                         kn |= set(self.neighs[key][day][:self.max_neighbours])
 
@@ -327,10 +323,16 @@ class BaselineAggLSTM4(BaseModel):
                     sorted_kn = sorted(views.items(), key=lambda x: x[1])
                     kn = set(p[0] for p in sorted_kn[:self.max_neighbours])
                 elif self.neigh_sample and not self.evaluate_mode:
+                    pairs = counter.items()
+                    candidates = np.array([p[0] for p in pairs])
+                    probs = np.array([p[1] for p in pairs])
+                    probs = probs / probs.sum()
                     kn = set(self.sample_rs.choice(
-                        list(kn), min(len(kn),
-                                      self.max_agg_neighbours),
-                        replace=False))
+                        candidates,
+                        size=min(len(candidates), self.max_agg_neighbours),
+                        replace=False,
+                        p=probs,
+                    ))
 
                 key_neighs[key] = kn
                 all_neigh_keys |= kn
