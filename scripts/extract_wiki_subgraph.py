@@ -43,7 +43,7 @@ def get_titles_from_cat(seed_word, db):
     return titles, title2id
 
 
-def get_series(seed, series_path, cat_path, title2id_path, influence_path, counter_path, neightitle2id_path, db, max_depth, end, matrix_path):
+def get_series(seed, series_path, cat_path, title2id_path, influence_path, remaining_path, counter_path, neightitle2id_path, db, max_depth, end, matrix_path):
     series = {}
     title2id = {}
     id2title = {}
@@ -97,13 +97,15 @@ def get_series(seed, series_path, cat_path, title2id_path, influence_path, count
     with open(title2id_path, 'wb') as f:
         pickle.dump(title2id, f)
 
-    neightitle2id, influence = grow_from_seeds(
+    neightitle2id, influence, remaining = grow_from_seeds(
         series, db, end, matrix_path, counter_path)
 
     with open(neightitle2id_path, 'wb') as f:
         pickle.dump(neightitle2id, f)
     with open(influence_path, 'wb') as f:
         pickle.dump(influence, f)
+    with open(remaining_path, 'wb') as f:
+        pickle.dump(remaining, f)
 
 
 def grow_from_cats(key, seed, mongo_host, depth, end, matrix_path):
@@ -121,10 +123,11 @@ def grow_from_cats(key, seed, mongo_host, depth, end, matrix_path):
     neighs_path = os.path.join(output_dir, 'neighs.pkl')
     influence_path = os.path.join(output_dir, 'influence.pkl')
     counter_path = os.path.join(output_dir, 'counter.pkl')
+    remaining_path = os.path.join(output_dir, 'remaining.pkl')
 
     if not os.path.exists(series_path):
         get_series(seed, series_path, cat_path,
-                   title2id_path, influence_path, counter_path, neightitle2id_path, db, depth, end, matrix_path)
+                   title2id_path, influence_path, remaining_path, counter_path, neightitle2id_path, db, depth, end, matrix_path)
     logger.info(f'Loading series from {series_path}')
     with open(series_path, 'rb') as f:
         series = pickle.load(f)
@@ -212,7 +215,7 @@ def grow_from_seeds(series, db, end, matrix_path, counter_path):
     pbar = tqdm(total=10000)
     pbar.update(len(inlinks))
     logger.info('Getting neighbouring nodes')
-    while len(inlinks) < 10000:
+    while len(inlinks) < 10000 or len(counter) > 0:
         p, c = counter.most_common(1)[0]
         del counter[p]
         assert p not in inlinks
@@ -240,7 +243,7 @@ def grow_from_seeds(series, db, end, matrix_path, counter_path):
     for link in inlinks:
         inlinks[link] = list(filter(lambda n: n in inlinks, inlinks[link]))
 
-    return neightitle2id, influence
+    return neightitle2id, influence, counter
 
 
 def get_traffic_for_page(o_title, i, db, end):
