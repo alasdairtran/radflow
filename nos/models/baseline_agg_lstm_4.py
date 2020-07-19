@@ -16,7 +16,7 @@ from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
 from torch_geometric.data import Data
-from torch_geometric.nn import SAGEConv
+from torch_geometric.nn import GATConv, SAGEConv
 from tqdm import tqdm
 
 from nos.modules import Decoder
@@ -190,16 +190,22 @@ class BaselineAggLSTM4(BaseModel):
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
 
-        assert agg_type in ['mean', 'none', 'attention']
+        assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
-        if agg_type in ['mean', 'attention']:
+        if agg_type in ['mean', 'attention', 'sage', 'gat']:
             self.out_proj = GehringLinear(
                 6 * self.hidden_size, self.hidden_size)
             self.fc = GehringLinear(self.hidden_size, 1)
+
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
                 hidden_size * 3, 4, dropout=0.1, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+        elif agg_type == 'sage':
+            self.conv = SAGEConv(hidden_size * 3, hidden_size * 3)
+        elif agg_type == 'gat':
+            self.conv = GATConv(hidden_size * 3, hidden_size * 3 // 4,
+                                heads=4, dropout=0.1)
 
         series_path = f'{data_dir}/{seed_word}/series.pkl'
         logger.info(f'Loading {series_path} into model')
@@ -288,6 +294,8 @@ class BaselineAggLSTM4(BaseModel):
             Xm = self._aggregate_mean(Xm, masks)
         elif self.agg_type == 'attention':
             Xm = self._aggregate_attn(X, Xm, masks)
+        elif self.agg_type in ['gat', 'sage']:
+            Xm = self._aggregate_gat(X, Xm, masks)
 
         X_out = self._pool(X, Xm)
         return X_out
@@ -446,6 +454,51 @@ class BaselineAggLSTM4(BaseModel):
         X_out = X_attn.reshape(B, T, E)
 
         return X_out
+
+    def _aggregate_gat(self, X, Xn, masks):
+        # X.shape == [batch_size, seq_len, hidden_size]
+        # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
+        # masks.shape == [batch_size, n_neighs, seq_len]
+
+        B, N, T, E = Xn.shape
+
+        Xn = Xn.reshape(B * N * T, E)
+        # Xn.shape == [batch_size * n_neighs * seq_len, hidden_size]
+
+        X_in = X.reshape(B * T, E)
+        # X_in.shape == [batch_size * seq_len, hidden_size]
+
+        # The indices 0...(BT - 1) will enumerate the central nodes
+        # The indices BT...(BT + BNT - 1) will enumerate the neighbours
+
+        # Add self-loops to central nodes
+        sources = [i for i in range(B * T)]
+        targets = [i for i in range(B * T)]
+
+        for b in range(B):
+            for t in range(T):
+                for n in range(N):
+                    if not masks[b, n, t]:
+                        sources.append(B * T + N * T * b + T * n + t)
+                        targets.append(T * b + t)
+
+        edges = torch.tensor([sources, targets]).to(X.device)
+        nodes = torch.cat([X_in, Xn], dim=0)
+        # nodes.shape == [BT + BNT, hidden_size]
+
+        nodes = self.conv(nodes, edges)
+        # nodes.shape == [BT + BNT, hidden_size]
+
+        nodes = nodes[:B * T]
+        # nodes.shape == [BT, hidden_size]
+
+        nodes = F.elu(nodes)
+        # nodes.shape == [BT, hidden_size]
+
+        X_agg = nodes.reshape(B, T, E)
+        # X_agg.shape == [batch_size, seq_len, hidden_size]
+
+        return X_agg
 
     def forward(self, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
