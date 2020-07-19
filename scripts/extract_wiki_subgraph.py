@@ -215,8 +215,10 @@ def grow_from_seeds(series, db, end, matrix_path, counter_path):
     pbar = tqdm(total=10000)
     pbar.update(len(inlinks))
     logger.info('Getting neighbouring nodes')
-    while len(inlinks) < 10000 or len(counter) > 0:
+    while len(counter) > 0:
         p, c = counter.most_common(1)[0]
+        if c == 1:
+            break
         del counter[p]
         assert p not in inlinks
 
