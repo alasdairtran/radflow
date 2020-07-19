@@ -29,8 +29,9 @@ python scripts/download_wikidump.py
 # If we use a single thread (no parallelization), it takes between 3-7 hours
 # to go through each file. The following scripts construct a mongo database
 # for the entire wiki graph
-python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 39 --total 336 --split 0 # cray
-python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host localhost --n-jobs 39 --total 336 --split 1 # dijkstra
+python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 24 --total 232 --split 0 # braun
+python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 1 # cray
+python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 2 # cray
 python scripts/extract_graph.py --reindex
 
 # Get page view counts directly from wiki API

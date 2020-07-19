@@ -388,7 +388,7 @@ def convert_to_datetime_str(page):
 def process_path(path, host, prefixes):
     time.sleep(random.uniform(1, 5))
     client = MongoClient(host=host, port=27017)
-    db = client.wiki
+    db = client.wiki2
 
     filename = os.path.basename(path)
 
@@ -465,6 +465,7 @@ def resolve_ambiguity(db, title, id1, id2, title2id, id2title):
         id2title[id1] = title1
         id2title[id2] = title2
 
+
 def fix_duplicates(db, index_path):
     id2title = {}
     title2id = {}
@@ -516,7 +517,7 @@ def fix_duplicates(db, index_path):
 def reindex(host):
 
     client = MongoClient(host=host, port=27017)
-    db = client.wiki
+    db = client.wiki2
     db.pages.create_index([
         ('i', pymongo.ASCENDING),
     ])
@@ -534,7 +535,7 @@ def reindex(host):
 
 def extract_wiki_graph(host, split, n_jobs, total, dump_dir):
     client = MongoClient(host=host, port=27017)
-    db = client.wiki
+    db = client.wiki2
 
     # Only need to do this once. It's safe to run this multiple times.
     # Mongo will simply ignore the command if the index already exists.
