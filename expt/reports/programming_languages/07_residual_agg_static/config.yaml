@@ -24,6 +24,7 @@ model:
   max_neighbours: 4
   static_graph: true
   neigh_sample: true
+  end_offset: 31
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal

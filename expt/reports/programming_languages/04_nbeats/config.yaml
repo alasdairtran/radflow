@@ -4,6 +4,8 @@ dataset_reader:
   data_dir: "./data/wiki/subgraphs"
   seed_word: programming_languages
   fp16: false
+  use_edge: false
+  eval_edge: true
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -21,6 +23,7 @@ model:
   test_lengths: [7, 14, 21, 28]
   dropout: 0.1
   max_neighbours: 0
+  end_offset: 31
 iterator:
   type: basic
   batch_size: 64

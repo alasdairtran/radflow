@@ -4,6 +4,8 @@ dataset_reader:
   data_dir: "./data/wiki/subgraphs"
   seed_word: programming_languages
   fp16: false
+  use_edge: false
+  eval_edge: true
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -22,6 +24,7 @@ model:
   test_lengths: [7, 14, 21, 28]
   peek: false
   max_neighbours: 4
+  end_offset: 31
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal

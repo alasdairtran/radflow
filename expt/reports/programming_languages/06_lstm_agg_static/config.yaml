@@ -23,6 +23,7 @@ model:
   test_lengths: [7, 14, 21, 28]
   max_neighbours: 4
   static_graph: true
+  end_offset: 31
   initializer:
     - - ^decoder.weight*
       - type: orthogonal

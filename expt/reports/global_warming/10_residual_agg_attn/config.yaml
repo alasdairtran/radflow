@@ -26,7 +26,7 @@ model:
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
-  end_offset: 31
+  end_offset: 77
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal

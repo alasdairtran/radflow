@@ -2,7 +2,7 @@
 dataset_reader:
   type: subwiki_network
   data_dir: "./data/wiki/subgraphs"
-  seed_word: global_health
+  seed_word: programming_languages
   use_edge: true
   eval_edge: true
   fp16: false
@@ -16,7 +16,7 @@ model:
   agg_type: attention
   peek: true
   data_dir: "./data/wiki/subgraphs"
-  seed_word: global_health
+  seed_word: programming_languages
   num_layers: 8
   hidden_size: 108
   dropout: 0.1
@@ -26,6 +26,7 @@ model:
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
+  end_offset: 31
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
