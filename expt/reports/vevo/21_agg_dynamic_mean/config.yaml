@@ -3,7 +3,7 @@ dataset_reader:
   type: subwiki_network
   data_dir: "./data/wiki/subgraphs"
   seed_word: vevo
-  use_edge: false
+  use_edge: true
   eval_edge: true
   fp16: false
 train_data_path: train

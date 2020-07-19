@@ -311,8 +311,10 @@ class BaselineAggLSTM4(BaseModel):
                     elif self.static_graph:
                         kn &= set(self.neighs[key][day])
                     elif self.neigh_sample:
-                        kn |= set(self.neighs[key][day])
-                        counter.update(self.neighs[key][day])
+                        candidates = set(
+                            self.neighs[key][day][:self.max_neighbours])
+                        kn |= candidates
+                        counter.update(candidates)
                     else:
                         kn |= set(self.neighs[key][day][:self.max_neighbours])
 
@@ -333,10 +335,10 @@ class BaselineAggLSTM4(BaseModel):
                         replace=False,
                         p=probs,
                     ))
-                elif self.neigh_sample:
-                    pairs = counter.most_common(self.max_agg_neighbours)
-                    candidates = [p[0] for p in pairs]
-                    kn = set(candidates)
+                # elif self.neigh_sample:
+                #     pairs = counter.most_common(self.max_agg_neighbours)
+                #     candidates = [p[0] for p in pairs]
+                #     kn = set(candidates)
 
                 key_neighs[key] = kn
                 all_neigh_keys |= kn
