@@ -333,6 +333,10 @@ class BaselineAggLSTM4(BaseModel):
                         replace=False,
                         p=probs,
                     ))
+                elif self.neigh_sample:
+                    pairs = counter.most_common(self.max_agg_neighbours)
+                    candidates = [p[0] for p in pairs]
+                    kn = set(candidates)
 
                 key_neighs[key] = kn
                 all_neigh_keys |= kn
