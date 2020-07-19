@@ -43,7 +43,7 @@ def get_titles_from_cat(seed_word, db):
     return titles, title2id
 
 
-def get_series(seed, series_path, cat_path, title2id_path, influence_path, neightitle2id_path, db, max_depth, end, matrix_path):
+def get_series(seed, series_path, cat_path, title2id_path, influence_path, counter_path, neightitle2id_path, db, max_depth, end, matrix_path):
     series = {}
     title2id = {}
     id2title = {}
@@ -97,7 +97,7 @@ def get_series(seed, series_path, cat_path, title2id_path, influence_path, neigh
     with open(title2id_path, 'wb') as f:
         pickle.dump(title2id, f)
 
-    neightitle2id, influence = grow_from_seeds(series, db, end, matrix_path)
+    neightitle2id, influence = grow_from_seeds(series, db, end, matrix_path, counter_path)
 
     with open(neightitle2id_path, 'wb') as f:
         pickle.dump(neightitle2id, f)
@@ -119,10 +119,11 @@ def grow_from_cats(key, seed, mongo_host, depth, end, matrix_path):
     neightitle2id_path = os.path.join(output_dir, 'neightitle2id.pkl')
     neighs_path = os.path.join(output_dir, 'neighs.pkl')
     influence_path = os.path.join(output_dir, 'influence.pkl')
+    counter_path = os.path.join(output_dir, 'counter.pkl')
 
     if not os.path.exists(series_path):
         get_series(seed, series_path, cat_path,
-                   title2id_path, influence_path, neightitle2id_path, db, depth, end, matrix_path)
+                   title2id_path, influence_path, counter_path, neightitle2id_path, db, depth, end, matrix_path)
     logger.info(f'Loading series from {series_path}')
     with open(series_path, 'rb') as f:
         series = pickle.load(f)
@@ -186,7 +187,7 @@ def get_dynamic_edges(title2id, n_days, db):
     return in_degrees
 
 
-def grow_from_seeds(series, db, end, matrix_path):
+def grow_from_seeds(series, db, end, matrix_path, counter_path):
     matrix = ss.load_npz(matrix_path)
     csc_matric = matrix.tocsc()
 
@@ -202,6 +203,9 @@ def grow_from_seeds(series, db, end, matrix_path):
         for link in inlinks[page]:
             if link not in inlinks:
                 counter[link] += 1
+
+    with open(counter_path, 'wb') as f:
+        pickle.dump(counter, f)
 
     # This between 5-30 minutes
     pbar = tqdm(total=10000)
@@ -230,9 +234,9 @@ def grow_from_seeds(series, db, end, matrix_path):
         series[p] = s
         influence[p] = c
         neightitle2id[page['title']] = i
-        for link in inlinks[p]:
-            if link not in inlinks:
-                counter[link] += 1
+        # for link in inlinks[p]:
+        #     if link not in inlinks:
+        #         counter[link] += 1
     pbar.close()
 
     for link in inlinks:
