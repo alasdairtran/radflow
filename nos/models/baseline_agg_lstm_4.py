@@ -328,6 +328,9 @@ class BaselineAggLSTM4(BaseModel):
                     else:
                         kn |= set(self.neighs[key][day][:self.max_neighbours])
 
+                if not kn:
+                    continue
+
                 if self.static_graph:
                     views = {k: self.series[self.series_map[k],
                                             start:start+self.backcast_length].sum().cpu().item()
