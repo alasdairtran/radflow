@@ -4,6 +4,7 @@ dataset_reader:
   data_dir: "./data/wiki/subgraphs"
   seed_word: vevo
   use_edge: true
+  eval_edge: true
   fp16: false
 train_data_path: train
 validation_data_path: valid
@@ -23,6 +24,8 @@ model:
   backcast_length: 42
   test_lengths: [7]
   max_neighbours: 4
+  max_agg_neighbours: 4
+  neigh_sample: true
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
