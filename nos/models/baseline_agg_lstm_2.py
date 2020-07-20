@@ -52,10 +52,9 @@ class BaselineAggLSTM2(BaseModel):
                  static_graph: bool = False,
                  end_offset: int = 0,
                  view_missing_p: float = 0,
-                 attn: bool = False,
+                 n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
-        self.attn = attn
         self.mse = nn.MSELoss()
         self.hidden_size = hidden_size
         self.peek = peek
@@ -76,13 +75,10 @@ class BaselineAggLSTM2(BaseModel):
         self.sample_rs = np.random.RandomState(3456)
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
+        self.n_hops = n_hops
 
-        if not attn:
-            self.decoder = nn.LSTM(1, hidden_size, num_layers,
-                                   bias=True, batch_first=True, dropout=dropout)
-        else:
-            self.decoder = TransformerDecoder(
-                hidden_size, num_layers, dropout, self.total_length)
+        self.decoder = nn.LSTM(1, hidden_size, num_layers,
+                               bias=True, batch_first=True, dropout=dropout)
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
@@ -100,6 +96,11 @@ class BaselineAggLSTM2(BaseModel):
         elif agg_type == 'gat':
             self.conv = GATConv(hidden_size * 3, hidden_size * 3 // 4,
                                 heads=4, dropout=0.1)
+
+        if n_hops == 2:
+            self.proj_hop_2 = GehringLinear(
+                6 * self.hidden_size, 3 * self.hidden_size)
+            self.hop_rs = np.random.RandomState(4321)
 
         series_path = f'{data_dir}/{seed_word}/series.pkl'
         logger.info(f'Loading {series_path} into model')
@@ -197,7 +198,7 @@ class BaselineAggLSTM2(BaseModel):
             return X
 
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, X_cache)
+            X, keys, start, total_len, X_cache, 1)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -209,7 +210,7 @@ class BaselineAggLSTM2(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, X_cache):
+    def _construct_neighs(self, X, keys, start, total_len, X_cache, level):
         B, T, E = X.shape
         batch_set = set(keys)
 
@@ -294,6 +295,26 @@ class BaselineAggLSTM2(BaseModel):
             Xn = Xn[:, 1:]
         else:
             Xn = Xn[:, :-1]
+
+        if self.n_hops - level > 0:
+            input_keys = np.array(all_neigh_keys)
+            if not self.evaluate_mode:
+                size = int(round(len(Xn) / self.max_agg_neighbours))
+                idx = self.hop_rs.choice(len(Xn), size=size, replace=False)
+                input_keys = np.array(all_neigh_keys)[idx]
+            else:
+                idx = list(range(len(Xn)))
+
+            Xm_2, masks_2 = self._construct_neighs(
+                Xn[idx], input_keys, start, total_len, None, level + 1)
+            if self.agg_type == 'mean':
+                Xm_2 = self._aggregate_mean(Xm_2, masks_2)
+            elif self.agg_type == 'attention':
+                Xm_2 = self._aggregate_attn(Xn[idx], Xm_2, masks_2)
+            elif self.agg_type in ['gat', 'sage']:
+                Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2)
+            X_out = self._pool(Xn[idx], Xm_2)
+            Xn[idx] = F.gelu(self.proj_hop_2(X_out)).type_as(Xn)
 
         _, S, E = Xn.shape
 
@@ -464,7 +485,7 @@ class BaselineAggLSTM2(BaseModel):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         X_agg = self._get_neighbour_embeds(
-            X, keys, start, self.total_length, X_full)
+            X, keys, start, self.total_length)
         # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
         X_agg = self.fc(X_agg)
