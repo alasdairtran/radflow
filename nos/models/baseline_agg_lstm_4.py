@@ -504,7 +504,7 @@ class BaselineAggLSTM4(BaseModel):
         nodes = nodes[:B * T]
         # nodes.shape == [BT, hidden_size]
 
-        nodes = F.elu(nodes)
+        # nodes = F.elu(nodes)
         # nodes.shape == [BT, hidden_size]
 
         X_agg = nodes.reshape(B, T, E)
