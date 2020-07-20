@@ -167,6 +167,7 @@ class BaselineAggLSTM4(BaseModel):
                  variant: str = 'full',
                  static_graph: bool = False,
                  end_offset: int = 0,
+                 view_missing_p: float = 0,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.decoder = LSTMDecoder(hidden_size, num_layers, dropout, variant)
@@ -187,6 +188,7 @@ class BaselineAggLSTM4(BaseModel):
         self.neigh_sample = neigh_sample
         self.equal_weight = equal_weight
         self.evaluate_mode = False
+        self.view_missing_p = view_missing_p
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
@@ -268,7 +270,20 @@ class BaselineAggLSTM4(BaseModel):
                                   len(self.series[k])))
         self.series_map = {}
         for i, (k, v) in enumerate(tqdm(self.series.items())):
-            series_matrix[i] = np.asarray(v)
+            if self.view_missing_p > 0:
+                view_rs = np.random.RandomState(k)
+                max_size = len(v) - self.end_offset - self.forecast_length
+                size = int(max_size * self.view_missing_p)
+                indices = view_rs.choice(np.arange(1, max_size),
+                                         replace=False,
+                                         size=size)
+                v[indices] = np.nan
+                mask = np.isnan(v)
+                idx = np.where(~mask, np.arange(len(mask)), 0)
+                np.maximum.accumulate(idx, out=idx)
+                v[mask] = v[idx[mask]]
+
+            series_matrix[i] = v
             self.series_map[k] = i
         self.series = p.new_tensor(series_matrix)
 

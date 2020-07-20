@@ -51,6 +51,7 @@ class BaselineAggLSTM2(BaseModel):
                  t_total: int = 163840,
                  static_graph: bool = False,
                  end_offset: int = 0,
+                 view_missing_p: float = 0,
                  attn: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -74,6 +75,7 @@ class BaselineAggLSTM2(BaseModel):
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
         self.evaluate_mode = False
+        self.view_missing_p = view_missing_p
 
         if not attn:
             self.decoder = nn.LSTM(1, hidden_size, num_layers,
@@ -158,7 +160,20 @@ class BaselineAggLSTM2(BaseModel):
                                   len(self.series[k])))
         self.series_map = {}
         for i, (k, v) in enumerate(tqdm(self.series.items())):
-            series_matrix[i] = np.asarray(v)
+            if self.view_missing_p > 0:
+                view_rs = np.random.RandomState(k)
+                max_size = len(v) - self.end_offset - self.forecast_length
+                size = int(max_size * self.view_missing_p)
+                indices = view_rs.choice(np.arange(1, max_size),
+                                         replace=False,
+                                         size=size)
+                v[indices] = np.nan
+                mask = np.isnan(v)
+                idx = np.where(~mask, np.arange(len(mask)), 0)
+                np.maximum.accumulate(idx, out=idx)
+                v[mask] = v[idx[mask]]
+
+            series_matrix[i] = v
             self.series_map[k] = i
         self.series = p.new_tensor(series_matrix)
 
