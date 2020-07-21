@@ -327,8 +327,9 @@ class BaselineAggLSTM4(BaseModel):
         if self.agg_type == 'none':
             return X
 
+        ancestors = defaultdict(set)
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, X_cache, 1)
+            X, keys, start, total_len, X_cache, 1, ancestors)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -340,7 +341,7 @@ class BaselineAggLSTM4(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, X_cache, level):
+    def _construct_neighs(self, X, keys, start, total_len, X_cache, level, ancestors):
         B, T, E = X.shape
         batch_set = set(keys)
 
@@ -353,18 +354,20 @@ class BaselineAggLSTM4(BaseModel):
                 kn = set(self.neighs[key][start]) \
                     if self.static_graph else set()
                 counter = Counter()
+                blackset = ancestors[key]
                 for day in range(start, start+total_len):
+                    neighs_t = [n for n in self.neighs[key][day]
+                                if n not in blackset]
                     if self.training and self.batch_as_subgraph:
-                        kn |= set(self.neighs[key][day]) & batch_set
+                        kn |= set(neighs_t) & batch_set
                     elif self.static_graph:
-                        kn &= set(self.neighs[key][day])
+                        kn &= set(neighs_t)
                     elif self.neigh_sample:
-                        candidates = set(
-                            self.neighs[key][day][:self.max_neighbours])
+                        candidates = set(neighs_t[:self.max_neighbours])
                         kn |= candidates
                         counter.update(candidates)
                     else:
-                        kn |= set(self.neighs[key][day][:self.max_neighbours])
+                        kn |= set(neighs_t[:self.max_neighbours])
 
                 if not kn:
                     continue
@@ -399,6 +402,8 @@ class BaselineAggLSTM4(BaseModel):
                 #     kn = set(candidates)
 
                 key_neighs[key] = kn
+                for n in kn:
+                    ancestors[n].add(key)
                 all_neigh_keys |= kn
                 max_n_neighs = max(max_n_neighs, len(kn))
 
@@ -443,7 +448,7 @@ class BaselineAggLSTM4(BaseModel):
                 idx = list(range(len(Xn)))
 
             Xm_2, masks_2 = self._construct_neighs(
-                Xn[idx], input_keys, start, total_len, None, level + 1)
+                Xn[idx], input_keys, start, total_len, None, level + 1, ancestors)
             if self.agg_type == 'mean':
                 Xm_2 = self._aggregate_mean(Xm_2, masks_2)
             elif self.agg_type == 'attention':
