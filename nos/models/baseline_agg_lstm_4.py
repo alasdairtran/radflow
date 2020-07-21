@@ -236,6 +236,7 @@ class BaselineAggLSTM4(BaseModel):
             with open(neighs_path, 'rb') as f:
                 self.neighs = pickle.load(f)
         self.mask_dict = None
+        self.non_missing = None
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -291,24 +292,30 @@ class BaselineAggLSTM4(BaseModel):
         logger.info('Processing series')
         series_matrix = np.zeros((len(self.series),
                                   len(self.series[k])))
+        non_missing_matrix = np.ones((len(self.series),
+                                      len(self.series[k])), dtype=bool)
         self.series_map = {}
         for i, (k, v) in enumerate(tqdm(self.series.items())):
             if self.view_missing_p > 0:
                 view_rs = np.random.RandomState(k)
                 max_size = len(v) - self.end_offset - self.forecast_length
                 size = int(round(max_size * self.view_missing_p))
-                indices = view_rs.choice(np.arange(1, max_size),
+                indices = view_rs.choice(np.arange(max_size),
                                          replace=False,
                                          size=size)
                 v[indices] = 0  # np.nan
+                non_missing_idx = np.ones(len(v), dtype=bool)
+                non_missing_idx[indices] = False
                 # mask = np.isnan(v)
                 # idx = np.where(~mask, np.arange(len(mask)), 0)
                 # np.maximum.accumulate(idx, out=idx)
                 # v[mask] = v[idx[mask]]
+                non_missing_matrix[i] = non_missing_idx
 
             series_matrix[i] = v
             self.series_map[k] = i
         self.series = p.new_tensor(series_matrix)
+        self.non_missing = torch.from_numpy(non_missing_matrix).to(p.device)
 
         self.max_start = len(
             self.series[i]) - self.forecast_length * 2 - self.total_length - self.end_offset
@@ -596,8 +603,10 @@ class BaselineAggLSTM4(BaseModel):
         }
 
         series_list = []
+        non_missing_list = []
         for key in keys:
             s = self.series[self.series_map[key]]
+            m = self.non_missing[self.series_map[key]]
             if split == 'train':
                 if self.max_start == 0:
                     start = 0
@@ -608,10 +617,14 @@ class BaselineAggLSTM4(BaseModel):
             elif split == 'test':
                 start = self.max_start + self.forecast_length * 2
             s = s[start:start+self.total_length]
+            m = m[start:start+self.total_length]
             series_list.append(s)
+            non_missing_list.append(m)
 
         raw_series = torch.stack(series_list, dim=0)
         # series.shape == [batch_size, seq_len]
+
+        non_missing_idx = torch.stack(non_missing_list, dim=0)[:, 1:]
 
         log_raw_series = torch.log1p(raw_series)
 
@@ -634,8 +647,12 @@ class BaselineAggLSTM4(BaseModel):
             # preds.shape == [batch_size, seq_len]
 
         preds = torch.exp(preds)
-
         targets = raw_series[:, 1:]
+
+        if self.view_missing_p > 0:
+            preds = torch.masked_select(preds, non_missing_idx)
+            targets = torch.masked_select(targets, non_missing_idx)
+
         numerator = torch.abs(targets - preds)
         denominator = torch.abs(targets) + torch.abs(preds)
         loss = numerator / denominator
