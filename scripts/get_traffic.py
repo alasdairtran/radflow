@@ -132,9 +132,6 @@ def get_id_maps(db, redis_host, index_path):
 
 
 def get_traffic(path, mongo_host, redis_host, traffic_path, i):
-    # client = MongoClient(host=host, port=27017)
-    # db = client.wiki
-
     filename = os.path.basename(path)
     parts = filename.split('.')[0].split('-')
     year = int(parts[1])
@@ -232,7 +229,7 @@ def get_all_traffic(mongo_host, redis_host, n_jobs, traffic_path):
 def get_traffic_for_page(o_title):
     # Reproduce the data collection process
     start = '2015070100'
-    end = '2020060900'
+    end = '2020063000'
     title = o_title.replace('%', r'%25').replace(
         '/', r'%2F').replace('?', r'%3F')
     domain = 'en.wikipedia.org'
@@ -271,7 +268,12 @@ def get_traffic_for_page(o_title):
     response = response['items']
 
     if len(response) < 1:
-        return {}
+        return {
+            'series': [],
+            'first_date': None,
+            'complete': False,  # no missing views last 140 days
+            'avg_views': 0,  # in the last 140 days
+        }
     first = response[0]['timestamp']
     last = response[-1]['timestamp']
 
@@ -303,11 +305,13 @@ def get_traffic_for_page(o_title):
         n_empty_days = (end_dt - last).days
         for _ in range(n_empty_days):
             series.append(-1)
-    assert len(series) == 1806
+    assert len(series) == 1827
 
     output = {
         'series': series,
         'first_date': first,
+        'complete': -1 not in series[-140:],  # no missing views last 140 days
+        'avg_views': sum(series[-140:]) / 140,  # in the last 140 days
     }
     return output
 
@@ -315,9 +319,9 @@ def get_traffic_for_page(o_title):
 def get_traffic_from_api(mongo_host, i, n_jobs, batch, total):
     time.sleep(random.uniform(1, 30))
     client = MongoClient(host=mongo_host, port=27017)
-    db = client.wiki
+    db = client.wiki2
 
-    # Find the largest possible i (which is 17035757)
+    # Find the largest possible i (which is around 17.3 million)
     max_i = db.pages.find_one(sort=[("i", pymongo.DESCENDING)],
                               projection=['i'])['i']
 
@@ -344,17 +348,13 @@ def get_traffic_from_api(mongo_host, i, n_jobs, batch, total):
             if elasped < 1:
                 time.sleep(1 - elasped)
             continue
-        elif not s:
-            series = []
-            t = None
-        else:
-            series = s['series']
-            t = s['first_date']
 
         db.traffic.insert_one({
             '_id': page['i'],
-            's': series,
-            't': t,
+            's': s['series'],
+            't': s['first_date'],
+            'c': s['complete'],
+            'v': s['avg_views'],
         })
 
         # Ensure that we take at least 1 second to appease the server
@@ -365,15 +365,17 @@ def get_traffic_from_api(mongo_host, i, n_jobs, batch, total):
 
 def get_all_traffic_from_api(mongo_host, redis_host, n_jobs, batch, total):
     client = MongoClient(host=mongo_host, port=27017)
-    db = client.wiki
+    db = client.wiki2
 
     db.traffic.create_index([
+        ('c', pymongo.ASCENDING),
         ('t', pymongo.DESCENDING),
+        ('v', pymongo.DESCENDING),
     ])
 
-    index_path = os.path.join('data/wiki', 'graph_ids.txt')
-    if not os.path.exists(index_path):
-        get_id_maps(db, redis_host, index_path)
+    # index_path = os.path.join('data/wiki', 'graph_ids.txt')
+    # if not os.path.exists(index_path):
+    #     get_id_maps(db, redis_host, index_path)
     # To mass insert this into redis later
     # cat data/wiki/graph_ids.txt | redis-cli --pipe
 
