@@ -37,6 +37,7 @@ from bz2file import BZ2File
 from docopt import docopt
 from joblib import Parallel, delayed
 from pymongo import MongoClient
+from requests.exceptions import ChunkedEncodingError, ConnectionError
 from schema import And, Or, Schema, Use
 from tqdm import tqdm
 
@@ -243,7 +244,7 @@ def get_traffic_for_page(o_title):
         count = 0
         try:
             response = requests.get(url).json()
-        except requests.exceptions.ConnectionError:
+        except (ConnectionError, ChunkedEncodingError):
             if count < 10:
                 count += 1
                 time.sleep(random.uniform(5, 10))
