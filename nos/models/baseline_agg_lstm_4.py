@@ -168,6 +168,7 @@ class BaselineAggLSTM4(BaseModel):
                  static_graph: bool = False,
                  end_offset: int = 0,
                  view_missing_p: float = 0,
+                 edge_missing_p: float = 0,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -190,6 +191,7 @@ class BaselineAggLSTM4(BaseModel):
         self.equal_weight = equal_weight
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
+        self.edge_missing_p = edge_missing_p
         self.n_hops = n_hops
 
         self.max_start = None
@@ -263,11 +265,25 @@ class BaselineAggLSTM4(BaseModel):
             logger.info('Processing edges')
             self.mask_dict = {}
             for node, neighs in tqdm(self.in_degrees.items()):
+                node_rs = np.random.RandomState(node + 1234567)
                 neigh_dict = {}
                 seq_len = len(self.series[node])
+                max_size = seq_len - self.end_offset - self.forecast_length
                 node_masks = np.ones((len(neighs), seq_len), dtype=bool)
                 for i, n in enumerate(neighs):
-                    node_masks[i] = n['mask'][:seq_len]
+                    mask = np.asarray(n['mask'][:seq_len])
+                    if self.edge_missing_p > 0:
+                        edge_rs = np.random.RandomState(
+                            node_rs.randint(0, 1000000))
+                        edge_idx = (~mask[:max_size]).nonzero()[0]
+                        size = int(round(len(edge_idx) * self.edge_missing_p))
+                        if size > 0:
+                            delete_idx = edge_rs.choice(edge_idx,
+                                                        replace=False,
+                                                        size=size)
+                            mask[delete_idx] = True
+
+                    node_masks[i] = mask
                     neigh_dict[n['id']] = i
                 self.in_degrees[node] = neigh_dict
                 self.mask_dict[node] = p.new_tensor(node_masks)
