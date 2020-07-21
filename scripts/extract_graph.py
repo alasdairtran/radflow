@@ -578,9 +578,24 @@ def fix_duplicates(db, index_path):
             assert p['_id'] not in title2id
             id2title[p['_id']] = title
 
-    # Statistics: 1,7035,758 unique titles/IDs.
+    # Another pass. We manually remove IDs pointing to these missing pages:
+    # 406610 For Us, the Living
+    # 10003539 Never Call Retreat
+    # 565953 Formerly Known as the Justice League
+    # 15918058 The Sunflower (book)
+    ids = set(title2id.values())
+    delete_ids = []
+    for i, title in id2title.items():
+        if i not in ids:
+            delete_ids.append(i)
+
+    for i in delete_ids:
+        del id2title[i]
+
+    # Statistics: 17,380,550 unique titles/IDs.
     logger.info(f"Number of IDs: {len(id2title)}")
     logger.info(f"Number of Titles: {len(title2id)}")
+    logger.info(f"Saving cached maps to {index_path}")
     with open(index_path, 'wb') as f:
         pickle.dump([title2id, id2title], f)
 

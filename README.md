@@ -22,16 +22,20 @@ git clone --recurse-submodules -j8 https://github.com/RedisGraph/RedisGraph.git
 # Start an empty mongodb database
 mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
 
-# Download wiki dump
+# Download wiki dump. This takes about three days.
 python scripts/download_wikidump.py
 
 # With wiki dump, we get 668 files. Each file has on average 290M lines.
 # If we use a single thread (no parallelization), it takes between 3-7 hours
 # to go through each file. The following scripts construct a mongo database
-# for the entire wiki graph
+# for the entire wiki graph. This takes about 40 hours.
 python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 24 --total 232 --split 0 # braun
 python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 1 # cray
 python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 2 # cray
+
+# Remove duplicate titles. Generate a cache title_index.pkl that maps
+# the title to the original page id. We also reindex the page IDs, taking 3h.
+# We end up with 17,380,550 unqiue IDs/titles.
 python scripts/extract_graph.py --reindex
 
 # Get page view counts directly from wiki API
