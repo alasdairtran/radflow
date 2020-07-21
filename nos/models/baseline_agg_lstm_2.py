@@ -134,10 +134,10 @@ class BaselineAggLSTM2(BaseModel):
         for k, v in self.series.items():
             v = np.asarray(v).astype(float)
             # Fill out missing values
-            mask = v == -1
-            idx = np.where(~mask, np.arange(len(mask)), 0)
-            np.maximum.accumulate(idx, out=idx)
-            v[mask] = v[idx[mask]]
+            # mask = v == -1
+            # idx = np.where(~mask, np.arange(len(mask)), 0)
+            # np.maximum.accumulate(idx, out=idx)
+            # v[mask] = v[idx[mask]]
 
             # Replace remaining initial views with 0
             v[v == -1] = 0
@@ -184,11 +184,11 @@ class BaselineAggLSTM2(BaseModel):
                 indices = view_rs.choice(np.arange(1, max_size),
                                          replace=False,
                                          size=size)
-                v[indices] = np.nan
-                mask = np.isnan(v)
-                idx = np.where(~mask, np.arange(len(mask)), 0)
-                np.maximum.accumulate(idx, out=idx)
-                v[mask] = v[idx[mask]]
+                v[indices] = 0  # np.nan
+                # mask = np.isnan(v)
+                # idx = np.where(~mask, np.arange(len(mask)), 0)
+                # np.maximum.accumulate(idx, out=idx)
+                # v[mask] = v[idx[mask]]
 
             series_matrix[i] = v
             self.series_map[k] = i
