@@ -180,7 +180,7 @@ class BaselineAggLSTM2(BaseModel):
             if self.view_missing_p > 0:
                 view_rs = np.random.RandomState(k)
                 max_size = len(v) - self.end_offset - self.forecast_length
-                size = int(max_size * self.view_missing_p)
+                size = int(round(max_size * self.view_missing_p))
                 indices = view_rs.choice(np.arange(1, max_size),
                                          replace=False,
                                          size=size)
