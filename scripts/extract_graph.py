@@ -471,30 +471,101 @@ def fix_duplicates(db, index_path):
     title2id = {}
 
     # Note that these articles have the same title but different page IDs
-    # Title: Anjan Chowdhury -> Anjan Chowdhury, remove 21606610, keep 62911656
-    # Title: You Si-kun -> Yu Shyi-kun, keep 349072
-    # Title: You Si-kun -> You Si-kun, keep 62998113
-    # Title: James Coyne -> James Elliott Coyne, keep 520170
-    # Title: James Coyne -> James Coyne, keep 62999621
-    # Title: Amanieu VI -> Amanieu V d'Albret, keep 10037159
-    # Title: Amanieu VI -> Amanieu VI, keep 63000573
-    # Title: Amanieu VIII -> Amanieu VII d'Albret, keep 10037418
-    # Title: Amanieu VIII -> Amanieu VIII, keep 63000585
-    # Title: Bernard Ezi IV -> Bernard Ezi II d'Albret, keep 10038254
-    # Title: Bernard Ezi IV -> Bernard Ezi IV, keep 63000589
-    # Title: Arnaud Amanieu, Lord of Albret -> Arnaud Amanieu d'Albret, keep 10038002
-    # Title: Arnaud Amanieu, Lord of Albret -> Arnaud Amanieu, Lord of Albret, keep 63000655
-    # Title: James Elliott Coyne -> James Elliott Coyne, remove 1217332, keep 520170
-    # Title: Air New Zealand Flight 901 -> Air New Zealand Flight 901, keep 62998459
-    # Title: Air New Zealand Flight 901 -> Mount Erebus disaster, keep 1158000
-    # Title: FIVB Senior World and Continental Rankings -> FIVB Senior World and Continental Rankings, keep 63000600
-    # Title: FIVB Senior World and Continental Rankings -> FIVB Senior World Rankings, keep 1463363
-    # Title: Mount Erebus disaster -> Mount Erebus disaster, remove 2224953, keep 1158000
-    # Title: Daily Mashriq -> Daily Mashriq, remove 63000119, keep 4737576
-    # Title: Zeewijk -> Zeewijk, keep 63000552
-    # Zeewijk -> Zeewijk (1725), keep 5931503
-    # Title: XMultiply -> XMultiply, keep 62998806
-    # Title: XMultiply -> X Multiply, keep 5103829
+    # Title: Children of the Moon -> Children of the Moon, remove 5443592, keep 55611314
+    # Title: Simultaneous interpretation -> Simultaneous interpretation, remove 6707331, keep 60027184
+    # Title: Max Hunter -> Max Hunter, remove 45359352, keep 64057525
+    # Title: Essent N.V. -> Essent, keep 7324758
+    # Title: Essent N.V. -> Essent N.V., keep 64168198
+    # Title: Chibi-Robo! Zip Lash -> Chibi-Robo! Zip Lash (video game), keep 46988924
+    # Title: Chibi-Robo! Zip Lash -> Chibi-Robo! Zip Lash, keep 64356807
+    # Title: No Pressure -> No Pressure (Erick Sermon album), keep 7354786
+    # Title: No Pressure -> No Pressure, keep 64364969
+    # Title: Kimberly Jones -> Kimberly Jones, remove 2182650, keep 64386907
+    # Title: Michael Hecht -> Michael Hecht, remove 64435049, keep 991517
+    # Title: List of patricides -> Patricide, keep 578580
+    # Title: List of patricides -> List of patricides, keep 64435981
+    # Title: Otok, Vukovar-Srijem County -> Otok, Vukovar-Syrmia County, keep 1526279
+    # Title: Otok, Vukovar-Srijem County -> Otok, Vukovar-Srijem County, keep 64436191
+    # Title: Ka Leo O Hawaii -> Ka Leo O Hawaiʻi, keep 2063589
+    # Title: Ka Leo O Hawaii -> Ka Leo O Hawaii, keep 64436348
+    # Title: University of Hawaii Maui College -> University of Hawaiʻi Maui College, keep 770165
+    # Title: University of Hawaii Maui College -> University of Hawaii Maui College, keep 64436368
+    # Title: University of Hawaii–West Oahu -> University of Hawaiʻi – West Oʻahu, keep 767176
+    # Title: University of Hawaii–West Oahu -> University of Hawaii–West Oahu, keep 64436430
+    # Title: Kapiolani Community College -> Kapiʻolani Community College, keep 769380
+    # Title: Kapiolani Community College -> Kapiolani Community College, keep 64436458
+    # Title: Kauai Community College -> Kauaʻi Community College, keep 770154
+    # Title: Kauai Community College -> Kauai Community College, keep 64436461
+    # Title: Waikiki Aquarium -> Waikīkī Aquarium, keep 764819
+    # Title: Waikiki Aquarium -> Waikiki Aquarium, keep 64436480
+    # Title: Haleakala Observatory -> Haleakalā Observatory, keep 1526755
+    # Title: Haleakala Observatory -> Haleakala Observatory, keep 64436484
+    # Title: Limestone College -> Limestone University, keep 2165207
+    # Title: Limestone College -> Limestone College, keep 64437109
+    # Title: Quadrics -> Quadrics (company), keep 259109
+    # Title: Quadrics -> Quadrics, keep 64437467
+    # Title: Flossenbürg -> Flossenbürg, Bavaria, keep 360881
+    # Title: Flossenbürg -> Flossenbürg, keep 64437896
+    # Title: Todd Martinez -> Todd Martínez, keep 6774439
+    # Title: Todd Martinez -> Todd Martinez, keep 64437916
+    # Title: Geminiano T. de Ocampo -> Geminiano de Ocampo, keep 5304445
+    # Title: Geminiano T. de Ocampo -> Geminiano T. de Ocampo, keep 64438043
+    # Title: Additional Protocol II -> Protocol II, keep 1953425
+    # Title: Additional Protocol II -> Additional Protocol II, keep 64438069
+    # Title: Ophelia Alcantara Dimalanta -> Ophelia Dimalanta, keep 12550037
+    # Title: Ophelia Alcantara Dimalanta -> Ophelia Alcantara Dimalanta, keep 64438237
+    # Title: Red Line (Cleveland) -> Red Line (RTA Rapid Transit), keep 3254444
+    # Title: Red Line (Cleveland) -> Red Line (Cleveland), keep 64438361
+    # Title: Blue Line (Cleveland) -> Blue Line (RTA Rapid Transit), keep 3253785
+    # Title: Blue Line (Cleveland) -> Blue Line (Cleveland), keep 64438364
+    # Title: Green Line (Cleveland) -> Green Line (RTA Rapid Transit), keep 3253787
+    # Title: Green Line (Cleveland) -> Green Line (Cleveland), keep 64438367
+    # Title: Dachau (disambiguation) -> Dachau (disambiguation), remove 64438510, keep 8518155
+    # Title: Toyama (city) -> Toyama, Toyama, keep 6792777
+    # Title: Toyama (city) -> Toyama (city), keep 64438616
+    # Title: 1985 (Anthony Burgess novel) -> 1985 (Burgess novel), keep 2235536
+    # Title: 1985 (Anthony Burgess novel) -> 1985 (Anthony Burgess novel), keep 64438752
+    # Title: Heavy Metal: a Tank Company's Battle to Baghdad -> Heavy Metal: A Tank Company's Battle to Baghdad, keep 1880633
+    # Title: Heavy Metal: a Tank Company's Battle to Baghdad -> Heavy Metal: a Tank Company's Battle to Baghdad, keep 64438775
+    # Title: Never Call Retreat: Lee and Grant: The Final Victory -> Never Call Retreat, keep 10003526
+    # Title: Never Call Retreat: Lee and Grant: The Final Victory -> Never Call Retreat: Lee and Grant: The Final Victory, keep 64438785
+    # Title: Hubris: The Inside Story of Spin, Scandal, and the Selling of the Iraq War -> Hubris (book), keep 7367152
+    # Title: Hubris: The Inside Story of Spin, Scandal, and the Selling of the Iraq War -> Hubris: The Inside Story of Spin, Scandal, and the Selling of the Iraq War, keep 64438823
+    # Title: They Marched Into Sunlight -> They Marched into Sunlight, keep 9755591
+    # Title: They Marched Into Sunlight -> They Marched Into Sunlight, keep 64438840
+    # Title: For God and Country (James Yee) -> For God and Country (Yee book), keep 10011965
+    # Title: For God and Country (James Yee) -> For God and Country (James Yee), keep 64438845
+    # Title: The General (C. S. Forester novel) -> The General (Forester novel), keep 198506
+    # Title: The General (C. S. Forester novel) -> The General (C. S. Forester novel), keep 64438870
+    # Title: To Ruhleben – And Back -> To Ruhleben – and Back, keep 4602991
+    # Title: To Ruhleben – And Back -> To Ruhleben – And Back, keep 64438877
+    # Title: The Left was Never Right -> The Left Was Never Right, keep 7536287
+    # Title: The Left was Never Right -> The Left was Never Right, keep 64438881
+    # Title: Peacemakers: The Paris Peace Conference of 1919 and Its Attempt to End War -> Peacemakers (book), keep 245520
+    # Title: Peacemakers: The Paris Peace Conference of 1919 and Its Attempt to End War -> Peacemakers: The Paris Peace Conference of 1919 and Its Attempt to End War, keep 64438887
+    # Title: For Us, the Living: A Comedy of Customs -> For Us, the Living, keep 406609
+    # Title: For Us, the Living: A Comedy of Customs -> For Us, the Living: A Comedy of Customs, keep 64438912
+    # Title: The Snow Goose: A Story of Dunkirk -> The Snow Goose (novella), keep 7206031
+    # Title: The Snow Goose: A Story of Dunkirk -> The Snow Goose: A Story of Dunkirk, keep 64438919
+    # Title: The Sunflower: On the Possibilities and Limits of Forgiveness -> The Sunflower (book), keep 14577792
+    # Title: The Sunflower: On the Possibilities and Limits of Forgiveness -> The Sunflower: On the Possibilities and Limits of Forgiveness, keep 64438926
+    # Title: Once (Morris Gleitzman novel) -> Once (Gleitzman novel), keep 12256255
+    # Title: Once (Morris Gleitzman novel) -> Once (Morris Gleitzman novel), keep 64438930
+    # Title: Super Buddies -> Formerly Known as the Justice League, keep 2221988
+    # Title: Super Buddies -> Super Buddies, keep 64439024
+    # Title: Air Guitar -> Air guitar (disambiguation), keep 3896605
+    # Title: Air Guitar -> Air Guitar, keep 64439054
+    # Title: Death of Benno Ohnesorg -> Shooting of Benno Ohnesorg, keep 493649
+    # Title: Death of Benno Ohnesorg -> Death of Benno Ohnesorg, keep 64439074
+    # Title: University of Hawaii at Manoa -> University of Hawaii at Manoa, keep 64436236
+    # Title: University of Hawaii at Manoa -> University of Hawaiʻi at Mānoa, keep 646743
+    # Title: Middle Child -> Middle Child, remove 20244502, keep 59734056
+    # Title: Waikiki -> Waikiki, keep 64436502
+    # Title: Waikiki -> Waikīkī, keep 59649
+    # Title: Mahatma Jyotiba Phule Mandai -> Mahatma Jyotiba Phule Mandai, keep 64434775
+    # Title: Mahatma Jyotiba Phule Mandai -> Crawford Market, keep 907894
+    # Title: Israel's Border Wars 1949–1956 -> Israel's Border Wars 1949–1956, keep 64438835
+    # Title: Israel's Border Wars 1949–1956 -> Israel's Border Wars, 1949–1956, keep 470454
 
     logger.info('Building title-id index map')
     for p in tqdm(db.pages.find({}, projection=['_id', 'title'])):
