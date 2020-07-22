@@ -430,10 +430,14 @@ class BaselineAggLSTM4(BaseModel):
             Xn = torch.stack(Xn_list, dim=0)
         else:
             neigh_series_list = []
+            neigh_non_missing_list = []
             for key in all_neigh_keys:
-                neigh_series_list.append(
-                    self.series[self.series_map[key], start:start+total_len])
+                k = self.series_map[key]
+                end = start+total_len
+                neigh_series_list.append(self.series[k, start:end])
+                neigh_non_missing_list.append(self.non_missing[k, start:end])
             neighs = torch.stack(neigh_series_list, dim=0)
+            neighs_non_missing = torch.stack(neigh_non_missing_list, dim=0)
             # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
             neighs = torch.log1p(neighs)
@@ -442,8 +446,10 @@ class BaselineAggLSTM4(BaseModel):
 
         if self.peek:
             Xn = Xn[:, 1:]
+            neighs_non_missing = neighs_non_missing[:, 1:]
         else:
             Xn = Xn[:, :-1]
+            neighs_non_missing = neighs_non_missing[:, :-1]
 
         if self.n_hops - level > 0:
             input_keys = np.array(all_neigh_keys)
@@ -476,14 +482,15 @@ class BaselineAggLSTM4(BaseModel):
             # a dict key looks like: {'id': 123, 'mask'; [0, 0, 1]}
             if key in key_neighs:
                 for i, k in enumerate(key_neighs[key]):
-                    Xm[b, i] = Xn[all_neigh_dict[k]]
+                    pos = all_neigh_dict[k]
+                    Xm[b, i] = Xn[pos]
                     mask = self.mask_dict[key][self.in_degrees[key][k]]
                     mask = mask[start:start+total_len]
                     if self.peek:
                         mask = mask[1:]
                     else:
                         mask = mask[:-1]
-                    masks[b, i] = mask
+                    masks[b, i] = mask | ~neighs_non_missing[pos]
 
         return Xm, masks
 
