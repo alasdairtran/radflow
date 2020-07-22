@@ -321,12 +321,21 @@ class BaselineAggLSTM4(BaseModel):
         # If a neighbour has a missing view on day t, all outgoing edges
         # will also be deleted.
         if self.view_missing_p > 0:
+            logger.info('Updating neighbour masks.')
+            for key in tqdm(self.mask_dict):
+                for n, i in self.in_degrees[key].items():
+                    mask_1 = self.mask_dict[key][i]
+                    mask_2 = ~self.non_missing[self.series_map[n]]
+                    self.mask_dict[key][i] = mask_1 | mask_2
+
+        if self.view_missing_p > 0 or self.edge_missing_p > 0:
             logger.info('Removing edges from neighbours with missing views.')
             for key in tqdm(self.neighs):
                 for day in self.neighs[key]:
                     neighs = self.neighs[key][day]
                     k = self.series_map[key]
-                    neighs = [n for n in neighs if self.non_missing[n][day]]
+                    neighs = [n for n in neighs
+                              if not self.mask_dict[key][self.in_degrees[key][n]][day]]
                     self.neighs[key][day] = neighs
 
         self.max_start = len(
@@ -442,14 +451,11 @@ class BaselineAggLSTM4(BaseModel):
             Xn = torch.stack(Xn_list, dim=0)
         else:
             neigh_series_list = []
-            neigh_non_missing_list = []
             for key in all_neigh_keys:
                 k = self.series_map[key]
                 end = start+total_len
                 neigh_series_list.append(self.series[k, start:end])
-                neigh_non_missing_list.append(self.non_missing[k, start:end])
             neighs = torch.stack(neigh_series_list, dim=0)
-            neighs_non_missing = torch.stack(neigh_non_missing_list, dim=0)
             # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
             neighs = torch.log1p(neighs)
@@ -458,10 +464,8 @@ class BaselineAggLSTM4(BaseModel):
 
         if self.peek:
             Xn = Xn[:, 1:]
-            neighs_non_missing = neighs_non_missing[:, 1:]
         else:
             Xn = Xn[:, :-1]
-            neighs_non_missing = neighs_non_missing[:, :-1]
 
         if self.n_hops - level > 0:
             input_keys = np.array(all_neigh_keys)
@@ -502,7 +506,7 @@ class BaselineAggLSTM4(BaseModel):
                         mask = mask[1:]
                     else:
                         mask = mask[:-1]
-                    masks[b, i] = mask | ~neighs_non_missing[pos]
+                    masks[b, i] = mask
 
         return Xm, masks
 
