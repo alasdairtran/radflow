@@ -287,7 +287,7 @@ class BaselineAggLSTM4(BaseModel):
                     node_masks[i] = mask
                     neigh_dict[n['id']] = i
                 self.in_degrees[node] = neigh_dict
-                self.mask_dict[node] = p.new_tensor(node_masks)
+                self.mask_dict[node] = torch.from_numpy(node_masks).to(p.device)
 
         logger.info('Processing series')
         series_matrix = np.zeros((len(self.series),
