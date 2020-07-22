@@ -166,11 +166,8 @@ class BaselineAggLSTM4(BaseModel):
                  variant: str = 'full',
                  static_graph: bool = False,
                  end_offset: int = 0,
-                 attn_gelu: bool = False,
                  view_missing_p: float = 0,
                  edge_missing_p: float = 0,
-                 final_gelu: bool = True,
-                 concat: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -194,45 +191,27 @@ class BaselineAggLSTM4(BaseModel):
         self.view_missing_p = view_missing_p
         self.edge_missing_p = edge_missing_p
         self.n_hops = n_hops
-        self.attn_gelu = attn_gelu
-        self.final_gelu = final_gelu
-        self.concat = concat
 
         self.max_start = None
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
 
-        if variant == 'full':
-            K = 3
-        elif variant == 'half':
-            K = 2
-        elif variant in ['hidden', 'b', 'f']:
-            K = 1
-        C = 1 if concat else 2
-
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
         if agg_type in ['mean', 'attention', 'sage', 'gat']:
-            if final_gelu:
-                self.out_proj = GehringLinear(
-                    C * K * self.hidden_size, self.hidden_size)
-                self.fc = GehringLinear(self.hidden_size, 1)
-            else:
-                self.fc = GehringLinear(C * K * self.hidden_size, 1)
+            self.fc = GehringLinear(2 * self.hidden_size, 1)
 
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
-                hidden_size * K, 4, dropout=0.1, bias=True,
+                hidden_size * 2, 4, dropout=0.1, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
         elif agg_type == 'sage':
-            self.conv = SAGEConv(hidden_size * 3, hidden_size * 3)
+            self.conv = SAGEConv(hidden_size * 2, hidden_size * 2)
         elif agg_type == 'gat':
-            self.conv = GATConv(hidden_size * 3, hidden_size * 3 // 4,
+            self.conv = GATConv(hidden_size * 2, hidden_size * 2 // 4,
                                 heads=4, dropout=0.1)
 
         if n_hops == 2:
-            self.proj_hop_2 = GehringLinear(
-                6 * self.hidden_size, 3 * self.hidden_size)
             self.hop_rs = np.random.RandomState(4321)
 
         series_path = f'{data_dir}/{seed_word}/series.pkl'
@@ -492,8 +471,7 @@ class BaselineAggLSTM4(BaseModel):
                 Xm_2 = self._aggregate_attn(Xn[idx], Xm_2, masks_2)
             elif self.agg_type in ['gat', 'sage']:
                 Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2)
-            X_out = self._pool(Xn[idx], Xm_2)
-            Xn[idx] = F.gelu(self.proj_hop_2(X_out)).type_as(Xn)
+            Xn[idx] = self._pool(Xn[idx], Xm_2)
 
         _, S, E = Xn.shape
 
@@ -519,10 +497,7 @@ class BaselineAggLSTM4(BaseModel):
         return Xm, masks
 
     def _pool(self, X, Xn):
-        if self.concat:
-            X_out = X + Xn
-        else:
-            X_out = torch.cat([X, Xn], dim=-1)
+        X_out = X + Xn
         return X_out
 
     def _aggregate_mean(self, Xn, masks):
@@ -569,8 +544,7 @@ class BaselineAggLSTM4(BaseModel):
 
         X_out = X_attn.reshape(B, T, E)
 
-        if self.attn_gelu:
-            X_out = F.gelu(X_out)
+        X_out = F.gelu(X_out).type_as(X)
 
         return X_out
 
@@ -616,6 +590,8 @@ class BaselineAggLSTM4(BaseModel):
 
         X_agg = nodes.reshape(B, T, E)
         # X_agg.shape == [batch_size, seq_len, hidden_size]
+
+        X_agg = F.gelu(X_agg).type_as(X_agg)
 
         return X_agg
 
@@ -677,10 +653,7 @@ class BaselineAggLSTM4(BaseModel):
                 X, keys, start, self.total_length)
             # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
-            if self.final_gelu:
-                X_agg = self.fc(F.gelu(self.out_proj(X_agg)))
-            else:
-                X_agg = self.fc(X_agg)
+            X_agg = self.fc(X_agg)
             # X_agg.shape == [batch_size, seq_len, 1]
 
             preds = preds + X_agg.squeeze(-1)
@@ -721,10 +694,7 @@ class BaselineAggLSTM4(BaseModel):
                     seq_len = self.total_length - self.forecast_length + i + 1
                     X_agg = self._get_neighbour_embeds(
                         X, keys, start, seq_len)
-                    if self.final_gelu:
-                        X_agg = self.fc(F.gelu(self.out_proj(X_agg)))
-                    else:
-                        X_agg = self.fc(X_agg)
+                    X_agg = self.fc(X_agg)
                     pred = pred + X_agg.squeeze(-1)[:, -1]
                     # delta.shape == [batch_size]
 
@@ -773,26 +743,12 @@ class LSTMDecoder(nn.Module):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         forecast = X.new_zeros(*X.shape)
-        if self.variant == 'full':
-            hidden = X.new_zeros(X.shape[0], X.shape[1], 3 * X.shape[2])
-        elif self.variant in ['hidden', 'b', 'f']:
-            hidden = X.new_zeros(X.shape[0], X.shape[1], X.shape[2])
-        elif self.variant == 'half':
-            hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
+        hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
 
         for layer in self.layers:
             h, b, f = layer(X)
             X = X - b
-            if self.variant == 'full':
-                hidden = hidden + torch.cat([h, b, f], dim=-1)
-            elif self.variant == 'hidden':
-                hidden = hidden + h
-            elif self.variant == 'b':
-                hidden = hidden + b
-            elif self.variant == 'b':
-                hidden = hidden + f
-            elif self.variant == 'half':
-                hidden = hidden + torch.cat([h, b], dim=-1)
+            hidden = hidden + torch.cat([h, b], dim=-1)
             forecast = forecast + f
         hidden = hidden / len(self.layers)
 

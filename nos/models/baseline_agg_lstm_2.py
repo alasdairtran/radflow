@@ -83,9 +83,6 @@ class BaselineAggLSTM2(BaseModel):
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
         self.fc = GehringLinear(self.hidden_size, 1)
-        if agg_type in ['mean', 'attention', 'sage', 'gat']:
-            self.out_proj = GehringLinear(
-                self.hidden_size * 2, self.hidden_size)
 
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
@@ -252,7 +249,7 @@ class BaselineAggLSTM2(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, level, parents):
+    def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
         B, T, E = X.shape
 
         # First iteration: grab the top neighbours from each sample
@@ -381,10 +378,7 @@ class BaselineAggLSTM2(BaseModel):
         return Xm, masks
 
     def _pool(self, X, Xn):
-        X_out = torch.cat([X, Xn], dim=-1)
-        # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
-
-        X_out = F.relu(self.out_proj(X_out))
+        X_out = X + Xn
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
         return X_out
@@ -433,6 +427,8 @@ class BaselineAggLSTM2(BaseModel):
 
         X_out = X_attn.reshape(B, T, E)
 
+        X_out = F.gelu(X_out).type_as(X)
+
         return X_out
 
     def _aggregate_gat(self, X, Xn, masks):
@@ -477,6 +473,8 @@ class BaselineAggLSTM2(BaseModel):
 
         X_agg = nodes.reshape(B, T, E)
         # X_agg.shape == [batch_size, seq_len, hidden_size]
+
+        X_agg = F.gelu(X_agg).type_as(X_agg)
 
         return X_agg
 
