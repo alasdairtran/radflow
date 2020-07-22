@@ -160,7 +160,6 @@ class BaselineAggLSTM4(BaseModel):
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
-                 batch_as_subgraph: bool = False,
                  neigh_sample: bool = False,
                  equal_weight: bool = False,
                  t_total: int = 163840,
@@ -182,7 +181,6 @@ class BaselineAggLSTM4(BaseModel):
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
         self.test_lengths = test_lengths
-        self.batch_as_subgraph = batch_as_subgraph
         self.t_total = t_total
         self.current_t = 0
         self.static_graph = static_graph
@@ -386,9 +384,7 @@ class BaselineAggLSTM4(BaseModel):
                 for day in range(start, start+total_len):
                     neighs_t = [n for n in self.neighs[key][day]
                                 if n not in blackset]
-                    if self.training and self.batch_as_subgraph:
-                        kn |= set(neighs_t) & batch_set
-                    elif self.static_graph:
+                    if self.static_graph:
                         kn &= set(neighs_t)
                     elif self.neigh_sample:
                         candidates = set(neighs_t[:self.max_neighbours])
@@ -443,24 +439,17 @@ class BaselineAggLSTM4(BaseModel):
             Xm = X.new_zeros(B, 1, T, E)
             return Xm, masks
 
-        if self.training and self.batch_as_subgraph and X_cache is not None:
-            cache_pos = {k: i for i, k in enumerate(keys)}
-            Xn_list = []
-            for key in all_neigh_keys:
-                Xn_list.append(X_cache[cache_pos[key]])
-            Xn = torch.stack(Xn_list, dim=0)
-        else:
-            neigh_series_list = []
-            for key in all_neigh_keys:
-                k = self.series_map[key]
-                end = start+total_len
-                neigh_series_list.append(self.series[k, start:end])
-            neighs = torch.stack(neigh_series_list, dim=0)
-            # neighs.shape == [batch_size * max_n_neighs, seq_len]
+        neigh_series_list = []
+        for key in all_neigh_keys:
+            k = self.series_map[key]
+            end = start+total_len
+            neigh_series_list.append(self.series[k, start:end])
+        neighs = torch.stack(neigh_series_list, dim=0)
+        # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
-            neighs = torch.log1p(neighs)
-            Xn, _ = self._forward_full(neighs)
-            # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
+        neighs = torch.log1p(neighs)
+        Xn, _ = self._forward_full(neighs)
+        # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
 
         if self.peek:
             Xn = Xn[:, 1:]
