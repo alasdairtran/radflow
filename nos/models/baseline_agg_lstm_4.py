@@ -349,13 +349,12 @@ class BaselineAggLSTM4(BaseModel):
 
         return X, forecast
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len, X_cache=None):
+    def _get_neighbour_embeds(self, X, keys, start, total_len):
         if self.agg_type == 'none':
             return X
 
-        ancestors = defaultdict(set)
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, X_cache, 1, ancestors)
+            X, keys, start, total_len, 1)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -367,23 +366,20 @@ class BaselineAggLSTM4(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, X_cache, level, ancestors):
+    def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
         B, T, E = X.shape
-        batch_set = set(keys)
 
         # First iteration: grab the top neighbours from each sample
         key_neighs = {}
         max_n_neighs = 1
-        all_neigh_keys = set()
-        for key in keys:
+        for i, key in enumerate(keys):
             if key in self.neighs:
                 kn = set(self.neighs[key][start]) \
                     if self.static_graph else set()
                 counter = Counter()
-                blackset = ancestors[key]
                 for day in range(start, start+total_len):
                     neighs_t = [n for n in self.neighs[key][day]
-                                if n not in blackset]
+                                if parents is None or n != parents[i]]
                     if self.static_graph:
                         kn &= set(neighs_t)
                     elif self.neigh_sample:
@@ -420,36 +416,43 @@ class BaselineAggLSTM4(BaseModel):
                             replace=False,
                             p=probs,
                         ))
-                # elif self.neigh_sample:
-                #     pairs = counter.most_common(self.max_agg_neighbours)
-                #     candidates = [p[0] for p in pairs]
-                #     kn = set(candidates)
 
-                key_neighs[key] = kn
-                for n in kn:
-                    ancestors[n].add(key)
-                all_neigh_keys |= kn
+                key_neighs[key] = list(kn)
                 max_n_neighs = max(max_n_neighs, len(kn))
 
-        all_neigh_keys = list(all_neigh_keys)
-        all_neigh_dict = {k: i for i, k in enumerate(all_neigh_keys)}
+        neighs = torch.zeros(B, max_n_neighs, total_len).to(X.device)
+        n_masks = X.new_zeros(B, max_n_neighs).bool()
+        parents = X.new_full((B, max_n_neighs), -1).long()
+        neigh_keys = X.new_full((B, max_n_neighs), -1).long()
+        end = start+total_len
+        for i, key in enumerate(keys):
+            if key in key_neighs:
+                for j, n in enumerate(key_neighs[key]):
+                    k = self.series_map[n]
+                    neighs[i, j] = self.series[k, start:end]
+                    parents[i, j] = key
+                    n_masks[i, j] = True
+                    neigh_keys[i, j] = n
 
-        if not all_neigh_keys:
+        neighs = neighs.reshape(B * max_n_neighs, total_len)
+        n_masks = n_masks.reshape(B * max_n_neighs)
+        parents = parents.reshape(B * max_n_neighs)
+        neigh_keys = neigh_keys.reshape(B * max_n_neighs)
+        # neighs.shape == [batch_size * max_n_neighs, seq_len]
+
+        neighs = neighs[n_masks]
+        parents = parents[n_masks]
+        neigh_keys = neigh_keys[n_masks]
+        # neighs.shape == [neigh_batch_size, seq_len]
+
+        if neighs.shape[0] == 0:
             masks = X.new_ones(B, 1, T).bool()
             Xm = X.new_zeros(B, 1, T, E)
             return Xm, masks
 
-        neigh_series_list = []
-        for key in all_neigh_keys:
-            k = self.series_map[key]
-            end = start+total_len
-            neigh_series_list.append(self.series[k, start:end])
-        neighs = torch.stack(neigh_series_list, dim=0)
-        # neighs.shape == [batch_size * max_n_neighs, seq_len]
-
         neighs = torch.log1p(neighs)
         Xn, _ = self._forward_full(neighs)
-        # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
+        # Xn.shape == [neigh_batch_size, seq_len, hidden_size]
 
         if self.peek:
             Xn = Xn[:, 1:]
@@ -457,16 +460,15 @@ class BaselineAggLSTM4(BaseModel):
             Xn = Xn[:, :-1]
 
         if self.n_hops - level > 0:
-            input_keys = np.array(all_neigh_keys)
             if not self.evaluate_mode:
                 size = int(round(len(Xn) / self.max_agg_neighbours))
                 idx = self.hop_rs.choice(len(Xn), size=size, replace=False)
-                input_keys = np.array(all_neigh_keys)[idx]
             else:
                 idx = list(range(len(Xn)))
 
             Xm_2, masks_2 = self._construct_neighs(
-                Xn[idx], input_keys, start, total_len, None, level + 1, ancestors)
+                Xn[idx], neigh_keys[idx].cpu().tolist(), start, total_len,
+                level + 1, parents[idx].cpu().tolist())
             if self.agg_type == 'mean':
                 Xm_2 = self._aggregate_mean(Xm_2, masks_2)
             elif self.agg_type == 'attention':
@@ -479,16 +481,16 @@ class BaselineAggLSTM4(BaseModel):
         _, S, E = Xn.shape
 
         # We plus one to give us option to either peek or not
-        masks = X.new_ones(B, max_n_neighs, S).bool()
-        Xm = X.new_zeros(B, max_n_neighs, S, E)
+        Xm = X.new_zeros(B * max_n_neighs, S, E)
+        Xm[n_masks] = Xn
+        Xm = Xm.reshape(B, max_n_neighs, S, E)
 
+        masks = X.new_ones(B, max_n_neighs, S).bool()
         for b, key in enumerate(keys):
             # in_degrees maps node_id to a sorted list of dicts
             # a dict key looks like: {'id': 123, 'mask'; [0, 0, 1]}
             if key in key_neighs:
                 for i, k in enumerate(key_neighs[key]):
-                    pos = all_neigh_dict[k]
-                    Xm[b, i] = Xn[pos]
                     mask = self.mask_dict[key][self.in_degrees[key][k]]
                     mask = mask[start:start+total_len]
                     if self.peek:
