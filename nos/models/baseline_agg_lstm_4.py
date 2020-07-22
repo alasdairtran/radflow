@@ -287,7 +287,8 @@ class BaselineAggLSTM4(BaseModel):
                     node_masks[i] = mask
                     neigh_dict[n['id']] = i
                 self.in_degrees[node] = neigh_dict
-                self.mask_dict[node] = torch.from_numpy(node_masks).to(p.device)
+                self.mask_dict[node] = torch.from_numpy(
+                    node_masks).to(p.device)
 
         logger.info('Processing series')
         series_matrix = np.zeros((len(self.series),
@@ -316,6 +317,17 @@ class BaselineAggLSTM4(BaseModel):
             self.series_map[k] = i
         self.series = p.new_tensor(series_matrix)
         self.non_missing = torch.from_numpy(non_missing_matrix).to(p.device)
+
+        # If a neighbour has a missing view on day t, all outgoing edges
+        # will also be deleted.
+        if self.view_missing_p > 0:
+            logger.info('Removing edges from neighbours with missing views.')
+            for key in tqdm(self.neighs):
+                for day in self.neighs[key]:
+                    neighs = self.neighs[key][day]
+                    k = self.series_map[key]
+                    neighs = [n for n in neighs if self.non_missing[n][day]]
+                    self.neighs[key][day] = neighs
 
         self.max_start = len(
             self.series[i]) - self.forecast_length * 2 - self.total_length - self.end_offset
