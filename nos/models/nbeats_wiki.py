@@ -16,6 +16,7 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
+from pymongo import MongoClient
 from torch_geometric.data import Data
 from torch_geometric.nn import SAGEConv
 from tqdm import tqdm
@@ -37,7 +38,9 @@ class NBEATSWiki(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  data_dir: str,
-                 seed_word: str = 'programming',
+                 database: str = 'vevo',
+                 collection: str = 'graph',
+                 series_len: int = 63,
                  forecast_length: int = 28,
                  backcast_length: int = 224,
                  test_lengths: List[int] = [7],
@@ -63,27 +66,17 @@ class NBEATSWiki(BaseModel):
         self.rs = np.random.RandomState(1234)
         self.hidden_size = hidden_size
         self.device = torch.device('cuda:0')
-        self.max_start = None
         self.missing_p = missing_p
         self.end_offset = end_offset
-        # self.diff = {}
         initializer(self)
 
-        series_path = f'{data_dir}/{seed_word}/series.pkl'
-        logger.info(f'Loading {series_path} into model')
-        with open(series_path, 'rb') as f:
-            self.series = pickle.load(f)
+        client = MongoClient(host='localhost', port=27017)
+        db = client[database]
+        self.col = db[collection]
 
-        if max_neighbours > 0:
-            in_degrees_path = f'{data_dir}/{seed_word}/in_degrees.pkl'
-            logger.info(f'Loading {in_degrees_path} into model')
-            with open(in_degrees_path, 'rb') as f:
-                self.in_degrees = pickle.load(f)
-
-            neighs_path = f'{data_dir}/{seed_word}/neighs.pkl'
-            logger.info(f'Loading {neighs_path} into model')
-            with open(neighs_path, 'rb') as f:
-                self.neighs = pickle.load(f)
+        self.series_len = series_len
+        self.max_start = series_len - self.forecast_length * \
+            2 - self.total_length - self.end_offset
 
         if net == 'nbeats':
             self.net = NBeatsNet(device=torch.device('cuda:0'),
@@ -235,7 +228,7 @@ class NBEATSWiki(BaseModel):
         # its gradient.
         # torch.autograd.set_detect_anomaly(True)
 
-        self._initialize_series()
+        # self._initialize_series()
 
         split = splits[0]
         B = len(keys)
@@ -250,27 +243,27 @@ class NBEATSWiki(BaseModel):
             'sample_size': p.new_tensor(B),
         }
 
-        series_list = []
-        # diff_list = []
-        for key in keys:
-            s = self.series[key]
-            if split == 'train':
-                if self.max_start == 0:
-                    start = 0
-                else:
-                    start = self.rs.randint(0, self.max_start)
-            elif split == 'valid':
-                start = self.max_start + self.forecast_length
-            elif split == 'test':
-                # start = len(s) - self.total_length
-                start = self.max_start + self.forecast_length * 2
-            s = s[start:start+self.total_length]
-            # d = self.diff[key][start:start+self.total_length]
-            series_list.append(s)
-            # diff_list.append(d)
+        if split == 'train':
+            if self.max_start == 0:
+                start = 0
+            else:
+                start = self.rs.randint(0, self.max_start)
+        elif split == 'valid':
+            start = self.max_start + self.forecast_length
+        elif split == 'test':
+            start = self.max_start + self.forecast_length * 2
 
-        series = torch.stack(series_list, dim=0)
-        # series.shape == [batch_size, total_length]
+        # Find all series of given keys
+        cursor = self.col.find({'_id': {'$in': keys}})
+        series_dict = {}
+        for page in cursor:
+            key = int(page['_id'])
+            series = np.array(page['s'][start:start+self.total_length])
+            series_dict[key] = series
+
+        series_list = np.array([series_dict[k]
+                                for k in keys], dtype=np.float32)
+        series = torch.from_numpy(series_list).to(p.device)
 
         # diffs = torch.stack(diff_list, dim=0)
         # diffs = series.new_tensor(diff_list)
