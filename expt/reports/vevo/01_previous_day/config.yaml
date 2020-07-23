@@ -11,7 +11,6 @@ vocabulary:
   type: empty_vocab
 model:
   type: new_naive
-  data_dir: "./data/wiki/subgraphs"
   database: vevo
   collection: graph
   method: previous_day

@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class NewNaive(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
-                 data_dir: str,
                  database: str = 'vevo',
                  collection: str = 'graph',
                  series_len: int = 63,
@@ -158,7 +157,6 @@ class NewNaive(BaseModel):
 class BaselineAggLSTM4(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
-                 data_dir: str,
                  agg_type: str,
                  forecast_length: int = 7,
                  backcast_length: int = 42,

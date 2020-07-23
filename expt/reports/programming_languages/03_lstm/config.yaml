@@ -13,7 +13,6 @@ model:
   type: baseline_agg_lstm_2
   agg_type: none
   peek: true
-  data_dir: "./data/wiki/subgraphs"
   database: wiki
   collection: programming
   num_layers: 8

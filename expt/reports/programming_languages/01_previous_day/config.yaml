@@ -10,7 +10,6 @@ vocabulary:
   type: empty_vocab
 model:
   type: new_naive
-  data_dir: "./data/wiki/subgraphs"
   database: wiki
   collection: programming
   method: previous_day

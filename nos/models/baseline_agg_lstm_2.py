@@ -35,7 +35,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class BaselineAggLSTM2(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
-                 data_dir: str,
                  agg_type: str,
                  forecast_length: int = 7,
                  backcast_length: int = 42,

@@ -13,7 +13,6 @@ model:
   type: baseline_agg_lstm_4
   agg_type: mean
   peek: true
-  data_dir: "./data/wiki/subgraphs"
   database: vevo
   collection: graph
   num_layers: 8

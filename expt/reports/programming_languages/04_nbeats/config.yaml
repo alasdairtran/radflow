@@ -11,7 +11,6 @@ vocabulary:
   type: empty_vocab
 model:
   type: nbeats_wiki
-  data_dir: "./data/wiki/subgraphs"
   database: wiki
   collection: programming
   n_stacks: 8

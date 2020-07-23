@@ -12,7 +12,6 @@ model:
   type: baseline_agg_lstm_2
   agg_type: mean
   peek: true
-  data_dir: "./data/wiki/subgraphs"
   database: wiki
   collection: health
   num_layers: 8
