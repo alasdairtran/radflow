@@ -230,12 +230,12 @@ class BaselineAggLSTM2(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len):
+    def _get_neighbour_embeds(self, X, keys, start, total_len, neigh_list, mask_list):
         if self.agg_type == 'none':
             return X
 
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, 1)
+            X, keys, start, total_len, neigh_list, mask_list, 1)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -247,67 +247,81 @@ class BaselineAggLSTM2(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
+    def _construct_neighs(self, X, keys, start, total_len, neigh_list, mask_list, level, parents=None):
         B, T, E = X.shape
 
         # First iteration: grab the top neighbours from each sample
         key_neighs = {}
         max_n_neighs = 1
-        for i, key in enumerate(keys):
-            if key in self.neighs:
-                kn = set(self.neighs[key][start]) \
-                    if self.static_graph else set()
-                counter = Counter()
-                for day in range(start, start+total_len):
-                    neighs_t = [n for n in self.neighs[key][day]
-                                if parents is None or n != parents[i]]
-                    if self.static_graph:
-                        kn &= set(neighs_t)
-                    elif self.neigh_sample:
-                        candidates = set(neighs_t[:self.max_neighbours])
-                        kn |= candidates
-                        counter.update(candidates)
-                    else:
-                        kn |= set(neighs_t[:self.max_neighbours])
+        all_neigh_keys = set()
+        for i, (key, neighs) in enumerate(zip(keys, neigh_list)):
+            if not neighs:
+                continue
 
-                if not kn:
-                    continue
-
+            kn = set(neighs[start]) \
+                if self.static_graph else set()
+            counter = Counter()
+            for day in range(start, start+total_len):
+                neighs_t = [n for n in neighs[day]
+                            if parents is None or n != parents[i]]
                 if self.static_graph:
-                    views = {k: self.series[self.series_map[k],
-                                            start:start+self.backcast_length].sum().cpu().item()
-                             for k in kn}
-                    sorted_kn = sorted(views.items(), key=lambda x: x[1])
-                    kn = set(p[0] for p in sorted_kn[:self.max_neighbours])
-                elif self.neigh_sample and not self.evaluate_mode:
-                    pairs = counter.items()
-                    candidates = np.array([p[0] for p in pairs])
-                    probs = np.array([p[1] for p in pairs])
-                    probs = probs / probs.sum()
-                    kn = set(self.sample_rs.choice(
-                        candidates,
-                        size=min(len(candidates), self.max_agg_neighbours),
-                        replace=False,
-                        p=probs,
-                    ))
+                    kn &= set(neighs_t)
+                elif self.neigh_sample:
+                    candidates = set(neighs_t[:self.max_neighbours])
+                    kn |= candidates
+                    counter.update(candidates)
+                else:
+                    kn |= set(neighs_t[:self.max_neighbours])
 
-                key_neighs[key] = list(kn)
-                max_n_neighs = max(max_n_neighs, len(kn))
+            if not kn:
+                continue
 
-        neighs = torch.zeros(B, max_n_neighs, total_len).to(X.device)
+            if self.static_graph:
+                views = {k: self.series[self.series_map[k],
+                                        start:start+self.backcast_length].sum().cpu().item()
+                         for k in kn}
+                sorted_kn = sorted(views.items(), key=lambda x: x[1])
+                kn = set(p[0] for p in sorted_kn[:self.max_neighbours])
+            elif self.neigh_sample and not self.evaluate_mode:
+                pairs = counter.items()
+                candidates = np.array([p[0] for p in pairs])
+                probs = np.array([p[1] for p in pairs])
+                probs = probs / probs.sum()
+                kn = set(self.sample_rs.choice(
+                    candidates,
+                    size=min(len(candidates), self.max_agg_neighbours),
+                    replace=False,
+                    p=probs,
+                ))
+
+            key_neighs[key] = list(kn)
+            all_neigh_keys |= set(kn)
+            max_n_neighs = max(max_n_neighs, len(kn))
+
+        neighs = np.zeros((B, max_n_neighs, total_len), dtype=np.float32)
         n_masks = X.new_zeros(B, max_n_neighs).bool()
         parents = X.new_full((B, max_n_neighs), -1).long()
         neigh_keys = X.new_full((B, max_n_neighs), -1).long()
         end = start+total_len
+
+        cursor = self.col.find({'_id': {'$in': list(all_neigh_keys)}})
+        series_dict = {}
+        neigh_dict = {}
+        for page in cursor:
+            key = int(page['_id'])
+            series = np.array(page['s'][start:end])
+            series_dict[key] = series
+            neigh_dict[key] = page['e']
+
         for i, key in enumerate(keys):
             if key in key_neighs:
                 for j, n in enumerate(key_neighs[key]):
-                    k = self.series_map[n]
-                    neighs[i, j] = self.series[k, start:end]
+                    neighs[i, j] = series_dict[n]
                     parents[i, j] = key
                     n_masks[i, j] = True
                     neigh_keys[i, j] = n
 
+        neighs = torch.from_numpy(neighs).to(X.device)
         neighs = neighs.reshape(B * max_n_neighs, total_len)
         n_masks = n_masks.reshape(B * max_n_neighs)
         parents = parents.reshape(B * max_n_neighs)
@@ -359,19 +373,20 @@ class BaselineAggLSTM2(BaseModel):
         Xm[n_masks] = Xn
         Xm = Xm.reshape(B, max_n_neighs, S, E)
 
-        masks = X.new_ones(B, max_n_neighs, S).bool()
-        for b, key in enumerate(keys):
-            # in_degrees maps node_id to a sorted list of dicts
-            # a dict key looks like: {'id': 123, 'mask'; [0, 0, 1]}
-            if key in key_neighs:
-                for i, k in enumerate(key_neighs[key]):
-                    mask = self.mask_dict[key][self.in_degrees[key][k]]
-                    mask = mask[start:start+total_len]
-                    if self.peek:
-                        mask = mask[1:]
-                    else:
-                        mask = mask[:-1]
-                    masks[b, i] = mask
+        masks = np.ones((B, max_n_neighs, S), dtype=bool)
+        for b, (key, neigh_masks) in enumerate(zip(keys, mask_list)):
+            if key not in key_neighs:
+                continue
+            for i, k in enumerate(key_neighs[key]):
+                mask = neigh_masks[k]
+                mask = mask[start:start+total_len]
+                if self.peek:
+                    mask = mask[1:]
+                else:
+                    mask = mask[:-1]
+                masks[b, i] = mask
+
+        masks = torch.from_numpy(masks).to(X.device)
 
         return Xm, masks
 
@@ -515,13 +530,19 @@ class BaselineAggLSTM2(BaseModel):
         # Find all series of given keys
         cursor = self.col.find({'_id': {'$in': keys}})
         series_dict = {}
+        neigh_dict = {}
+        mask_dict = {}
         for page in cursor:
             key = int(page['_id'])
             series = np.array(page['s'][start:start+self.total_length])
             series_dict[key] = series
+            neigh_dict[key] = page['e']
+            mask_dict[key] = {int(k): v for k, v in page['m'].items()}
 
         series_list = np.array([series_dict[k]
                                 for k in keys], dtype=np.float32)
+        neigh_list = [neigh_dict[k] for k in keys]
+        mask_list = [mask_dict[k] for k in keys]
         raw_series = torch.from_numpy(series_list).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
 
@@ -536,7 +557,7 @@ class BaselineAggLSTM2(BaseModel):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         X_agg = self._get_neighbour_embeds(
-            X, keys, start, self.total_length)
+            X, keys, start, self.total_length, neigh_list, mask_list)
         # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
         X_agg = self.fc(X_agg)
@@ -573,7 +594,7 @@ class BaselineAggLSTM2(BaseModel):
                 X = self._forward_full(series)
                 seq_len = self.total_length - self.forecast_length + i + 1
                 X_agg = self._get_neighbour_embeds(
-                    X, keys, start, seq_len)
+                    X, keys, start, seq_len, neigh_list, mask_list)
                 X_agg = self.fc(X_agg)
                 pred = X_agg.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
