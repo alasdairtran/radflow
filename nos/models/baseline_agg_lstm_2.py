@@ -16,6 +16,7 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
+from pymongo import MongoClient
 from torch_geometric.data import Data
 from torch_geometric.nn import GATConv, SAGEConv
 from tqdm import tqdm
@@ -391,7 +392,7 @@ class BaselineAggLSTM2(BaseModel):
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
 
-        X_out = F.relu(self.out_proj(X_out))
+        X_out = F.gelu(self.out_proj(X_out))
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
         return X_out
