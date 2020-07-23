@@ -35,7 +35,8 @@ class SubWikivNetworkReader(DatasetReader):
         all_cursor = db[collection].find({}, projection=['_id'])
         self.all_ids = sorted([s['_id'] for s in all_cursor])
 
-        node_cursor = db[collection].find({}, projection=['_id'])
+        node_cursor = db[collection].find(
+            {'n': {'$gt': 0}}, projection=['_id'])
         self.node_ids = sorted([s['_id'] for s in node_cursor])
 
         self.train_all = train_all
