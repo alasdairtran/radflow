@@ -199,23 +199,25 @@ class BaselineAggLSTM2(BaseModel):
 
         # If a neighbour has a missing view on day t, all outgoing edges
         # will also be deleted.
-        if self.view_missing_p > 0:
-            logger.info('Updating neighbour masks.')
-            for key in tqdm(self.mask_dict):
-                for n, i in self.in_degrees[key].items():
-                    mask_1 = self.mask_dict[key][i]
-                    mask_2 = ~self.non_missing[self.series_map[n]]
-                    self.mask_dict[key][i] = mask_1 | mask_2
+        if self.agg_type != 'none':
+            if self.view_missing_p > 0:
+                logger.info('Updating neighbour masks.')
+                for key in tqdm(self.mask_dict):
+                    for n, i in self.in_degrees[key].items():
+                        mask_1 = self.mask_dict[key][i]
+                        mask_2 = ~self.non_missing[self.series_map[n]]
+                        self.mask_dict[key][i] = mask_1 | mask_2
 
-        if self.view_missing_p > 0 or self.edge_missing_p > 0:
-            logger.info('Removing edges from neighbours with missing views.')
-            for key in tqdm(self.neighs):
-                for day in self.neighs[key]:
-                    neighs = self.neighs[key][day]
-                    k = self.series_map[key]
-                    neighs = [n for n in neighs
-                              if not self.mask_dict[key][self.in_degrees[key][n]][day]]
-                    self.neighs[key][day] = neighs
+            if self.view_missing_p > 0 or self.edge_missing_p > 0:
+                logger.info(
+                    'Removing edges from neighbours with missing views.')
+                for key in tqdm(self.neighs):
+                    for day in self.neighs[key]:
+                        neighs = self.neighs[key][day]
+                        k = self.series_map[key]
+                        neighs = [n for n in neighs
+                                  if not self.mask_dict[key][self.in_degrees[key][n]][day]]
+                        self.neighs[key][day] = neighs
 
         self.max_start = len(
             self.series[i]) - self.forecast_length * 2 - self.total_length - self.end_offset
