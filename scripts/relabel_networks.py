@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 
 import pandas as pd
+import pymongo
+from pymongo import MongoClient
 from tqdm import tqdm
 
 from nos.utils import keystoint
@@ -188,8 +190,59 @@ def relabel_networks():
         pickle.dump(neighs, f)
 
 
+def populate_database(seed_word, collection):
+    data_dir = 'data/wiki/subgraphs'
+    series_path = f'{data_dir}/{seed_word}/series.pkl'
+    with open(series_path, 'rb') as f:
+        series = pickle.load(f)
+
+    in_degrees_path = f'{data_dir}/{seed_word}/in_degrees.pkl'
+    with open(in_degrees_path, 'rb') as f:
+        in_degrees = pickle.load(f)
+
+    neighs_path = f'{data_dir}/{seed_word}/neighs.pkl'
+    with open(neighs_path, 'rb') as f:
+        neighs = pickle.load(f)
+
+    docs = []
+
+    for k, s in tqdm(series.items()):
+        n_days = len(s)
+        neighs_list = []
+        if k in neighs:
+            for d in range(n_days):
+                ns = [] if d not in neighs[k] else neighs[k][d]
+                neighs_list.append(ns)
+
+        masks = {}
+        if k in in_degrees:
+            for n in in_degrees[k]:
+                masks[str(n['id'])] = list(map(bool, n['mask']))
+
+        doc = {
+            '_id': k,
+            's': s,
+            'e': neighs_list,
+            'm': masks,
+            'n': len(masks),
+        }
+
+        docs.append(doc)
+
+    client = MongoClient(host='localhost', port=27017)
+    db = client.vevo
+    db[collection].create_index([
+        ('n', pymongo.DESCENDING),
+    ])
+
+    logger.info('Inserting graph into database.')
+    result = db[collection].insert_many(docs)
+
+
 def main():
     relabel_networks()
+    populate_database('vevo', 'graph')
+    populate_database('vevo_static', 'static')
 
 
 if __name__ == '__main__':
