@@ -305,11 +305,12 @@ class BaselineAggLSTM2(BaseModel):
         n_masks = X.new_zeros(B, max_n_neighs).bool()
         parents = X.new_full((B, max_n_neighs), -1).long()
         neigh_keys = X.new_full((B, max_n_neighs), -1).long()
-        end = start+total_len
 
         missing_keys = all_neigh_keys - set(series_dict)
         if missing_keys:
-            cursor = self.col.find({'_id': {'$in': list(missing_keys)}},
+            query = {'_id': {'$in': list(missing_keys)}}
+            projection = {'s': {'$slice': [start, self.total_length]}}
+            cursor = self.col.find(query, projection,
                                    batch_size=len(missing_keys))
             for page in cursor:
                 key = int(page['_id'])
@@ -321,7 +322,7 @@ class BaselineAggLSTM2(BaseModel):
         for i, key in enumerate(keys):
             if key in key_neighs:
                 for j, n in enumerate(key_neighs[key]):
-                    neighs[i, j] = series_dict[n][start:end]
+                    neighs[i, j] = series_dict[n][:total_len]
                     parents[i, j] = key
                     n_masks[i, j] = True
                     neigh_keys[i, j] = n
@@ -538,13 +539,15 @@ class BaselineAggLSTM2(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        cursor = self.col.find({'_id': {'$in': keys}}, batch_size=len(keys))
+        query = {'_id': {'$in': keys}}
+        projection = {'s': {'$slice': [start, self.total_length]}}
+        cursor = self.col.find(query, projection, batch_size=len(keys))
         series_dict = {}
         neigh_dict = {}
         mask_dict = {}
         for page in cursor:
             key = int(page['_id'])
-            series = np.array(page['s'][start:start+self.total_length])
+            series = np.array(page['s'])
             series_dict[key] = series
             neigh_dict[key] = page['e']
             mask_dict[key] = {int(k): v for k, v in page['m'].items()}

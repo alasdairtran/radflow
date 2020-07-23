@@ -253,11 +253,13 @@ class NBEATSWiki(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        cursor = self.col.find({'_id': {'$in': keys}})
+        query = {'_id': {'$in': keys}}
+        projection = {'s': {'$slice': [start, self.total_length]}}
+        cursor = self.col.find(query, projection, batch_size=len(keys))
         series_dict = {}
         for page in cursor:
             key = int(page['_id'])
-            series = np.array(page['s'][start:start+self.total_length])
+            series = np.array(page['s'])
             series_dict[key] = series
 
         series_list = np.array([series_dict[k]
