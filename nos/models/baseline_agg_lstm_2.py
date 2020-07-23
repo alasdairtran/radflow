@@ -230,12 +230,14 @@ class BaselineAggLSTM2(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len, neigh_list, mask_list):
+    def _get_neighbour_embeds(self, X, keys, start, total_len, neigh_list, mask_list, series_dict=None, neigh_dict=None):
         if self.agg_type == 'none':
             return X
 
+        series_dict = {} if series_dict is None else series_dict
+        neigh_dict = {} if neigh_dict is None else neigh_dict
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, neigh_list, mask_list, 1)
+            X, keys, start, total_len, neigh_list, mask_list, series_dict, neigh_dict, 1)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -247,7 +249,7 @@ class BaselineAggLSTM2(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, neigh_list, mask_list, level, parents=None):
+    def _construct_neighs(self, X, keys, start, total_len, neigh_list, mask_list, series_dict, neigh_dict, level, parents=None):
         B, T, E = X.shape
 
         # First iteration: grab the top neighbours from each sample
@@ -287,12 +289,12 @@ class BaselineAggLSTM2(BaseModel):
                 candidates = np.array([p[0] for p in pairs])
                 probs = np.array([p[1] for p in pairs])
                 probs = probs / probs.sum()
-                kn = set(self.sample_rs.choice(
+                kn = self.sample_rs.choice(
                     candidates,
                     size=min(len(candidates), self.max_agg_neighbours),
                     replace=False,
                     p=probs,
-                ))
+                ).tolist()
 
             key_neighs[key] = list(kn)
             all_neigh_keys |= set(kn)
@@ -304,19 +306,19 @@ class BaselineAggLSTM2(BaseModel):
         neigh_keys = X.new_full((B, max_n_neighs), -1).long()
         end = start+total_len
 
-        cursor = self.col.find({'_id': {'$in': list(all_neigh_keys)}})
-        series_dict = {}
-        neigh_dict = {}
-        for page in cursor:
-            key = int(page['_id'])
-            series = np.array(page['s'][start:end])
-            series_dict[key] = series
-            neigh_dict[key] = page['e']
+        missing_keys = all_neigh_keys - set(series_dict)
+        if missing_keys:
+            cursor = self.col.find({'_id': {'$in': list(missing_keys)}})
+            for page in cursor:
+                key = int(page['_id'])
+                series = np.array(page['s'])
+                series_dict[key] = series
+                neigh_dict[key] = page['e']
 
         for i, key in enumerate(keys):
             if key in key_neighs:
                 for j, n in enumerate(key_neighs[key]):
-                    neighs[i, j] = series_dict[n]
+                    neighs[i, j] = series_dict[n][start:end]
                     parents[i, j] = key
                     n_masks[i, j] = True
                     neigh_keys[i, j] = n
@@ -590,11 +592,12 @@ class BaselineAggLSTM2(BaseModel):
 
             series = log_raw_series[:, :-self.forecast_length]
             current_views = series[:, -1]
+            series_dict, neigh_dict = {}, {}
             for i in range(self.forecast_length):
                 X = self._forward_full(series)
                 seq_len = self.total_length - self.forecast_length + i + 1
                 X_agg = self._get_neighbour_embeds(
-                    X, keys, start, seq_len, neigh_list, mask_list)
+                    X, keys, start, seq_len, neigh_list, mask_list, series_dict, neigh_dict)
                 X_agg = self.fc(X_agg)
                 pred = X_agg.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
