@@ -1,11 +1,9 @@
 # Number of trainable parameters:
 dataset_reader:
   type: subwiki_network
-  data_dir: "./data/wiki/subgraphs"
-  seed_word: vevo
-  use_edge: true
-  eval_edge: true
-  fp16: false
+  database: vevo
+  collection: graph
+  train_all: false
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -16,7 +14,8 @@ model:
   agg_type: attention
   peek: true
   data_dir: "./data/wiki/subgraphs"
-  seed_word: vevo
+  database: vevo
+  collection: graph
   num_layers: 8
   hidden_size: 112
   dropout: 0.1

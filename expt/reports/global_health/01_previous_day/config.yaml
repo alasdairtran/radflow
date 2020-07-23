@@ -1,9 +1,8 @@
 # Number of trainable parameters:
 dataset_reader:
   type: subwiki_network
-  data_dir: "./data/wiki/subgraphs"
-  seed_word: global_health
-  fp16: false
+  database: wiki
+  collection: health
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -12,7 +11,8 @@ vocabulary:
 model:
   type: new_naive
   data_dir: "./data/wiki/subgraphs"
-  seed_word: global_health
+  database: wiki
+  collection: health
   method: previous_day
   backcast_length: 112
   forecast_length: 28

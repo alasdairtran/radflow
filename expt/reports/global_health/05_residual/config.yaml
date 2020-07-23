@@ -1,11 +1,9 @@
 # Number of trainable parameters:
 dataset_reader:
   type: subwiki_network
-  data_dir: "./data/wiki/subgraphs"
-  seed_word: global_health
-  fp16: false
-  use_edge: false
-  eval_edge: true
+  database: wiki
+  collection: health
+  train_all: true
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -15,7 +13,8 @@ model:
   type: baseline_agg_lstm_4
   agg_type: none
   data_dir: "./data/wiki/subgraphs"
-  seed_word: global_health
+  database: wiki
+  collection: health
   num_layers: 8
   hidden_size: 128
   dropout: 0.1

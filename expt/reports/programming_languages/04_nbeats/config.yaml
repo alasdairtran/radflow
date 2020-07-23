@@ -1,11 +1,9 @@
 # Number of trainable parameters:
 dataset_reader:
   type: subwiki_network
-  data_dir: "./data/wiki/subgraphs"
-  seed_word: programming_languages
-  fp16: false
-  use_edge: false
-  eval_edge: true
+  database: wiki
+  collection: programming
+  train_all: true
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -14,7 +12,8 @@ vocabulary:
 model:
   type: nbeats_wiki
   data_dir: "./data/wiki/subgraphs"
-  seed_word: programming_languages
+  database: wiki
+  collection: programming
   n_stacks: 8
   hidden_size: 176
   thetas_dims: 176
