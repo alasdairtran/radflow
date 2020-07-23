@@ -98,6 +98,10 @@ class BaselineAggLSTM2(BaseModel):
             self.proj_hop_2 = GehringLinear(
                 6 * self.hidden_size, 3 * self.hidden_size)
             self.hop_rs = np.random.RandomState(4321)
+            if agg_type == 'attention':
+                self.attn2 = nn.MultiheadAttention(
+                    hidden_size * 2, 4, dropout=0.1, bias=True,
+                    add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
 
         series_path = f'{data_dir}/{seed_word}/series.pkl'
         logger.info(f'Loading {series_path} into model')
@@ -244,7 +248,7 @@ class BaselineAggLSTM2(BaseModel):
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
         elif self.agg_type == 'attention':
-            Xm = self._aggregate_attn(X, Xm, masks)
+            Xm = self._aggregate_attn(X, Xm, masks, 1)
         elif self.agg_type in ['gat', 'sage']:
             Xm = self._aggregate_gat(X, Xm, masks)
 
@@ -350,7 +354,7 @@ class BaselineAggLSTM2(BaseModel):
             if self.agg_type == 'mean':
                 Xm_2 = self._aggregate_mean(Xm_2, masks_2)
             elif self.agg_type == 'attention':
-                Xm_2 = self._aggregate_attn(Xn[idx], Xm_2, masks_2)
+                Xm_2 = self._aggregate_attn(Xn[idx], Xm_2, masks_2, level + 1)
             elif self.agg_type in ['gat', 'sage']:
                 Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2)
             X_out = self._pool(Xn[idx], Xm_2)
@@ -408,7 +412,7 @@ class BaselineAggLSTM2(BaseModel):
 
         return Xn
 
-    def _aggregate_attn(self, Xn, X, masks):
+    def _aggregate_attn(self, Xn, X, masks, level):
         # X.shape == [batch_size, seq_len, hidden_size]
         # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
         # masks.shape == [batch_size, n_neighs, seq_len]
@@ -424,7 +428,10 @@ class BaselineAggLSTM2(BaseModel):
         key_padding_mask = masks.transpose(0, 1).reshape(N, B * T)
         # key_padding_mask.shape == [n_neighs, batch_size  * seq_len]
 
-        X_attn, _ = self.attn(X, Xn, Xn, key_padding_mask, False)
+        if level == 1:
+            X_attn, _ = self.attn(X, Xn, Xn, key_padding_mask, False)
+        elif level == 2:
+            X_attn, _ = self.attn2(X, Xn, Xn, key_padding_mask, False)
         # X_attn.shape == [1, batch_size * seq_len, hidden_size]
 
         X_out = X_attn.reshape(B, T, E)
