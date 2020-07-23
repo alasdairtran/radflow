@@ -41,7 +41,9 @@ class BaselineAggLSTM2(BaseModel):
                  backcast_length: int = 42,
                  test_lengths: List[int] = [7],
                  peek: bool = True,
-                 seed_word: str = 'vevo',
+                 database: str = 'vevo',
+                 collection: str = 'graph',
+                 series_len: int = 63,
                  num_layers: int = 8,
                  hidden_size: int = 128,
                  dropout: float = 0.1,
@@ -65,7 +67,6 @@ class BaselineAggLSTM2(BaseModel):
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
         self.test_lengths = test_lengths
-        self.max_start = None
         self.t_total = t_total
         self.current_t = 0
         self.static_graph = static_graph
@@ -108,23 +109,13 @@ class BaselineAggLSTM2(BaseModel):
                     hidden_size * 2, 4, dropout=0.1, bias=True,
                     add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
 
-        series_path = f'{data_dir}/{seed_word}/series.pkl'
-        logger.info(f'Loading {series_path} into model')
-        with open(series_path, 'rb') as f:
-            self.series = pickle.load(f)
+        client = MongoClient(host='localhost', port=27017)
+        db = client[database]
+        self.col = db[collection]
 
-        if self.agg_type != 'none':
-            in_degrees_path = f'{data_dir}/{seed_word}/in_degrees.pkl'
-            logger.info(f'Loading {in_degrees_path} into model')
-            with open(in_degrees_path, 'rb') as f:
-                self.in_degrees = pickle.load(f)
-
-            neighs_path = f'{data_dir}/{seed_word}/neighs.pkl'
-            logger.info(f'Loading {neighs_path} into model')
-            with open(neighs_path, 'rb') as f:
-                self.neighs = pickle.load(f)
-        self.mask_dict = None
-        self.non_missing = None
+        self.series_len = series_len
+        self.max_start = series_len - self.forecast_length * \
+            2 - self.total_length - self.end_offset
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -227,9 +218,6 @@ class BaselineAggLSTM2(BaseModel):
                         neighs = [n for n in neighs
                                   if not self.mask_dict[key][self.in_degrees[key][n]][day]]
                         self.neighs[key][day] = neighs
-
-        self.max_start = len(
-            self.series[i]) - self.forecast_length * 2 - self.total_length - self.end_offset
 
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
@@ -500,7 +488,7 @@ class BaselineAggLSTM2(BaseModel):
         # its gradient.
         # torch.autograd.set_detect_anomaly(True)
 
-        self._initialize_series()
+        # self._initialize_series()
 
         split = splits[0]
         B = len(keys)
@@ -515,29 +503,30 @@ class BaselineAggLSTM2(BaseModel):
             'sample_size': p.new_tensor(B),
         }
 
-        series_list = []
-        non_missing_list = []
-        for key in keys:
-            s = self.series[self.series_map[key]]
-            m = self.non_missing[self.series_map[key]]
-            if split == 'train':
-                if self.max_start == 0:
-                    start = 0
-                else:
-                    start = self.rs.randint(0, self.max_start)
-            elif split == 'valid':
-                start = self.max_start + self.forecast_length
-            elif split == 'test':
-                start = self.max_start + self.forecast_length * 2
-            s = s[start:start+self.total_length]
-            m = m[start:start+self.total_length]
-            series_list.append(s)
-            non_missing_list.append(m)
+        if split == 'train':
+            if self.max_start == 0:
+                start = 0
+            else:
+                start = self.rs.randint(0, self.max_start)
+        elif split == 'valid':
+            start = self.max_start + self.forecast_length
+        elif split == 'test':
+            start = self.max_start + self.forecast_length * 2
 
-        raw_series = torch.stack(series_list, dim=0)
-        # series.shape == [batch_size, seq_len]
+        # Find all series of given keys
+        cursor = self.col.find({'_id': {'$in': keys}})
+        series_dict = {}
+        for page in cursor:
+            key = int(page['_id'])
+            series = np.array(page['s'][start:start+self.total_length])
+            series_dict[key] = series
 
-        non_missing_idx = torch.stack(non_missing_list, dim=0)[:, 1:]
+        series_list = np.array([series_dict[k]
+                                for k in keys], dtype=np.float32)
+        raw_series = torch.from_numpy(series_list).to(p.device)
+        # raw_series.shape == [batch_size, seq_len]
+
+        # non_missing_idx = torch.stack(non_missing_list, dim=0)[:, 1:]
 
         log_raw_series = torch.log1p(raw_series)
 
@@ -558,9 +547,9 @@ class BaselineAggLSTM2(BaseModel):
         preds = torch.exp(preds)
         # preds.shape == [batch_size, seq_len]
 
-        if self.view_missing_p > 0:
-            preds = torch.masked_select(preds, non_missing_idx)
-            targets = torch.masked_select(targets, non_missing_idx)
+        # if self.view_missing_p > 0:
+        #     preds = torch.masked_select(preds, non_missing_idx)
+        #     targets = torch.masked_select(targets, non_missing_idx)
 
         targets = raw_series[:, 1:]
         numerator = torch.abs(targets - preds)
@@ -572,12 +561,9 @@ class BaselineAggLSTM2(BaseModel):
 
         # During evaluation, we compute one time step at a time
         if split in ['valid', 'test']:
-            target_list = []
-            for key in keys:
-                s = start + self.backcast_length
-                e = s + self.forecast_length
-                target_list.append(self.series[self.series_map[key], s:e])
-            targets = torch.stack(target_list, dim=0)
+            s = self.backcast_length
+            e = s + self.forecast_length
+            targets = raw_series[:, s:e]
             # targets.shape == [batch_size, forecast_len]
 
             preds = targets.new_zeros(*targets.shape)
