@@ -230,14 +230,15 @@ class BaselineAggLSTM2(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len, neigh_list, mask_list, series_dict=None, neigh_dict=None):
+    def _get_neighbour_embeds(self, X, keys, start, total_len, neigh_list, mask_list, series_dict=None, neigh_dict=None, mask_dict=None):
         if self.agg_type == 'none':
             return X
 
         series_dict = {} if series_dict is None else series_dict
         neigh_dict = {} if neigh_dict is None else neigh_dict
+        mask_dict = {} if mask_dict is None else mask_dict
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, neigh_list, mask_list, series_dict, neigh_dict, 1)
+            X, keys, start, total_len, neigh_list, mask_list, series_dict, neigh_dict, mask_dict, 1)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -249,7 +250,7 @@ class BaselineAggLSTM2(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, neigh_list, mask_list, series_dict, neigh_dict, level, parents=None):
+    def _construct_neighs(self, X, keys, start, total_len, neigh_list, mask_list, series_dict, neigh_dict, mask_dict, level, parents=None):
         B, T, E = X.shape
 
         # First iteration: grab the top neighbours from each sample
@@ -314,6 +315,7 @@ class BaselineAggLSTM2(BaseModel):
                 series = np.array(page['s'])
                 series_dict[key] = series
                 neigh_dict[key] = page['e']
+                mask_dict[key] = {int(k): v for k, v in page['m'].items()}
 
         for i, key in enumerate(keys):
             if key in key_neighs:
@@ -356,8 +358,13 @@ class BaselineAggLSTM2(BaseModel):
             else:
                 idx = list(range(len(Xn)))
 
+            sampled_keys = neigh_keys[idx].cpu().tolist()
+            neigh_neigh_list = [neigh_dict[k] for k in sampled_keys]
+            neigh_mask_list = [mask_dict[k] for k in sampled_keys]
+
             Xm_2, masks_2 = self._construct_neighs(
-                Xn[idx], neigh_keys[idx].cpu().tolist(), start, total_len,
+                Xn[idx], sampled_keys, start, total_len,
+                neigh_neigh_list, neigh_mask_list, series_dict, neigh_dict, mask_dict,
                 level + 1, parents[idx].cpu().tolist())
             if self.agg_type == 'mean':
                 Xm_2 = self._aggregate_mean(Xm_2, masks_2)
@@ -592,12 +599,12 @@ class BaselineAggLSTM2(BaseModel):
 
             series = log_raw_series[:, :-self.forecast_length]
             current_views = series[:, -1]
-            series_dict, neigh_dict = {}, {}
+            series_dict, neigh_dict, mask_dict = {}, {}, {}
             for i in range(self.forecast_length):
                 X = self._forward_full(series)
                 seq_len = self.total_length - self.forecast_length + i + 1
                 X_agg = self._get_neighbour_embeds(
-                    X, keys, start, seq_len, neigh_list, mask_list, series_dict, neigh_dict)
+                    X, keys, start, seq_len, neigh_list, mask_list, series_dict, neigh_dict, mask_dict)
                 X_agg = self.fc(X_agg)
                 pred = X_agg.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
