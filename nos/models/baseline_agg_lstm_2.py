@@ -308,7 +308,7 @@ class BaselineAggLSTM2(BaseModel):
 
         missing_keys = all_neigh_keys - set(series_dict)
         if missing_keys:
-            query = {'_id': {'$in': list(missing_keys)}}
+            query = {'_id': {'$in': sorted(missing_keys)}}
             projection = {'s': {'$slice': [start, self.total_length]}}
             cursor = self.col.find(query, projection,
                                    batch_size=len(missing_keys))
@@ -539,7 +539,7 @@ class BaselineAggLSTM2(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        query = {'_id': {'$in': keys}}
+        query = {'_id': {'$in': sorted(keys)}}
         projection = {'s': {'$slice': [start, self.total_length]}}
         cursor = self.col.find(query, projection, batch_size=len(keys))
         series_dict = {}
