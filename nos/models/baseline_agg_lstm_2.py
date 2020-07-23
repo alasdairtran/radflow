@@ -84,6 +84,10 @@ class BaselineAggLSTM2(BaseModel):
         self.agg_type = agg_type
         self.fc = GehringLinear(self.hidden_size, 1)
 
+        if agg_type in ['mean', 'attention', 'sage', 'gat']:
+            self.out_proj = GehringLinear(
+                self.hidden_size * 2, self.hidden_size)
+
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
                 self.hidden_size, 4, dropout=0.1, bias=True,
@@ -384,7 +388,10 @@ class BaselineAggLSTM2(BaseModel):
         return Xm, masks
 
     def _pool(self, X, Xn):
-        X_out = X + Xn
+        X_out = torch.cat([X, Xn], dim=-1)
+        # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
+
+        X_out = F.relu(self.out_proj(X_out))
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
         return X_out
