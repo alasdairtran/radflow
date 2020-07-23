@@ -433,7 +433,8 @@ class BaselineAggLSTM4(BaseModel):
 
         missing_keys = all_neigh_keys - set(series_dict)
         if missing_keys:
-            cursor = self.col.find({'_id': {'$in': list(missing_keys)}})
+            cursor = self.col.find({'_id': {'$in': list(missing_keys)}},
+                                   batch_size=len(missing_keys))
             for page in cursor:
                 key = int(page['_id'])
                 series = np.array(page['s'])
@@ -656,7 +657,7 @@ class BaselineAggLSTM4(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        cursor = self.col.find({'_id': {'$in': keys}})
+        cursor = self.col.find({'_id': {'$in': keys}}, batch_size=len(keys))
         series_dict = {}
         neigh_dict = {}
         mask_dict = {}
