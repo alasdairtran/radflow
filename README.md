@@ -8,19 +8,35 @@ Network of sequences
 conda env create -f conda.yaml
 conda activate nos
 python -m ipykernel install --user --name nos --display-name "nos"
+
+# Install apex
 cd lib/apex
 git submodule init && git submodule update .
 pip install -v --no-cache-dir --global-option="--pyprof" --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+
+# Install nos package
 cd ../.. && python setup.py develop
+
+# Install PyTorch Geometric
 pip install -U torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
 pip install -U torch-sparse==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
 pip install -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
 pip install -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
 pip install -U torch-geometric
+
+# Install RedisGraph
+cd lib/RedisGraph && git submodule update --init --recursive .
 git clone --recurse-submodules -j8 https://github.com/RedisGraph/RedisGraph.git
+sudo apt install build-essential cmake m4 automake peg libtool autoconf
+make
 
 # Start an empty mongodb database
 mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
+
+# Start redis server
+redis-server \
+    --protected-mode no \
+    --loadmodule lib/RedisGraph/src/redisgraph.so
 
 # Download wiki dump. This takes about three days.
 python scripts/download_wikidump.py
