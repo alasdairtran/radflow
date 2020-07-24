@@ -8,14 +8,13 @@ Network of sequences
 conda env create -f conda.yaml
 conda activate nos
 python -m ipykernel install --user --name nos --display-name "nos"
+python setup.py develop
 
 # Install apex
 cd lib/apex
 git submodule init && git submodule update .
 pip install -v --no-cache-dir --global-option="--pyprof" --global-option="--cpp_ext" --global-option="--cuda_ext" ./
-
-# Install nos package
-cd ../.. && python setup.py develop
+cd ../..
 
 # Install PyTorch Geometric
 pip install -U torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
@@ -32,12 +31,14 @@ rm -rf redis-6.0.6.tar.gz
 cd redis-6.0.6
 make
 make test
+cd ../..
 
 # Install RedisGraph
 cd lib/RedisGraph && git submodule update --init --recursive .
 git clone --recurse-submodules -j8 https://github.com/RedisGraph/RedisGraph.git
 sudo apt install build-essential cmake m4 automake peg libtool autoconf
 make
+cd ../..
 
 # Start an empty mongodb database
 mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
