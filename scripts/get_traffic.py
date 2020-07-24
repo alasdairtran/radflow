@@ -32,7 +32,9 @@ import numpy as np
 import ptvsd
 import pymongo
 import pytz
+import redis
 import requests
+import tiledb
 from bz2file import BZ2File
 from docopt import docopt
 from joblib import Parallel, delayed
@@ -41,8 +43,6 @@ from requests.exceptions import ChunkedEncodingError, ConnectionError
 from schema import And, Or, Schema, Use
 from tqdm import tqdm
 
-import redis
-import tiledb
 from nos.utils import setup_logger
 
 logger = setup_logger()
