@@ -42,6 +42,8 @@ class BaselineAggLSTM2(BaseModel):
                  peek: bool = True,
                  database: str = 'vevo',
                  collection: str = 'graph',
+                 series_path: str = './data/views.hdf5',
+                 series_name: str = 'vevo',
                  series_len: int = 63,
                  num_layers: int = 8,
                  hidden_size: int = 128,
@@ -77,6 +79,9 @@ class BaselineAggLSTM2(BaseModel):
         self.view_missing_p = view_missing_p
         self.edge_missing_p = edge_missing_p
         self.n_hops = n_hops
+
+        self.series_store = h5py.File(series_path, 'r')
+        self.series_name = series_name
 
         self.decoder = nn.LSTM(1, hidden_size, num_layers,
                                bias=True, batch_first=True, dropout=dropout)
@@ -309,15 +314,19 @@ class BaselineAggLSTM2(BaseModel):
         missing_keys = all_neigh_keys - set(series_dict)
         if missing_keys:
             query = {'_id': {'$in': sorted(missing_keys)}}
-            projection = {'s': {'$slice': [start, self.total_length]}}
+            projection = {'s': False}
             cursor = self.col.find(query, projection,
                                    batch_size=len(missing_keys))
             for page in cursor:
                 key = int(page['_id'])
-                series = np.array(page['s'])
-                series_dict[key] = series
                 neigh_dict[key] = page['e']
                 mask_dict[key] = {int(k): v for k, v in page['m'].items()}
+
+            sorted_keys = sorted(missing_keys)
+            end = start + self.total_length
+            sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+            for i, k in enumerate(sorted_keys):
+                series_dict[sorted_keys[i]] = sorted_series[i]
 
         for i, key in enumerate(keys):
             if key in key_neighs:
@@ -540,17 +549,21 @@ class BaselineAggLSTM2(BaseModel):
 
         # Find all series of given keys
         query = {'_id': {'$in': sorted(keys)}}
-        projection = {'s': {'$slice': [start, self.total_length]}}
+        projection = {'s': False}
         cursor = self.col.find(query, projection, batch_size=len(keys))
         series_dict = {}
         neigh_dict = {}
         mask_dict = {}
         for page in cursor:
             key = int(page['_id'])
-            series = np.array(page['s'])
-            series_dict[key] = series
             neigh_dict[key] = page['e']
             mask_dict[key] = {int(k): v for k, v in page['m'].items()}
+
+        sorted_keys = sorted(keys)
+        end = start + self.total_length
+        sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+        for i, k in enumerate(sorted_keys):
+            series_dict[sorted_keys[i]] = sorted_series[i]
 
         series_list = np.array([series_dict[k]
                                 for k in keys], dtype=np.float32)
