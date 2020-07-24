@@ -34,6 +34,7 @@ dependencies:
       - ptvsd==4.3.2
       - pudb==2019.2
       - git+git://github.com/salaniz/pycocoevalcap.git@a6b79b0fbd0f4f293634831e4e09405de2abc955
+      - git+https://github.com/RedisGraph/redisgraph-bulk-loader.git@master
       - pyarrow==0.17.1
       - pymongo==3.10.1
       - python-igraph==0.8.2
