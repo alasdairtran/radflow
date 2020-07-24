@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List
 
+import h5py
 import numpy as np
 import pandas as pd
 import pymongo
@@ -289,6 +290,23 @@ def populate_tiledb():
         A[:] = views
 
 
+def populate_hdf5():
+    views_path = 'data/views.hdf5'
+    views = np.full((60740, 63), np.iinfo(np.uint32).max, dtype=np.uint32)
+
+    logger.info('Populating series in memory')
+    client = MongoClient(host='localhost', port=27017)
+    for p in tqdm(client.vevo.graph.find({}, projection=['s'])):
+        s = np.array(p['s'])
+        s[s == -1] = np.iinfo(np.uint32).max
+        views[p['_id']] = s
+
+    logger.info(f'Writing series matrix to {views_path}')
+    f = h5py.File(views_path, 'w')
+    hdf5_views = f.create_dataset("vevo", (60740, 63), dtype='uint32')
+    hdf5_views[:] = views
+
+
 def main():
     relabel_networks()
     populate_database('vevo', 'graph')
@@ -297,6 +315,9 @@ def main():
     # We leave this here, but TileDB random read speed is still slower
     # than mongo.
     populate_tiledb()
+
+    # Reading series from hdf5 is 20% than from mongo.
+    populate_hdf5()
 
 
 if __name__ == '__main__':
