@@ -6,8 +6,10 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List
 
+import numpy as np
 import pandas as pd
 import pymongo
+import tiledb
 from pymongo import MongoClient
 from tqdm import tqdm
 
@@ -190,6 +192,34 @@ def relabel_networks():
         pickle.dump(neighs, f)
 
 
+def create_traffic_tile(traffic_path, n_nodes, train_length, start, end):
+    if os.path.exists(traffic_path):
+        return
+
+    os.makedirs(traffic_path, exist_ok=True)
+
+    logger.info(f'Creating traffic tile at {traffic_path}')
+    n_steps = (end - start).days + 1
+    logger.info(f'No of days: {n_steps}')
+
+    dom = tiledb.Domain(tiledb.Dim(name='i',
+                                   domain=(0, n_nodes - 1),
+                                   tile=1,
+                                   dtype=np.uint32),
+                        tiledb.Dim(name="t",
+                                   domain=(0, n_steps - 1),
+                                   tile=train_length,
+                                   dtype=np.uint32))
+
+    # The array will be dense with a single attribute "v" so each (i,j) cell can store an integer.
+    schema = tiledb.ArraySchema(domain=dom, sparse=False,
+                                attrs=[tiledb.Attr(name="v", dtype=np.uint32)])
+
+    # Create the (empty) array on disk.
+    # Empty cells are represented by 4294967295 for uint32 (largest number  2^32 − 1)
+    tiledb.DenseArray.create(traffic_path, schema)
+
+
 def populate_database(seed_word, collection):
     data_dir = 'data/wiki/subgraphs'
     series_path = f'{data_dir}/{seed_word}/series.pkl'
@@ -239,10 +269,34 @@ def populate_database(seed_word, collection):
     result = db[collection].insert_many(docs)
 
 
+def populate_tiledb():
+    traffic_path = 'data/series/vevo'
+    start = datetime(2018, 9, 1)
+    end = datetime(2018, 11, 2)  # includes endpoint
+    create_traffic_tile(traffic_path, 60740, 63, start, end)
+
+    views = np.full((60740, 63), np.iinfo(np.uint32).max, dtype=np.uint32)
+
+    logger.info('Populating series in memory')
+    client = MongoClient(host='localhost', port=27017)
+    for p in tqdm(client.vevo.graph.find({}, projection=['s'])):
+        s = np.array(p['s'])
+        s[s == -1] = np.iinfo(np.uint32).max
+        views[p['_id']] = s
+
+    logger.info(f'Writing series matrix to {traffic_path}')
+    with tiledb.DenseArray(traffic_path, mode='w') as A:
+        A[:] = views
+
+
 def main():
     relabel_networks()
     populate_database('vevo', 'graph')
     populate_database('vevo_static', 'static')
+
+    # We leave this here, but TileDB random read speed is still slower
+    # than mongo.
+    populate_tiledb()
 
 
 if __name__ == '__main__':
