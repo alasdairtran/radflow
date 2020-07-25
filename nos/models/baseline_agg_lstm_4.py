@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import pickle
@@ -8,6 +9,7 @@ from typing import Any, Dict, List
 import h5py
 import numpy as np
 import pandas as pd
+import redis
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -39,6 +41,10 @@ class NewNaive(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
+                 redis_namespace: str = 'vevo',
+                 redis_db: int = 0,
+                 redis_host: str = 'localhost',
+                 redis_port: int = 6379,
                  series_len: int = 63,
                  method: str = 'previous_day',
                  forecast_length: int = 7,
@@ -65,6 +71,8 @@ class NewNaive(BaseModel):
         client = MongoClient(host='localhost', port=27017)
         db = client[database]
         self.col = db[collection]
+        self.redis = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
+        self.redis_ns = redis_namespace
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -172,6 +180,10 @@ class BaselineAggLSTM4(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
+                 redis_namespace: str = 'vevo',
+                 redis_db: int = 0,
+                 redis_host: str = 'localhost',
+                 redis_port: int = 6379,
                  series_len: int = 63,
                  num_layers: int = 8,
                  hidden_size: int = 128,
@@ -241,6 +253,8 @@ class BaselineAggLSTM4(BaseModel):
         client = MongoClient(host='localhost', port=27017)
         db = client[database]
         self.col = db[collection]
+        self.redis = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
+        self.redis_ns = redis_namespace
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \
@@ -443,14 +457,12 @@ class BaselineAggLSTM4(BaseModel):
 
         missing_keys = all_neigh_keys - set(series_dict)
         if missing_keys:
-            query = {'_id': {'$in': sorted(missing_keys)}}
-            projection = {'s': False}
-            cursor = self.col.find(query, projection,
-                                   batch_size=len(missing_keys))
-            for page in cursor:
-                key = int(page['_id'])
-                neigh_dict[key] = page['e']
-                mask_dict[key] = {int(k): v for k, v in page['m'].items()}
+            results = self.redis.mget([f'{self.redis_ns}:{k}'
+                                       for k in missing_keys])
+            for k, r in zip(missing_keys, results):
+                r = json.loads(r)
+                neigh_dict[k] = r['e']
+                mask_dict[k] = {int(k): v for k, v in r['m'].items()}
 
             sorted_keys = sorted(missing_keys)
             end = start + self.total_length
@@ -673,27 +685,19 @@ class BaselineAggLSTM4(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        query = {'_id': {'$in': sorted(keys)}}
-        projection = {'s': False}
-        cursor = self.col.find(query, projection, batch_size=len(keys))
-        series_dict = {}
-        neigh_dict = {}
-        mask_dict = {}
-        for page in cursor:
-            key = int(page['_id'])
-            neigh_dict[key] = page['e']
-            mask_dict[key] = {int(k): v for k, v in page['m'].items()}
-
         sorted_keys = sorted(keys)
         end = start + self.total_length
         sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+        series_dict = {}
         for i, k in enumerate(sorted_keys):
             series_dict[sorted_keys[i]] = sorted_series[i]
-
         series_list = np.array([series_dict[k]
                                 for k in keys], dtype=np.float32)
-        neigh_list = [neigh_dict[k] for k in keys]
-        mask_list = [mask_dict[k] for k in keys]
+
+        results = self.redis.mget([f'{self.redis_ns}:{k}' for k in keys])
+        results = [json.loads(r) for r in results]
+        neigh_list = [r['e'] for r in results]
+        mask_list = [{int(k): v for k, v in r['m'].items()} for r in results]
         raw_series = torch.from_numpy(series_list).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
 

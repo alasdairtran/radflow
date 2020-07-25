@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
+import redis
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -41,6 +42,10 @@ class NBEATSWiki(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
+                 redis_namespace: str = 'vevo',
+                 redis_db: int = 0,
+                 redis_host: str = 'localhost',
+                 redis_port: int = 6379,
                  series_len: int = 63,
                  forecast_length: int = 28,
                  backcast_length: int = 224,
@@ -77,6 +82,8 @@ class NBEATSWiki(BaseModel):
         client = MongoClient(host='localhost', port=27017)
         db = client[database]
         self.col = db[collection]
+        self.redis = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
+        self.redis_ns = redis_namespace
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \
