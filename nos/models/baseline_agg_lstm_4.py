@@ -40,10 +40,6 @@ class NewNaive(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
-                 redis_namespace: str = 'vevo',
-                 redis_db: int = 0,
-                 redis_host: str = 'localhost',
-                 redis_port: int = 6379,
                  series_len: int = 63,
                  method: str = 'previous_day',
                  forecast_length: int = 7,
@@ -70,8 +66,6 @@ class NewNaive(BaseModel):
         client = MongoClient(host='localhost', port=27017)
         db = client[database]
         self.col = db[collection]
-        self.redis = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
-        self.redis_ns = redis_namespace
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
@@ -179,10 +173,7 @@ class BaselineAggLSTM4(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
-                 redis_namespace: str = 'vevo',
-                 redis_db: int = 0,
-                 redis_host: str = 'localhost',
-                 redis_port: int = 6379,
+                 graph_path: str = './data/graphs/vevo.pkl',
                  series_len: int = 63,
                  num_layers: int = 8,
                  hidden_size: int = 128,
@@ -252,8 +243,10 @@ class BaselineAggLSTM4(BaseModel):
         client = MongoClient(host='localhost', port=27017)
         db = client[database]
         self.col = db[collection]
-        self.redis = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
-        self.redis_ns = redis_namespace
+
+        logger.info(f'Loading graph from {graph_path}')
+        with open(graph_path, 'rb') as f:
+            self.graph = pickle.load(f)
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \
@@ -456,12 +449,9 @@ class BaselineAggLSTM4(BaseModel):
 
         missing_keys = all_neigh_keys - set(series_dict)
         if missing_keys:
-            results = self.redis.mget([f'{self.redis_ns}:{k}'
-                                       for k in missing_keys])
-            for k, r in zip(missing_keys, results):
-                r = pickle.loads(r)
-                neigh_dict[k] = r['e']
-                mask_dict[k] = r['m']
+            for k in missing_keys:
+                neigh_dict[k] = self.graph[k]['e']
+                mask_dict[k] = self.graph[k]['m']
 
             sorted_keys = sorted(missing_keys)
             end = start + self.total_length
@@ -693,10 +683,8 @@ class BaselineAggLSTM4(BaseModel):
         series_list = np.array([series_dict[k]
                                 for k in keys], dtype=np.float32)
 
-        results = self.redis.mget([f'{self.redis_ns}:{k}' for k in keys])
-        results = [pickle.loads(r) for r in results]
-        neigh_list = [r['e'] for r in results]
-        mask_list = [r['m']for r in results]
+        neigh_list = [self.graph[k]['e'] for k in keys]
+        mask_list = [self.graph[k]['m'] for k in keys]
         raw_series = torch.from_numpy(series_list).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
 
