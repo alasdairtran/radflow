@@ -42,6 +42,7 @@ class NBEATSWiki(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
+                 cache_series: bool = True,
                  series_len: int = 63,
                  forecast_length: int = 28,
                  backcast_length: int = 224,
@@ -73,6 +74,8 @@ class NBEATSWiki(BaseModel):
         initializer(self)
 
         self.series = h5py.File(series_path, 'r')[series_name]
+        if cache_series:
+            self.series = self.series[...]
 
         client = MongoClient(host='localhost', port=27017)
         db = client[database]

@@ -45,6 +45,7 @@ class BaselineAggLSTM2(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
+                 cache_series: bool = True,
                  graph_path: str = './data/graphs/vevo.pkl',
                  series_len: int = 63,
                  num_layers: int = 8,
@@ -85,6 +86,8 @@ class BaselineAggLSTM2(BaseModel):
         self.hop_scale = hop_scale
 
         self.series = h5py.File(series_path, 'r')[series_name]
+        if cache_series:
+            self.series = self.series[...]
 
         self.decoder = nn.LSTM(1, hidden_size, num_layers,
                                bias=True, batch_first=True, dropout=dropout)

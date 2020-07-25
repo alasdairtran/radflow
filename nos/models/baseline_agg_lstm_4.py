@@ -40,6 +40,7 @@ class NewNaive(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
+                 cache_series: bool = True,
                  series_len: int = 63,
                  method: str = 'previous_day',
                  forecast_length: int = 7,
@@ -59,6 +60,8 @@ class NewNaive(BaseModel):
         self.end_offset = end_offset
 
         self.series = h5py.File(series_path, 'r')[series_name]
+        if cache_series:
+            self.series = self.series[...]
 
         assert method in ['previous_day', 'previous_week']
 
@@ -172,6 +175,7 @@ class BaselineAggLSTM4(BaseModel):
                  collection: str = 'graph',
                  series_path: str = './data/views.hdf5',
                  series_name: str = 'vevo',
+                 cache_series: bool = True,
                  graph_path: str = './data/graphs/vevo.pkl',
                  series_len: int = 63,
                  num_layers: int = 8,
@@ -217,6 +221,8 @@ class BaselineAggLSTM4(BaseModel):
         self.sample_rs = np.random.RandomState(3456)
 
         self.series = h5py.File(series_path, 'r')[series_name]
+        if cache_series:
+            self.series = self.series[...]
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
