@@ -10,6 +10,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pymongo
+import redis
 import tiledb
 from pymongo import MongoClient
 from tqdm import tqdm
@@ -307,6 +308,25 @@ def populate_hdf5():
     hdf5_views[:] = views
 
 
+def populate_redis():
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    client = MongoClient(host='localhost', port=27017)
+
+    logger.info('Populating dynamic graph to redis')
+    cursor = client.vevo.graph.find({}, {'s': False})
+    for p in tqdm(cursor):
+        i = p['_id']
+        load = json.dumps({'e': p['e'], 'm': p['m']})
+        r.set(f'vevo:{i}', load)
+
+    logger.info('Populating static graph to redis')
+    cursor = client.vevo.static.find({}, {'s': False})
+    for p in tqdm(cursor):
+        i = p['_id']
+        load = json.dumps({'e': p['e'], 'm': p['m']})
+        r.set(f'vevo.static:{i}', load)
+
+
 def main():
     relabel_networks()
     populate_database('vevo', 'graph')
@@ -318,6 +338,9 @@ def main():
 
     # Reading series from hdf5 is 20% than from mongo.
     populate_hdf5()
+
+    # Reading graph from redis is much faster than mongo.
+    populate_redis()
 
 
 if __name__ == '__main__':
