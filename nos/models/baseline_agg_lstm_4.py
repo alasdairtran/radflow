@@ -58,8 +58,7 @@ class NewNaive(BaseModel):
         self.method = method
         self.end_offset = end_offset
 
-        self.series_store = h5py.File(series_path, 'r')
-        self.series_name = series_name
+        self.series = h5py.File(series_path, 'r')[series_name]
 
         assert method in ['previous_day', 'previous_week']
 
@@ -121,7 +120,7 @@ class NewNaive(BaseModel):
         series_dict = {}
         sorted_keys = sorted(keys)
         end = start + self.total_length
-        sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+        sorted_series = self.series[sorted_keys, start:end]
         for i, k in enumerate(sorted_keys):
             series_dict[sorted_keys[i]] = sorted_series[i]
 
@@ -217,8 +216,7 @@ class BaselineAggLSTM4(BaseModel):
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
 
-        self.series_store = h5py.File(series_path, 'r')
-        self.series_name = series_name
+        self.series = h5py.File(series_path, 'r')[series_name]
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
@@ -457,7 +455,7 @@ class BaselineAggLSTM4(BaseModel):
 
             sorted_keys = sorted(missing_keys)
             end = start + self.total_length
-            sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+            sorted_series = self.series[sorted_keys, start:end]
             for i, k in enumerate(sorted_keys):
                 series_dict[sorted_keys[i]] = sorted_series[i]
 
@@ -678,7 +676,7 @@ class BaselineAggLSTM4(BaseModel):
         # Find all series of given keys
         sorted_keys = sorted(keys)
         end = start + self.total_length
-        sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+        sorted_series = self.series[sorted_keys, start:end]
         series_dict = {}
         for i, k in enumerate(sorted_keys):
             series_dict[sorted_keys[i]] = sorted_series[i]

@@ -84,8 +84,7 @@ class BaselineAggLSTM2(BaseModel):
         self.n_hops = n_hops
         self.hop_scale = hop_scale
 
-        self.series_store = h5py.File(series_path, 'r')
-        self.series_name = series_name
+        self.series = h5py.File(series_path, 'r')[series_name]
 
         self.decoder = nn.LSTM(1, hidden_size, num_layers,
                                bias=True, batch_first=True, dropout=dropout)
@@ -327,7 +326,7 @@ class BaselineAggLSTM2(BaseModel):
 
             sorted_keys = sorted(missing_keys)
             end = start + self.total_length
-            sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+            sorted_series = self.series[sorted_keys, start:end]
             for i, k in enumerate(sorted_keys):
                 series_dict[sorted_keys[i]] = sorted_series[i]
 
@@ -553,7 +552,7 @@ class BaselineAggLSTM2(BaseModel):
         # Find all series of given keys
         sorted_keys = sorted(keys)
         end = start + self.total_length
-        sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+        sorted_series = self.series[sorted_keys, start:end]
         series_dict = {}
         for i, k in enumerate(sorted_keys):
             series_dict[sorted_keys[i]] = sorted_series[i]

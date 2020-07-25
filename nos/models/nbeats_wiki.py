@@ -72,8 +72,7 @@ class NBEATSWiki(BaseModel):
         self.end_offset = end_offset
         initializer(self)
 
-        self.series_store = h5py.File(series_path, 'r')
-        self.series_name = series_name
+        self.series = h5py.File(series_path, 'r')[series_name]
 
         client = MongoClient(host='localhost', port=27017)
         db = client[database]
@@ -262,7 +261,7 @@ class NBEATSWiki(BaseModel):
         series_dict = {}
         sorted_keys = sorted(keys)
         end = start + self.total_length
-        sorted_series = self.series_store[self.series_name][sorted_keys, start:end]
+        sorted_series = self.series[sorted_keys, start:end]
         for i, k in enumerate(sorted_keys):
             series_dict[sorted_keys[i]] = sorted_series[i]
 
