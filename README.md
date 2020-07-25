@@ -65,8 +65,7 @@ python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host 
 # We end up with 17,380,550 unqiue IDs/titles.
 python scripts/extract_graph.py --reindex
 
-# Get page view counts directly from wiki API
-# Also create a redis database to cache a map from title to node ID
+# Get page view counts directly from wiki API. Takes around 3 days.
 python scripts/get_traffic.py -m localhost -b 0 -t 3 # dijkstra
 python scripts/get_traffic.py -m dijkstra -b 1 -t 3 # cray
 python scripts/get_traffic.py -m dijkstra -b 2 -t 3 # braun
