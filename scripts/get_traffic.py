@@ -317,30 +317,24 @@ def get_traffic_for_page(o_title):
     return output
 
 
-def get_traffic_from_api(mongo_host, i, n_jobs, batch, total):
+def get_traffic_from_api(mongo_host, i, n_jobs, batch, total, new_ids):
     time.sleep(random.uniform(1, 30))
     client = MongoClient(host=mongo_host, port=27017)
     db = client.wiki2
 
     # Find the largest possible i (which is around 17.3 million)
-    max_i = db.pages.find_one(sort=[("i", pymongo.DESCENDING)],
-                              projection=['i'])['i']
+    max_i = len(new_ids)
 
     size = int(math.ceil(max_i / (n_jobs * total)))
     batch_size = size * n_jobs
     start = batch * batch_size + i * size
     end = start + size
 
-    pages = db.pages.find({'i': {'$gte': start, '$lt': end}},
+    batch_ids = sorted(new_ids[start:end])
+
+    pages = db.pages.find({'i': {'$in': batch_ids}},
                           projection=['i', 'title'])
-
-    docs = db.traffic.find({'_id': {'$gte': start, '$lt': end}}, projection=[])
-    done_ids = set([d['_id'] for d in docs])
-
     for page in pages:
-        if page['i'] in done_ids:
-            continue
-
         start_ts = time.time()
         s = get_traffic_for_page(page['title'])
         if s is None:
@@ -374,6 +368,18 @@ def get_all_traffic_from_api(mongo_host, redis_host, n_jobs, batch, total):
         ('v', pymongo.DESCENDING),
     ])
 
+    # Find the largest possible i (which is around 17.3 million)
+    max_i = db.pages.find_one(sort=[("i", pymongo.DESCENDING)],
+                              projection=['i'])['i'] + 1
+    all_ids = set(range(max_i))
+
+    logger.info('Grabbing existing IDs')
+    docs = db.traffic.find({}, projection=[], batch_size=1000000)
+    done_ids = set([d['_id'] for d in docs])
+
+    new_ids = sorted(all_ids - done_ids)
+    logger.info(f'Will get {len(new_ids)} more series.')
+
     # index_path = os.path.join('data/wiki', 'graph_ids.txt')
     # if not os.path.exists(index_path):
     #     get_id_maps(db, redis_host, index_path)
@@ -384,7 +390,7 @@ def get_all_traffic_from_api(mongo_host, redis_host, n_jobs, batch, total):
 
     logger.info('Extracting traffic counts')
     with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
-        parallel(delayed(get_traffic_from_api)(mongo_host, i, n_jobs, batch, total)
+        parallel(delayed(get_traffic_from_api)(mongo_host, i, n_jobs, batch, total, sorted(new_ids))
                  for i in tqdm(range(n_jobs)))
 
 
