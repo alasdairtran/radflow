@@ -180,6 +180,7 @@ class BaselineAggLSTM4(BaseModel):
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
+                 hop_scale: int = 4,
                  neigh_sample: bool = False,
                  equal_weight: bool = False,
                  t_total: int = 163840,
@@ -211,6 +212,7 @@ class BaselineAggLSTM4(BaseModel):
         self.view_missing_p = view_missing_p
         self.edge_missing_p = edge_missing_p
         self.n_hops = n_hops
+        self.hop_scale = hop_scale
 
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
@@ -495,7 +497,7 @@ class BaselineAggLSTM4(BaseModel):
 
         if self.n_hops - level > 0:
             if not self.evaluate_mode:
-                size = int(round(len(Xn) / self.max_agg_neighbours))
+                size = int(round(len(Xn) / self.hop_scale))
                 idx = self.hop_rs.choice(len(Xn), size=size, replace=False)
             else:
                 idx = list(range(len(Xn)))

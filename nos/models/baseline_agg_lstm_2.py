@@ -52,6 +52,7 @@ class BaselineAggLSTM2(BaseModel):
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
+                 hop_scale: int = 4,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
                  static_graph: bool = False,
@@ -81,6 +82,7 @@ class BaselineAggLSTM2(BaseModel):
         self.view_missing_p = view_missing_p
         self.edge_missing_p = edge_missing_p
         self.n_hops = n_hops
+        self.hop_scale = hop_scale
 
         self.series_store = h5py.File(series_path, 'r')
         self.series_name = series_name
@@ -365,7 +367,7 @@ class BaselineAggLSTM2(BaseModel):
 
         if self.n_hops - level > 0:
             if not self.evaluate_mode:
-                size = int(round(len(Xn) / self.max_agg_neighbours))
+                size = int(round(len(Xn) / self.hop_scale))
                 idx = self.hop_rs.choice(len(Xn), size=size, replace=False)
             else:
                 idx = list(range(len(Xn)))
