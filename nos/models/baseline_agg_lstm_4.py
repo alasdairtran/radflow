@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import pickle
@@ -460,9 +459,9 @@ class BaselineAggLSTM4(BaseModel):
             results = self.redis.mget([f'{self.redis_ns}:{k}'
                                        for k in missing_keys])
             for k, r in zip(missing_keys, results):
-                r = json.loads(r)
+                r = pickle.loads(r)
                 neigh_dict[k] = r['e']
-                mask_dict[k] = {int(k): v for k, v in r['m'].items()}
+                mask_dict[k] = r['m']
 
             sorted_keys = sorted(missing_keys)
             end = start + self.total_length
@@ -695,9 +694,9 @@ class BaselineAggLSTM4(BaseModel):
                                 for k in keys], dtype=np.float32)
 
         results = self.redis.mget([f'{self.redis_ns}:{k}' for k in keys])
-        results = [json.loads(r) for r in results]
+        results = [pickle.loads(r) for r in results]
         neigh_list = [r['e'] for r in results]
-        mask_list = [{int(k): v for k, v in r['m'].items()} for r in results]
+        mask_list = [r['m']for r in results]
         raw_series = torch.from_numpy(series_list).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
 
