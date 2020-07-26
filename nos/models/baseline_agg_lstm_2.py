@@ -44,6 +44,7 @@ class BaselineAggLSTM2(BaseModel):
                  database: str = 'vevo',
                  collection: str = 'graph',
                  data_path: str = './data/vevo.hdf5',
+                 key2pos_path: str = './data/vevo.key2pos.pkl',
                  series_len: int = 63,
                  num_layers: int = 8,
                  hidden_size: int = 128,
@@ -85,6 +86,9 @@ class BaselineAggLSTM2(BaseModel):
         self.data = h5py.File(data_path, 'r')
         self.series = self.data['views']
         self.edges = self.data['edges']
+        self.masks = self.data['masks']
+        with open(key2pos_path, 'rb') as f:
+            self.key2pos = pickle.load(f)
 
         self.decoder = nn.LSTM(1, hidden_size, num_layers,
                                bias=True, batch_first=True, dropout=dropout)
@@ -374,11 +378,14 @@ class BaselineAggLSTM2(BaseModel):
 
         Xm_out = X.new_zeros(B, max_n_neighs, S, E)
         masks = np.ones((B, max_n_neighs, S), dtype=bool)
+        sorted_masks = self.masks[sorted_keys]
         for b, key in enumerate(keys):
             if key not in key_neighs:
                 continue
+            n_mask = sorted_masks[key_map[key]].reshape(-1, self.series_len)
             for i, k in enumerate(key_neighs[key]):
-                mask = self.data[f'masks/{key}/{k}'][start:start+total_len]
+                mask = n_mask[self.key2pos[key][k]]
+                mask = mask[start:start+total_len]
                 if self.peek:
                     mask = mask[1:]
                 else:

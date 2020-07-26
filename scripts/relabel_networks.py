@@ -297,8 +297,12 @@ def populate_hdf5(collection, name):
     views = np.full((60740, 63), -1, dtype=np.int32)
     edges = f.create_dataset('edges', (60740, 63, 10), np.int32, fillvalue=-1)
 
+    dt = h5py.vlen_dtype(np.dtype('bool'))
+    masks = f.create_dataset('masks', (60740,), dt)
+
     logger.info('Populating series in memory')
     client = MongoClient(host='localhost', port=27017)
+    key2pos = [{} for _ in range(60740)]
     for p in tqdm(client.vevo[collection].find({})):
         s = np.array(p['s'])
         views[p['_id']] = s
@@ -307,12 +311,17 @@ def populate_hdf5(collection, name):
             day_ns = day_ns[:10]
             edges[p['_id'], d, :len(day_ns)] = day_ns
 
-        for k, v in p['m'].items():
-            path = f"masks/{p['_id']}/{k}"
-            f.create_dataset(path, dtype=np.bool, data=np.array(v))
+        mask = np.ones((len(p['m']), 63), dtype=np.bool_)
+        for i, (k, v) in enumerate(p['m'].items()):
+            mask[i] = np.array(v, dtype=np.bool_)
+            key2pos[p['_id']][int(k)] = i
+        masks[p['_id']] = mask.reshape(-1)
 
     hdf5_views = f.create_dataset("views", (60740, 63), dtype='int32')
     hdf5_views[:] = views
+
+    with open(f'data/{name}.key2pos.pkl', 'wb') as f:
+        pickle.dump(key2pos, f)
 
 
 def populate_redis():
