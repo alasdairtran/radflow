@@ -40,11 +40,10 @@ import pudb
 from docopt import docopt
 from schema import And, Or, Schema, Use
 
+from nos.commands.evaluate import evaluate_from_file
+from nos.commands.generate import generate
+from nos.commands.train import train_model_from_file
 from nos.utils import setup_logger
-
-from .evaluate import evaluate_from_file
-from .generate import generate
-from .train import train_model_from_file
 
 logger = setup_logger()
 
