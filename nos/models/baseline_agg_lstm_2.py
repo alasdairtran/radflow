@@ -506,7 +506,8 @@ class BaselineAggLSTM2(BaseModel):
 
         # self._initialize_series()
 
-        keys = sorted(keys)
+        # Occasionally we get duplicate keys due random sampling
+        keys = sorted(set(keys))
         split = splits[0]
         B = len(keys)
         p = next(self.parameters())

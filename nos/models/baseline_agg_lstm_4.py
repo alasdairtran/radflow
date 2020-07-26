@@ -88,7 +88,8 @@ class NewNaive(BaseModel):
 
         # self._initialize_series()
 
-        keys = sorted(keys)
+        # Occasionally we get duplicate keys due random sampling
+        keys = sorted(set(keys))
         split = splits[0]
         B = len(keys)
         # keys.shape == [batch_size]
@@ -625,7 +626,8 @@ class BaselineAggLSTM4(BaseModel):
 
         # self._initialize_series()
 
-        keys = sorted(keys)
+        # Occasionally we get duplicate keys due random sampling
+        keys = sorted(set(keys))
         split = splits[0]
         B = len(keys)
         p = next(self.parameters())
@@ -650,7 +652,6 @@ class BaselineAggLSTM4(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        sorted_keys = sorted(keys)
         end = start + self.total_length
         series = self.series[keys, start:end].astype(np.float32)
         raw_series = torch.from_numpy(series).to(p.device)
