@@ -1,8 +1,6 @@
 # Number of trainable parameters:
 dataset_reader:
   type: subwiki_network
-  database: wiki
-  collection: health
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -12,8 +10,6 @@ model:
   type: baseline_agg_lstm_4
   agg_type: mean
   peek: true
-  database: wiki
-  collection: health
   num_layers: 8
   hidden_size: 124
   dropout: 0.1

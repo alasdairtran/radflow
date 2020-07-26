@@ -323,6 +323,19 @@ def populate_hdf5(collection, name):
     with open(f'data/{name}.key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)
 
+    all_cursor = client.vevo[collection].find({}, projection=['_id'])
+    all_ids = set(s['_id'] for s in all_cursor)
+
+    node_cursor = client.vevo[collection].find(
+        {'n': {'$gt': 0}}, projection=['_id'])
+    connected_ids = set(s['_id'] for s in node_cursor)
+
+    with open(f'data/vevo_all_nodes.pkl', 'wb') as f:
+        pickle.dump(all_ids, f)
+
+    with open(f'data/vevo_connected_nodes.pkl', 'wb') as f:
+        pickle.dump(connected_ids, f)
+
 
 def populate_redis():
     r = redis.Redis(host='localhost', port=6379, db=0)

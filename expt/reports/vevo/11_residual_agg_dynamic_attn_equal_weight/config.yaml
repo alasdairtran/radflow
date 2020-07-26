@@ -1,9 +1,8 @@
 # Number of trainable parameters:
 dataset_reader:
   type: subwiki_network
-  database: vevo
-  collection: graph
-  train_all: false
+  train_path: data/vevo_connected_nodes.pkl
+  test_path: data/vevo_connected_nodes.pkl
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -13,8 +12,6 @@ model:
   type: baseline_agg_lstm_4
   agg_type: attention
   peek: true
-  database: vevo
-  collection: graph
   num_layers: 8
   hidden_size: 108
   dropout: 0.1

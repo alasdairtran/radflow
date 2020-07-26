@@ -1,9 +1,8 @@
 # Number of trainable parameters:
 dataset_reader:
   type: subwiki_network
-  database: vevo
-  collection: graph
-  train_all: false
+  train_path: data/vevo_connected_nodes.pkl
+  test_path: data/vevo_connected_nodes.pkl
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -11,8 +10,6 @@ vocabulary:
   type: empty_vocab
 model:
   type: new_naive
-  database: vevo
-  collection: graph
   method: previous_day
   forecast_length: 7
   backcast_length: 42

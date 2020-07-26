@@ -22,24 +22,18 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 @DatasetReader.register('subwiki_network')
 class SubWikivNetworkReader(DatasetReader):
     def __init__(self,
-                 database: str = 'vevo',
-                 collection: str = 'graph',
-                 train_all: bool = False,
+                 train_path: str = 'data/vevo_all_nodes.pkl',
+                 test_path: str = 'data/vevo_connected_nodes.pkl',
                  lazy: bool = True) -> None:
         super().__init__(lazy)
         random.seed(1234)
         self.rs = np.random.RandomState(1234)
 
-        client = MongoClient(host='localhost', port=27017)
-        db = client[database]
-        all_cursor = db[collection].find({}, projection=['_id'])
-        self.all_ids = sorted([s['_id'] for s in all_cursor])
+        with open(train_path, 'rb') as f:
+            self.train_ids = sorted(pickle.load(f))
 
-        node_cursor = db[collection].find(
-            {'n': {'$gt': 0}}, projection=['_id'])
-        self.node_ids = sorted([s['_id'] for s in node_cursor])
-
-        self.train_all = train_all
+        with open(test_path, 'rb') as f:
+            self.test_ids = sorted(pickle.load(f))
 
     @overrides
     def _read(self, split: str):
@@ -47,15 +41,14 @@ class SubWikivNetworkReader(DatasetReader):
             raise ValueError(f'Unknown split: {split}')
 
         if split == 'train':
-            keys = self.all_ids if self.train_all else self.node_ids
-            keys = sorted(keys)
+            keys = sorted(self.train_ids)
             while True:
                 self.rs.shuffle(keys)
                 for key in keys:
                     yield self.series_to_instance(key, split)
 
         elif split in ['valid', 'test']:
-            for key in self.node_ids:
+            for key in sorted(self.test_ids):
                 yield self.series_to_instance(key, split)
 
     def series_to_instance(self, key, split) -> Instance:

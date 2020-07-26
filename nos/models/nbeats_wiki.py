@@ -38,8 +38,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class NBEATSWiki(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
-                 database: str = 'vevo',
-                 collection: str = 'graph',
                  data_path: str = './data/vevo.hdf5',
                  series_len: int = 63,
                  forecast_length: int = 28,
@@ -73,10 +71,6 @@ class NBEATSWiki(BaseModel):
 
         self.data = h5py.File(data_path, 'r')
         self.series = self.data['views']
-
-        client = MongoClient(host='localhost', port=27017)
-        db = client[database]
-        self.col = db[collection]
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \

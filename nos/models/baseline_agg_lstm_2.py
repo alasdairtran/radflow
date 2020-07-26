@@ -41,8 +41,6 @@ class BaselineAggLSTM2(BaseModel):
                  backcast_length: int = 42,
                  test_lengths: List[int] = [7],
                  peek: bool = True,
-                 database: str = 'vevo',
-                 collection: str = 'graph',
                  data_path: str = './data/vevo.hdf5',
                  key2pos_path: str = './data/vevo.key2pos.pkl',
                  series_len: int = 63,
@@ -119,10 +117,6 @@ class BaselineAggLSTM2(BaseModel):
                 self.attn2 = nn.MultiheadAttention(
                     hidden_size * 2, 4, dropout=0.1, bias=True,
                     add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
-
-        client = MongoClient(host='localhost', port=27017)
-        db = client[database]
-        self.col = db[collection]
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \
