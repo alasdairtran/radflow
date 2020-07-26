@@ -40,9 +40,7 @@ class NBEATSWiki(BaseModel):
                  vocab: Vocabulary,
                  database: str = 'vevo',
                  collection: str = 'graph',
-                 series_path: str = './data/views.hdf5',
-                 series_name: str = 'vevo',
-                 cache_series: bool = True,
+                 data_path: str = './data/vevo.hdf5',
                  series_len: int = 63,
                  forecast_length: int = 28,
                  backcast_length: int = 224,
@@ -73,9 +71,8 @@ class NBEATSWiki(BaseModel):
         self.end_offset = end_offset
         initializer(self)
 
-        self.series = h5py.File(series_path, 'r')[series_name]
-        if cache_series:
-            self.series = self.series[...]
+        self.data = h5py.File(data_path, 'r')
+        self.series = self.data['views']
 
         client = MongoClient(host='localhost', port=27017)
         db = client[database]
@@ -237,6 +234,7 @@ class NBEATSWiki(BaseModel):
 
         # self._initialize_series()
 
+        keys = sorted(keys)
         split = splits[0]
         B = len(keys)
         p = next(self.parameters())

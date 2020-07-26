@@ -291,20 +291,27 @@ def populate_tiledb():
         A[:] = views
 
 
-def populate_hdf5():
-    views_path = 'data/views.hdf5'
-    views = np.full((60740, 63), np.iinfo(np.uint32).max, dtype=np.uint32)
+def populate_hdf5(collection, name):
+    data_path = f'data/{name}.hdf5'
+    f = h5py.File(data_path, 'a')
+    views = np.full((60740, 63), -1, dtype=np.int32)
+    edges = f.create_dataset('edges', (60740, 63, 10), np.int32, fillvalue=-1)
 
     logger.info('Populating series in memory')
     client = MongoClient(host='localhost', port=27017)
-    for p in tqdm(client.vevo.graph.find({}, projection=['s'])):
+    for p in tqdm(client.vevo[collection].find({})):
         s = np.array(p['s'])
-        s[s == -1] = np.iinfo(np.uint32).max
         views[p['_id']] = s
 
-    logger.info(f'Writing series matrix to {views_path}')
-    f = h5py.File(views_path, 'w')
-    hdf5_views = f.create_dataset("vevo", (60740, 63), dtype='uint32')
+        for d, day_ns in enumerate(p['e']):
+            day_ns = day_ns[:10]
+            edges[p['_id'], d, :len(day_ns)] = day_ns
+
+        for k, v in p['m'].items():
+            path = f"masks/{p['_id']}/{k}"
+            f.create_dataset(path, dtype=np.bool, data=np.array(v))
+
+    hdf5_views = f.create_dataset("views", (60740, 63), dtype='int32')
     hdf5_views[:] = views
 
 
@@ -372,7 +379,8 @@ def main():
     populate_tiledb()
 
     # Reading series from hdf5 is 20% than from mongo.
-    populate_hdf5()
+    populate_hdf5('graph', 'vevo')
+    populate_hdf5('static', 'vevo_static')
 
     # Reading graph from redis is much faster than mongo. Pickle is twice
     # as fast as JSON.

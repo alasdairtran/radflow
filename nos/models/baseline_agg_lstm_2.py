@@ -43,10 +43,7 @@ class BaselineAggLSTM2(BaseModel):
                  peek: bool = True,
                  database: str = 'vevo',
                  collection: str = 'graph',
-                 series_path: str = './data/views.hdf5',
-                 series_name: str = 'vevo',
-                 cache_series: bool = True,
-                 graph_path: str = './data/graphs/vevo.pkl',
+                 data_path: str = './data/vevo.hdf5',
                  series_len: int = 63,
                  num_layers: int = 8,
                  hidden_size: int = 128,
@@ -85,9 +82,9 @@ class BaselineAggLSTM2(BaseModel):
         self.n_hops = n_hops
         self.hop_scale = hop_scale
 
-        self.series = h5py.File(series_path, 'r')[series_name]
-        if cache_series:
-            self.series = self.series[...]
+        self.data = h5py.File(data_path, 'r')
+        self.series = self.data['views']
+        self.edges = self.data['edges']
 
         self.decoder = nn.LSTM(1, hidden_size, num_layers,
                                bias=True, batch_first=True, dropout=dropout)
@@ -122,10 +119,6 @@ class BaselineAggLSTM2(BaseModel):
         client = MongoClient(host='localhost', port=27017)
         db = client[database]
         self.col = db[collection]
-
-        logger.info(f'Loading graph from {graph_path}')
-        with open(graph_path, 'rb') as f:
-            self.graph = pickle.load(f)
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \
@@ -245,15 +238,12 @@ class BaselineAggLSTM2(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len, neigh_list, mask_list, series_dict=None, neigh_dict=None, mask_dict=None):
+    def _get_neighbour_embeds(self, X, keys, start, total_len):
         if self.agg_type == 'none':
             return X
 
-        series_dict = {} if series_dict is None else series_dict
-        neigh_dict = {} if neigh_dict is None else neigh_dict
-        mask_dict = {} if mask_dict is None else mask_dict
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, neigh_list, mask_list, series_dict, neigh_dict, mask_dict, 1)
+            X, keys, start, total_len, 1)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -265,42 +255,36 @@ class BaselineAggLSTM2(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, neigh_list, mask_list, series_dict, neigh_dict, mask_dict, level, parents=None):
+    def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
         B, T, E = X.shape
+
+        sorted_keys = sorted(set(keys))
+        key_map = {k: i for i, k in enumerate(sorted_keys)}
+        C = len(sorted_keys)
+
+        edges = self.edges[sorted_keys, start:start +
+                           total_len, :self.max_neighbours]
+        # edges.shape == [batch_size, total_len, max_neighs]
+
+        # Mask out parents
+        if parents is None:
+            parents = np.full_like(edges, -99, dtype=np.uint32)
+        edges[edges == parents] = -1
 
         # First iteration: grab the top neighbours from each sample
         key_neighs = {}
         max_n_neighs = 1
-        all_neigh_keys = set()
-        for i, (key, neighs) in enumerate(zip(keys, neigh_list)):
-            if not neighs:
+        neigh_set = set()
+        for i, (key, neighs) in enumerate(zip(sorted_keys, edges)):
+            # neighs.shape == [total_len, max_neighs]
+            non_empty_mask = neighs != -1
+            if not non_empty_mask.any():
                 continue
 
-            kn = set(neighs[start]) \
-                if self.static_graph else set()
-            counter = Counter()
-            for day in range(start, start+total_len):
-                neighs_t = [n for n in neighs[day]
-                            if parents is None or n != parents[i]]
-                if self.static_graph:
-                    kn &= set(neighs_t)
-                elif self.neigh_sample:
-                    candidates = set(neighs_t[:self.max_neighbours])
-                    kn |= candidates
-                    counter.update(candidates)
-                else:
-                    kn |= set(neighs_t[:self.max_neighbours])
+            counter = Counter(neighs[non_empty_mask])
+            kn = set(counter)
 
-            if not kn:
-                continue
-
-            if self.static_graph:
-                views = {k: self.series[self.series_map[k],
-                                        start:start+self.backcast_length].sum().cpu().item()
-                         for k in kn}
-                sorted_kn = sorted(views.items(), key=lambda x: x[1])
-                kn = set(p[0] for p in sorted_kn[:self.max_neighbours])
-            elif self.neigh_sample and not self.evaluate_mode:
+            if self.neigh_sample and not self.evaluate_mode:
                 pairs = counter.items()
                 candidates = np.array([p[0] for p in pairs])
                 probs = np.array([p[1] for p in pairs])
@@ -313,43 +297,36 @@ class BaselineAggLSTM2(BaseModel):
                 ).tolist()
 
             key_neighs[key] = list(kn)
-            all_neigh_keys |= set(kn)
+            neigh_set |= set(kn)
             max_n_neighs = max(max_n_neighs, len(kn))
 
-        neighs = np.zeros((B, max_n_neighs, total_len), dtype=np.float32)
-        n_masks = X.new_zeros(B, max_n_neighs).bool()
-        parents = X.new_full((B, max_n_neighs), -1).long()
-        neigh_keys = X.new_full((B, max_n_neighs), -1).long()
+        neighs = np.zeros((C, max_n_neighs, total_len), dtype=np.float32)
+        n_masks = X.new_zeros(C, max_n_neighs).bool()
+        parents = np.full((C, max_n_neighs), -99, dtype=np.uint32)
+        neigh_keys = X.new_full((C, max_n_neighs), -1).long()
 
-        missing_keys = all_neigh_keys - set(series_dict)
-        if missing_keys:
-            for k in missing_keys:
-                neigh_dict[k] = self.graph[k]['e']
-                mask_dict[k] = self.graph[k]['m']
+        neigh_list = sorted(neigh_set)
+        end = start + self.total_length
+        neigh_map = {k: i for i, k in enumerate(neigh_list)}
+        neigh_series = self.series[neigh_list, start:end].astype(np.float32)
 
-            sorted_keys = sorted(missing_keys)
-            end = start + self.total_length
-            sorted_series = self.series[sorted_keys, start:end]
-            for i, k in enumerate(sorted_keys):
-                series_dict[sorted_keys[i]] = sorted_series[i]
-
-        for i, key in enumerate(keys):
+        for i, key in enumerate(sorted_keys):
             if key in key_neighs:
                 for j, n in enumerate(key_neighs[key]):
-                    neighs[i, j] = series_dict[n][:total_len]
+                    neighs[i, j] = neigh_series[neigh_map[n]][:total_len]
                     parents[i, j] = key
                     n_masks[i, j] = True
                     neigh_keys[i, j] = n
 
         neighs = torch.from_numpy(neighs).to(X.device)
-        neighs = neighs.reshape(B * max_n_neighs, total_len)
-        n_masks = n_masks.reshape(B * max_n_neighs)
-        parents = parents.reshape(B * max_n_neighs)
-        neigh_keys = neigh_keys.reshape(B * max_n_neighs)
+        neighs = neighs.reshape(C * max_n_neighs, total_len)
+        n_masks = n_masks.reshape(C * max_n_neighs)
+        parents = parents.reshape(C * max_n_neighs)
+        neigh_keys = neigh_keys.reshape(C * max_n_neighs)
         # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
         neighs = neighs[n_masks]
-        parents = parents[n_masks]
+        parents = parents[n_masks.cpu().numpy(), np.newaxis, np.newaxis]
         neigh_keys = neigh_keys[n_masks]
         # neighs.shape == [neigh_batch_size, seq_len]
 
@@ -375,13 +352,10 @@ class BaselineAggLSTM2(BaseModel):
                 idx = list(range(len(Xn)))
 
             sampled_keys = neigh_keys[idx].cpu().tolist()
-            neigh_neigh_list = [neigh_dict[k] for k in sampled_keys]
-            neigh_mask_list = [mask_dict[k] for k in sampled_keys]
 
             Xm_2, masks_2 = self._construct_neighs(
                 Xn[idx], sampled_keys, start, total_len,
-                neigh_neigh_list, neigh_mask_list, series_dict, neigh_dict, mask_dict,
-                level + 1, parents[idx].cpu().tolist())
+                level + 1, parents[idx])
             if self.agg_type == 'mean':
                 Xm_2 = self._aggregate_mean(Xm_2, masks_2)
             elif self.agg_type == 'attention':
@@ -394,26 +368,28 @@ class BaselineAggLSTM2(BaseModel):
         _, S, E = Xn.shape
 
         # We plus one to give us option to either peek or not
-        Xm = X.new_zeros(B * max_n_neighs, S, E)
+        Xm = X.new_zeros(C * max_n_neighs, S, E)
         Xm[n_masks] = Xn
-        Xm = Xm.reshape(B, max_n_neighs, S, E)
+        Xm = Xm.reshape(C, max_n_neighs, S, E)
 
+        Xm_out = X.new_zeros(B, max_n_neighs, S, E)
         masks = np.ones((B, max_n_neighs, S), dtype=bool)
-        for b, (key, neigh_masks) in enumerate(zip(keys, mask_list)):
+        for b, key in enumerate(keys):
             if key not in key_neighs:
                 continue
             for i, k in enumerate(key_neighs[key]):
-                mask = neigh_masks[k]
-                mask = mask[start:start+total_len]
+                mask = self.data[f'masks/{key}/{k}'][start:start+total_len]
                 if self.peek:
                     mask = mask[1:]
                 else:
                     mask = mask[:-1]
                 masks[b, i] = mask
 
+            Xm_out[b] = Xm[key_map[key]]
+
         masks = torch.from_numpy(masks).to(X.device)
 
-        return Xm, masks
+        return Xm_out, masks
 
     def _pool(self, X, Xn):
         X_out = torch.cat([X, Xn], dim=-1)
@@ -529,6 +505,7 @@ class BaselineAggLSTM2(BaseModel):
 
         # self._initialize_series()
 
+        keys = sorted(keys)
         split = splits[0]
         B = len(keys)
         p = next(self.parameters())
@@ -553,18 +530,9 @@ class BaselineAggLSTM2(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        sorted_keys = sorted(keys)
         end = start + self.total_length
-        sorted_series = self.series[sorted_keys, start:end]
-        series_dict = {}
-        for i, k in enumerate(sorted_keys):
-            series_dict[sorted_keys[i]] = sorted_series[i]
-        series_list = np.array([series_dict[k]
-                                for k in keys], dtype=np.float32)
-
-        neigh_list = [self.graph[k]['e'] for k in keys]
-        mask_list = [self.graph[k]['m'] for k in keys]
-        raw_series = torch.from_numpy(series_list).to(p.device)
+        series = self.series[keys, start:end].astype(np.float32)
+        raw_series = torch.from_numpy(series).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
 
         # non_missing_idx = torch.stack(non_missing_list, dim=0)[:, 1:]
@@ -577,8 +545,7 @@ class BaselineAggLSTM2(BaseModel):
         X = X_full[:, :-1]
         # X.shape == [batch_size, seq_len, hidden_size]
 
-        X_agg = self._get_neighbour_embeds(
-            X, keys, start, self.total_length, neigh_list, mask_list)
+        X_agg = self._get_neighbour_embeds(X, keys, start, self.total_length)
         # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
         X_agg = self.fc(X_agg)
@@ -611,12 +578,11 @@ class BaselineAggLSTM2(BaseModel):
 
             series = log_raw_series[:, :-self.forecast_length]
             current_views = series[:, -1]
-            series_dict, neigh_dict, mask_dict = {}, {}, {}
             for i in range(self.forecast_length):
                 X = self._forward_full(series)
                 seq_len = self.total_length - self.forecast_length + i + 1
                 X_agg = self._get_neighbour_embeds(
-                    X, keys, start, seq_len, neigh_list, mask_list, series_dict, neigh_dict, mask_dict)
+                    X, keys, start, seq_len)
                 X_agg = self.fc(X_agg)
                 pred = X_agg.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
