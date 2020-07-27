@@ -42,7 +42,7 @@ class BaselineAggLSTM2(BaseModel):
                  backcast_length: int = 42,
                  test_lengths: List[int] = [7],
                  peek: bool = True,
-                 data_path: str = './data/vevo.hdf5',
+                 data_path: str = './data/vevo/vevo.hdf5',
                  key2pos_path: str = './data/vevo.key2pos.pkl',
                  series_len: int = 63,
                  num_layers: int = 8,

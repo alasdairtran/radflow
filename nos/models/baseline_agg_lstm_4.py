@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class NewNaive(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
-                 data_path: str = './data/vevo.hdf5',
+                 data_path: str = './data/vevo/vevo.hdf5',
                  series_len: int = 63,
                  method: str = 'previous_day',
                  forecast_length: int = 7,
@@ -164,7 +164,7 @@ class BaselineAggLSTM4(BaseModel):
                  backcast_length: int = 42,
                  test_lengths: List[int] = [7],
                  peek: bool = True,
-                 data_path: str = './data/vevo.hdf5',
+                 data_path: str = './data/vevo/vevo.hdf5',
                  key2pos_path: str = './data/vevo.key2pos.pkl',
                  series_len: int = 63,
                  num_layers: int = 8,

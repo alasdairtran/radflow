@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class NBEATSWiki(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
-                 data_path: str = './data/vevo.hdf5',
+                 data_path: str = './data/vevo/vevo.hdf5',
                  series_len: int = 63,
                  forecast_length: int = 28,
                  backcast_length: int = 224,
