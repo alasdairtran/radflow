@@ -398,7 +398,7 @@ class BaselineAggLSTM2(BaseModel):
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
 
-        X_out = F.gelu(self.out_proj(X_out))
+        X_out = F.relu(self.out_proj(X_out))
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
         return X_out
