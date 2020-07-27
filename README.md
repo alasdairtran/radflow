@@ -70,11 +70,8 @@ python scripts/get_traffic.py -m localhost -b 0 -t 3 # dijkstra
 python scripts/get_traffic.py -m dijkstra -b 1 -t 3 # cray
 python scripts/get_traffic.py -m dijkstra -b 2 -t 3 # braun
 
-# Extract static subgraphs for our first round of experiment
-python scripts/extract_wiki_subgraph.py -e 2020013100 -d 5 "Global warming"
-python scripts/extract_wiki_subgraph.py -e 2020013100 -d 5 "Star Wars"
-python scripts/extract_wiki_subgraph.py -e 2020013100 -d 5 "Global health"
-python scripts/extract_wiki_subgraph.py -e 2020013100 -d 5 "Programming languages"
+# Store wiki graph in hdf5
+python scripts/extract_wiki_subgraph.py
 ```
 
 ## Training

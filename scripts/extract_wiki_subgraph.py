@@ -15,10 +15,13 @@ import os
 import pickle
 import random
 import time
-from collections import Counter, deque
+from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta
 
+import h5py
+import numpy as np
 import ptvsd
+import pymongo
 import requests
 import scipy.sparse as ss
 from bs4 import BeautifulSoup
@@ -331,6 +334,106 @@ def extract_all(mongo_host, seed, depth, end):
     grow_from_cats(key, seed, mongo_host, depth, end, matrix_path)
 
 
+def clean_wiki(mongo_host):
+    client = MongoClient(host=mongo_host, port=27017)
+    db = client.wiki2
+    data_path = 'data/wiki/wiki.hdf5'
+    data_f = h5py.File(data_path, 'a')
+
+    db.graph.create_index([
+        ('n', pymongo.DESCENDING),
+    ])
+
+    records = []
+    query = {'v': {'$gte': 100}, 'c': True}
+    cursor = db.traffic.find(query, ['s', 't'], batch_size=1000)
+    cursor = cursor.sort('_id', pymongo.ASCENDING)
+    old2new = {}
+    for i, page in tqdm(enumerate(cursor)):
+        old2new[page['_id']] = i
+        record = {
+            '_id': i,
+            's': page['s'],
+            't': page['t'],
+        }
+        records.append(record)
+
+    with open('data/wiki/trafficid2graphid.pkl', 'wb') as f:
+        pickle.dump(old2new, f)
+
+    db.graph.insert_many(records)
+
+    title2graphid = {}
+    cursor = db.pages.find({'i': {'$in': sorted(old2new.keys())}},
+                           projection=['i', 'title'], batch_size=10000)
+    for page in tqdm(cursor):
+        title2graphid[page['title']] = old2new[page['i']]
+
+    with open('data/wiki/title2graphid.pkl', 'wb') as f:
+        pickle.dump(title2graphid, f)
+
+    # First get all the views in memory
+    views = np.full((len(old2new), 1827), -1, dtype=np.int32)
+    cursor = db.graph.find({})
+    for page in tqdm(cursor):
+        views[page['_id']] = page['s']
+    hdf5_views = data_f.create_dataset('views', dtype=np.int32, data=views)
+
+    edges = data_f.create_dataset('edges', (len(old2new), 1827, 10), np.int32,
+                                  fillvalue=-1)
+
+    dt = h5py.vlen_dtype(np.dtype('bool'))
+    masks = data_f.create_dataset('masks', (len(old2new),), dt)
+    key2pos = [{} for _ in range(len(old2new))]
+    new2old = {v: k for k, v in old2new.items()}
+
+    cursor = db.graph.find({})
+    first = datetime(2015, 7, 1)
+    last = datetime(2020, 7, 1)  # exclude end point
+    assert (last - first).days == 1827
+    for page in tqdm(cursor):
+        from_id = page['_id']
+
+        from_traffic_id = new2old[from_id]
+        from_page = db.pages.find_one({'i': from_traffic_id}, ['links'])
+        links = from_page['links']
+        for link in links:
+            to_title = link['n']
+            if to_title not in title2graphid:
+                continue
+            to_id = title2graphid[to_title]
+
+            mask = np.ones(1827, dtype=np.bool_)
+            for period in link['t']:
+                start = round_ts(period['s'])
+                # no edge on end date
+                end = round_ts(period['e'] if 'e' in period else last)
+
+                if (end - first).days <= 0:
+                    continue
+
+                start = max(start, first)
+                if (end - start).days <= 0:
+                    continue
+
+                i = (start - first).days
+                j = (end - first).days
+                mask[i:j] = False
+            masks[to_id] = np.concatenate([masks[to_id], mask])
+            key2pos[to_id][from_id] = len(key2pos[to_id])
+
+
+def round_ts(dt):
+    if dt.hour < 12:
+        dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    else:
+        dt = dt + timedelta(days=1)
+        dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    return dt
+
+
 def validate(args):
     """Validate command line arguments."""
     args = {k.lstrip('-').lower().replace('-', '_'): v
@@ -355,7 +458,8 @@ def main():
         ptvsd.enable_attach(address)
         ptvsd.wait_for_attach()
 
-    extract_all(args['mongo'], args['seed'], args['depth'], args['end'])
+    # extract_all(args['mongo'], args['seed'], args['depth'], args['end'])
+    clean_wiki(args['mongo'])
 
 
 if __name__ == '__main__':
