@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def relabel_networks():
-    data_dir = 'data'
+    data_dir = 'data/vevo/raw'
 
     # Load persistent network
     logger.info('Loading persistent network.')
@@ -292,7 +292,7 @@ def populate_tiledb():
 
 
 def populate_hdf5(collection, name):
-    data_path = f'data/{name}.hdf5'
+    data_path = f'data/vevo/{name}.hdf5'
     f = h5py.File(data_path, 'a')
     views = np.full((60740, 63), -1, dtype=np.int32)
     edges = f.create_dataset('edges', (60740, 63, 10), np.int32, fillvalue=-1)
@@ -320,7 +320,7 @@ def populate_hdf5(collection, name):
     hdf5_views = f.create_dataset("views", (60740, 63), dtype='int32')
     hdf5_views[:] = views
 
-    with open(f'data/{name}.key2pos.pkl', 'wb') as f:
+    with open(f'data/vevo/{name}.key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)
 
     all_cursor = client.vevo[collection].find({}, projection=['_id'])
@@ -330,10 +330,10 @@ def populate_hdf5(collection, name):
         {'n': {'$gt': 0}}, projection=['_id'])
     connected_ids = set(s['_id'] for s in node_cursor)
 
-    with open(f'data/vevo_all_nodes.pkl', 'wb') as f:
+    with open(f'data/vevo/vevo_all_nodes.pkl', 'wb') as f:
         pickle.dump(all_ids, f)
 
-    with open(f'data/vevo_connected_nodes.pkl', 'wb') as f:
+    with open(f'data/vevo/vevo_connected_nodes.pkl', 'wb') as f:
         pickle.dump(connected_ids, f)
 
 
