@@ -382,8 +382,6 @@ def clean_wiki(mongo_host):
     edges = data_f.create_dataset('edges', (len(old2new), 1827, 10), np.int32,
                                   fillvalue=-1)
 
-    dt = h5py.vlen_dtype(np.dtype('bool'))
-    masks = data_f.create_dataset('masks', (len(old2new),), dt)
     new2old = {v: k for k, v in old2new.items()}
 
     cursor = db.graph.find({}, no_cursor_timeout=True)
@@ -420,6 +418,20 @@ def clean_wiki(mongo_host):
                 mask[i:j] = False
             mask_path = f'allmasks/{to_id}/{from_id}'
             data_f.create_dataset(mask_path, dtype=np.bool_, data=mask)
+
+    # Consolidate masks
+    dt = h5py.vlen_dtype(np.dtype('bool'))
+    masks = data_f.create_dataset('masks', (len(old2new),), dt)
+    key2pos = [{} for _ in range(len(old2new))]
+
+    for key in tqdm(data_f['allmasks']):
+        mask_list = []
+        for i, neigh in enumerate(data_f['allmasks'][key]):
+            mask_list.append(data_f['allmasks'][key][neigh])
+            key2pos[int(key)][int(neigh)] = i
+        if len(mask_list) > 0:
+            mask = np.concatenate(mask_list)
+            masks[int(key)] = mask
 
 
 def round_ts(dt):
