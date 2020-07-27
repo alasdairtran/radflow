@@ -57,6 +57,8 @@ class BaselineAggLSTM2(BaseModel):
                  end_offset: int = 0,
                  view_missing_p: float = 0,
                  edge_missing_p: float = 0,
+                 view_randomize_p: bool = True,
+                 forward_fill: bool = True,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -76,6 +78,11 @@ class BaselineAggLSTM2(BaseModel):
         self.neigh_sample = neigh_sample
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
+        self.view_rs = np.random.RandomState(3821)
+        self.view_p_rs = np.random.RandomState(2131)
+        self.view_randomize_p = view_randomize_p
+        self.forward_fill = forward_fill
+
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
         self.edge_missing_p = edge_missing_p
@@ -308,6 +315,23 @@ class BaselineAggLSTM2(BaseModel):
         end = start + self.total_length
         neigh_map = {k: i for i, k in enumerate(neigh_list)}
         neigh_series = self.series[neigh_list, start:end].astype(np.float32)
+
+        if self.view_missing_p > 0:
+            if self.view_randomize_p:
+                prob = self.view_p_rs.uniform(0, self.view_missing_p)
+            else:
+                prob = self.view_missing_p
+            indices = self.view_rs.choice(np.arange(neigh_series.size),
+                                          replace=False,
+                                          size=int(round(neigh_series.size * prob)))
+            neigh_series[np.unravel_index(indices, neigh_series.shape)] = -1
+
+        if self.forward_fill:
+            mask = neigh_series == -1
+            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+            np.maximum.accumulate(idx, axis=1, out=idx)
+            neigh_series = neigh_series[np.arange(idx.shape[0])[:, None], idx]
+
         neigh_series[neigh_series == -1] = 0
 
         for i, key in enumerate(sorted_keys):
@@ -536,7 +560,25 @@ class BaselineAggLSTM2(BaseModel):
         # Find all series of given keys
         end = start + self.total_length
         series = self.series[keys, start:end].astype(np.float32)
+
+        if self.view_missing_p > 0:
+            if self.view_randomize_p:
+                prob = self.view_p_rs.uniform(0, self.view_missing_p)
+            else:
+                prob = self.view_missing_p
+            indices = self.view_rs.choice(np.arange(series.size),
+                                          replace=False,
+                                          size=int(round(series.size * prob)))
+            series[np.unravel_index(indices, series.shape)] = -1
+
         non_missing_idx = torch.from_numpy(series[:, 1:] != -1).to(p.device)
+
+        if self.forward_fill:
+            mask = series == -1
+            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+            np.maximum.accumulate(idx, axis=1, out=idx)
+            series = series[np.arange(idx.shape[0])[:, None], idx]
+
         series[series == -1] = 0
         raw_series = torch.from_numpy(series).to(p.device)
         # raw_series.shape == [batch_size, seq_len]

@@ -1,0 +1,90 @@
+# Number of trainable parameters:
+dataset_reader:
+  type: subwiki_network
+  train_path: data/vevo/vevo_connected_nodes.pkl
+  test_path: data/vevo/vevo_connected_nodes.pkl
+train_data_path: train
+validation_data_path: valid
+test_data_path: test
+vocabulary:
+  type: empty_vocab
+model:
+  type: baseline_agg_lstm_4
+  agg_type: attention
+  peek: true
+  num_layers: 8
+  hidden_size: 112
+  dropout: 0.1
+  forecast_length: 7
+  backcast_length: 42
+  test_lengths: [7]
+  max_neighbours: 4
+  max_agg_neighbours: 4
+  neigh_sample: true
+  n_hops: 2
+  hop_scale: 1
+  view_missing_p: 0.5
+  view_randomize_p: true
+  forward_fill: true
+  initializer:
+    - - ^decoder.layers.*.layer.weight*
+      - type: orthogonal
+    - - ^decoder.layers.*.layer.bias
+      - type: zero
+iterator:
+  type: basic
+  batch_size: 64
+  cache_instances: false
+  instances_per_epoch: 524288
+validation_iterator:
+  type: basic
+  batch_size: 64
+  cache_instances: false
+trainer:
+  type: callback_apex
+  apex_opt_level: O1
+  keep_batchnorm_fp32: None
+  optimizer:
+    type: bert_adam
+    lr: 0.0001
+    weight_decay: 0.0001
+    warmup: 0.05
+    t_total: 81920 # 8192 batches per epoch
+    max_grad_norm: 0.1
+    parameter_groups:
+      - - - ^decoder.in_proj
+        - {}
+      - - - ^decoder.layers.0
+        - {}
+      - - - ^decoder.layers.1
+        - {}
+      - - - ^decoder.layers.2
+        - {}
+      - - - ^decoder.layers.3
+        - {}
+      - - - ^decoder.layers.4
+        - {}
+      - - - ^decoder.layers.5
+        - {}
+      - - - ^decoder.layers.6
+        - {}
+      - - - ^decoder.layers.7
+        - {}
+      - - - ^decoder.out_proj
+        - {}
+      - - - ^(fc|out_proj)
+        - {}
+  num_epochs: 10
+  cuda_device: 0
+  shuffle: false
+  callbacks:
+    - type: checkpoint
+    # - type: archive
+    - type: track_metrics
+      patience: 10
+      validation_metric: "-smape_7"
+    - type: validate
+    - type: log_to_tensorboard
+      summary_interval: 100
+      should_log_parameter_statistics: false
+      log_batch_size_period: 1000
