@@ -608,7 +608,7 @@ def reindex(host):
         ('i', pymongo.ASCENDING),
     ])
 
-    index_path = os.path.join('data/wiki', 'title_index.pkl')
+    index_path = os.path.join('data/wiki', 'title2pageid.pkl')
     if not os.path.exists(index_path):
         fix_duplicates(db, index_path)
 

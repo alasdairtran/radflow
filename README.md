@@ -60,7 +60,7 @@ python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host 
 python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 1 # cray
 python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 2 # cray
 
-# Remove duplicate titles. Generate a cache title_index.pkl that maps
+# Remove duplicate titles. Generate a cache title2pageid.pkl that maps
 # the title to the original page id. We also reindex the page IDs, taking 3h.
 # We end up with 17,380,550 unqiue IDs/titles.
 python scripts/extract_graph.py --reindex
