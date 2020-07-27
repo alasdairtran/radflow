@@ -377,10 +377,7 @@ def clean_wiki(mongo_host):
     cursor = db.graph.find({})
     for page in tqdm(cursor):
         views[page['_id']] = page['s']
-    hdf5_views = data_f.create_dataset('views', dtype=np.int32, data=views)
-
-    edges = data_f.create_dataset('edges', (len(old2new), 1827, 10), np.int32,
-                                  fillvalue=-1)
+    data_f.create_dataset('views', dtype=np.int32, data=views)
 
     new2old = {v: k for k, v in old2new.items()}
 
@@ -424,11 +421,36 @@ def clean_wiki(mongo_host):
     masks = data_f.create_dataset('masks', (len(old2new),), dt)
     key2pos = [{} for _ in range(len(old2new))]
 
+    edges = data_f.create_dataset('edges', (len(old2new), 1827, 10), np.int32,
+                                  fillvalue=-1)
+    views = data_f['views'][...]
     for key in tqdm(data_f['allmasks']):
-        mask_list = []
+        mask_dict = {}
         for i, neigh in enumerate(data_f['allmasks'][key]):
-            mask_list.append(data_f['allmasks'][key][neigh])
-            key2pos[int(key)][int(neigh)] = i
+            mask_dict[int(neigh)] = data_f['allmasks'][key][neigh][...]
+
+        if not mask_dict:
+            continue
+
+        edges_array = np.full((1827, 10), -1, dtype=np.int32)
+        kept_neigh_set = set()
+        for d in range(1827):
+            day_neighs = [n for n in mask_dict if not mask_dict[n][d]]
+            if not day_neighs:
+                continue
+            top_neighs = sorted(day_neighs, key=lambda n: views[n, d],
+                                reverse=True)
+            top_neighs = top_neighs[:10]
+            edges_array[d, :len(top_neighs)] = top_neighs
+            kept_neigh_set |= set(top_neighs)
+        edges[int(key)] = edges_array
+
+        kept_neigh_ids = sorted(kept_neigh_set)
+        mask_list = []
+        for i, n in enumerate(kept_neigh_ids):
+            mask_list.append(mask_dict[n])
+            key2pos[int(key)][n] = i
+
         if len(mask_list) > 0:
             mask = np.concatenate(mask_list)
             masks[int(key)] = mask
