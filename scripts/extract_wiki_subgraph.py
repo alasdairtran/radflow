@@ -381,6 +381,7 @@ def clean_wiki(mongo_host):
 
     new2old = {v: k for k, v in old2new.items()}
 
+    mask_f = h5py.File('data/wiki/masks.hdf5', 'a')
     cursor = db.graph.find({}, no_cursor_timeout=True)
     first = datetime(2015, 7, 1)
     last = datetime(2020, 7, 1)  # exclude end point
@@ -413,8 +414,8 @@ def clean_wiki(mongo_host):
                 i = (start - first).days
                 j = (end - first).days
                 mask[i:j] = False
-            mask_path = f'allmasks/{to_id}/{from_id}'
-            data_f.create_dataset(mask_path, dtype=np.bool_, data=mask)
+            mask_path = f'{to_id}/{from_id}'
+            mask_f.create_dataset(mask_path, dtype=np.bool_, data=mask)
 
     # Consolidate masks
     dt = h5py.vlen_dtype(np.dtype('bool'))
