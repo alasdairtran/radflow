@@ -384,10 +384,9 @@ def clean_wiki(mongo_host):
 
     dt = h5py.vlen_dtype(np.dtype('bool'))
     masks = data_f.create_dataset('masks', (len(old2new),), dt)
-    key2pos = [{} for _ in range(len(old2new))]
     new2old = {v: k for k, v in old2new.items()}
 
-    cursor = db.graph.find({})
+    cursor = db.graph.find({}, no_cursor_timeout=True)
     first = datetime(2015, 7, 1)
     last = datetime(2020, 7, 1)  # exclude end point
     assert (last - first).days == 1827
@@ -419,8 +418,8 @@ def clean_wiki(mongo_host):
                 i = (start - first).days
                 j = (end - first).days
                 mask[i:j] = False
-            masks[to_id] = np.concatenate([masks[to_id], mask])
-            key2pos[to_id][from_id] = len(key2pos[to_id])
+            mask_path = f'allmasks/{to_id}/{from_id}'
+            data_f.create_dataset(mask_path, dtype=np.bool_, data=mask)
 
 
 def round_ts(dt):
