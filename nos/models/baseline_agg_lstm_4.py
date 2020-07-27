@@ -432,6 +432,7 @@ class BaselineAggLSTM4(BaseModel):
         end = start + self.total_length
         neigh_map = {k: i for i, k in enumerate(neigh_list)}
         neigh_series = self.series[neigh_list, start:end].astype(np.float32)
+        neigh_series[neigh_series == -1] = 0
 
         for i, key in enumerate(sorted_keys):
             if key in key_neighs:
@@ -654,6 +655,7 @@ class BaselineAggLSTM4(BaseModel):
         # Find all series of given keys
         end = start + self.total_length
         series = self.series[keys, start:end].astype(np.float32)
+        series[series == -1] = 0
         raw_series = torch.from_numpy(series).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
 

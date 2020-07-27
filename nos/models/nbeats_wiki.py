@@ -259,6 +259,7 @@ class NBEATSWiki(BaseModel):
         sorted_keys = sorted(keys)
         end = start + self.total_length
         sorted_series = self.series[sorted_keys, start:end]
+        sorted_series[sorted_series == -1] = 0
         for i, k in enumerate(sorted_keys):
             series_dict[sorted_keys[i]] = sorted_series[i]
 
