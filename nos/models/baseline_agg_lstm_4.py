@@ -655,6 +655,7 @@ class BaselineAggLSTM4(BaseModel):
         # Find all series of given keys
         end = start + self.total_length
         series = self.series[keys, start:end].astype(np.float32)
+        non_missing_idx = torch.from_numpy(series[:, 1:] != -1).to(p.device)
         series[series == -1] = 0
         raw_series = torch.from_numpy(series).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
@@ -684,9 +685,8 @@ class BaselineAggLSTM4(BaseModel):
         preds = torch.exp(preds)
         targets = raw_series[:, 1:]
 
-        # if self.view_missing_p > 0:
-        #     preds = torch.masked_select(preds, non_missing_idx)
-        #     targets = torch.masked_select(targets, non_missing_idx)
+        preds = torch.masked_select(preds, non_missing_idx)
+        targets = torch.masked_select(targets, non_missing_idx)
 
         numerator = torch.abs(targets - preds)
         denominator = torch.abs(targets) + torch.abs(preds)
