@@ -561,10 +561,10 @@ class BaselineAggLSTM2(BaseModel):
         preds = torch.exp(preds)
         # preds.shape == [batch_size, seq_len]
 
+        targets = raw_series[:, 1:]
         preds = torch.masked_select(preds, non_missing_idx)
         targets = torch.masked_select(targets, non_missing_idx)
 
-        targets = raw_series[:, 1:]
         numerator = torch.abs(targets - preds)
         denominator = torch.abs(targets) + torch.abs(preds)
         loss = numerator / denominator
