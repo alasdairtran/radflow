@@ -1,7 +1,7 @@
 # Number of trainable parameters:
 dataset_reader:
   type: subwiki_network
-  train_path: data/vevo/vevo_connected_nodes.pkl
+  train_path: data/vevo/vevo_all_nodes.pkl
   test_path: data/vevo/vevo_connected_nodes.pkl
 train_data_path: train
 validation_data_path: valid
@@ -10,19 +10,17 @@ vocabulary:
   type: empty_vocab
 model:
   type: baseline_agg_lstm_4
-  agg_type: attention
-  peek: true
+  agg_type: none
   num_layers: 8
-  hidden_size: 120
+  hidden_size: 128
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42
   test_lengths: [7]
+  peek: false
   max_neighbours: 4
-  max_agg_neighbours: 4
-  neigh_sample: true
-  view_missing_p: 0.5
-  view_randomize_p: true
+  view_missing_p: 0.4
+  view_randomize_p: false
   forward_fill: false
   initializer:
     - - ^decoder.layers.*.layer.weight*
@@ -69,8 +67,6 @@ trainer:
       - - - ^decoder.layers.7
         - {}
       - - - ^decoder.out_proj
-        - {}
-      - - - ^(fc|out_proj)
         - {}
   num_epochs: 10
   cuda_device: 0
