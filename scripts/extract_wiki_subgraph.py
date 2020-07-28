@@ -424,11 +424,14 @@ def clean_wiki(mongo_host):
 
     edges = data_f.create_dataset('edges', (len(old2new), 1827, 10), np.int32,
                                   fillvalue=-1)
+
+    # If there's enough memory, load all masks into memory
+    # mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
     views = data_f['views'][...]
-    for key in tqdm(data_f['allmasks']):
+    for key in tqdm(mask_f):
         mask_dict = {}
-        for i, neigh in enumerate(data_f['allmasks'][key]):
-            mask_dict[int(neigh)] = data_f['allmasks'][key][neigh][...]
+        for i, neigh in enumerate(mask_f[key]):
+            mask_dict[int(neigh)] = mask_f[key][neigh][...]
 
         if not mask_dict:
             continue
