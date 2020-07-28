@@ -323,12 +323,12 @@ class BaselineAggLSTM2(BaseModel):
 
             if self.view_randomize_p:
                 view_p_rs = np.random.RandomState(
-                    self.history['_n_samples'] + 124241 * level)
+                    int(self.history['_n_samples']) + 124241 * level)
                 prob = view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
             view_rs = np.random.RandomState(
-                self.history['_n_samples'] + 52212 * level)
+                int(self.history['_n_samples']) + 52212 * level)
             indices = view_rs.choice(np.arange(o_series.size),
                                      replace=False,
                                      size=int(round(o_series.size * prob)))
@@ -582,11 +582,13 @@ class BaselineAggLSTM2(BaseModel):
                 o_series = series
 
             if self.view_randomize_p:
-                view_p_rs = np.random.RandomState(self.history['_n_samples'])
+                view_p_rs = np.random.RandomState(
+                    int(self.history['_n_samples']))
                 prob = view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
-            view_rs = np.random.RandomState(self.history['_n_samples'] + 12421)
+            view_rs = np.random.RandomState(
+                int(self.history['_n_samples']) + 12421)
             indices = view_rs.choice(np.arange(o_series.size),
                                      replace=False,
                                      size=int(round(o_series.size * prob)))
