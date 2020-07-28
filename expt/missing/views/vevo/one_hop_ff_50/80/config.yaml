@@ -22,7 +22,7 @@ model:
   max_agg_neighbours: 4
   neigh_sample: true
   view_missing_p: 0.8
-  view_randomize_p: true
+  view_randomize_p: false
   forward_fill: true
   initializer:
     - - ^decoder.layers.*.layer.weight*
