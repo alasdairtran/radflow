@@ -317,14 +317,25 @@ class BaselineAggLSTM2(BaseModel):
         neigh_series = self.series[neigh_list, start:end].astype(np.float32)
 
         if self.view_missing_p > 0:
+            # Don't delete test data during evaluation
+            if self.evaluate_mode:
+                o_series = neigh_series[:, :self.backcast_length]
+            else:
+                o_series = neigh_series
+
             if self.view_randomize_p:
                 prob = self.view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
-            indices = self.view_rs.choice(np.arange(neigh_series.size),
+            indices = self.view_rs.choice(np.arange(o_series.size),
                                           replace=False,
-                                          size=int(round(neigh_series.size * prob)))
-            neigh_series[np.unravel_index(indices, neigh_series.shape)] = -1
+                                          size=int(round(o_series.size * prob)))
+            o_series[np.unravel_index(indices, o_series.shape)] = -1
+
+            if self.evaluate_mode:
+                neigh_series[:, :self.backcast_length] = o_series
+            else:
+                neigh_series = o_series
 
         if self.forward_fill:
             mask = neigh_series == -1
@@ -562,14 +573,25 @@ class BaselineAggLSTM2(BaseModel):
         series = self.series[keys, start:end].astype(np.float32)
 
         if self.view_missing_p > 0:
+            # Don't delete test data during evaluation
+            if self.evaluate_mode:
+                o_series = series[:, :self.backcast_length]
+            else:
+                o_series = series
+
             if self.view_randomize_p:
                 prob = self.view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
-            indices = self.view_rs.choice(np.arange(series.size),
+            indices = self.view_rs.choice(np.arange(o_series.size),
                                           replace=False,
-                                          size=int(round(series.size * prob)))
-            series[np.unravel_index(indices, series.shape)] = -1
+                                          size=int(round(o_series.size * prob)))
+            o_series[np.unravel_index(indices, o_series.shape)] = -1
+
+            if self.evaluate_mode:
+                series[:, :self.backcast_length] = o_series
+            else:
+                series = o_series
 
         non_missing_idx = torch.from_numpy(series[:, 1:] != -1).to(p.device)
 
