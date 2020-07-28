@@ -183,6 +183,7 @@ class BaselineAggLSTM4(BaseModel):
                  edge_missing_p: float = 0,
                  view_randomize_p: bool = True,
                  forward_fill: bool = True,
+                 allow_loops: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -207,6 +208,7 @@ class BaselineAggLSTM4(BaseModel):
         self.edge_missing_p = edge_missing_p
         self.n_hops = n_hops
         self.hop_scale = hop_scale
+        self.allow_loops = allow_loops
 
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
@@ -387,7 +389,7 @@ class BaselineAggLSTM4(BaseModel):
         # edges.shape == [batch_size, total_len, max_neighs]
 
         # Mask out parents
-        if parents is None:
+        if self.allow_loops or parents is None:
             parents = np.full_like(edges, -99, dtype=np.uint32)
         edges[edges == parents] = -1
 
