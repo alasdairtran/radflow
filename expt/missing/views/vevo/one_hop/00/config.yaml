@@ -21,7 +21,7 @@ model:
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
-  view_missing_p: 0.2
+  view_missing_p: 0
   view_randomize_p: true
   forward_fill: true
   initializer:

@@ -13,7 +13,7 @@ model:
   agg_type: attention
   peek: true
   num_layers: 8
-  hidden_size: 120
+  hidden_size: 112
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42
@@ -21,7 +21,9 @@ model:
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
-  view_missing_p: 0.2
+  n_hops: 2
+  hop_scale: 1
+  view_missing_p: 0
   view_randomize_p: true
   forward_fill: true
   initializer:

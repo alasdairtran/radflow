@@ -22,6 +22,8 @@ model:
   max_agg_neighbours: 4
   neigh_sample: true
   view_missing_p: 0.8
+  view_randomize_p: true
+  forward_fill: true
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
