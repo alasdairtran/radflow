@@ -183,6 +183,8 @@ class BaselineAggLSTM4(BaseModel):
                  edge_missing_p: float = 0,
                  view_randomize_p: bool = True,
                  forward_fill: bool = True,
+                 train_edges_ns: str = 'edges',
+                 test_edges_ns: str = 'edges',
                  allow_loops: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
@@ -209,6 +211,8 @@ class BaselineAggLSTM4(BaseModel):
         self.n_hops = n_hops
         self.hop_scale = hop_scale
         self.allow_loops = allow_loops
+        self.train_edges_ns = train_edges_ns
+        self.test_edges_ns = test_edges_ns
 
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
@@ -217,7 +221,8 @@ class BaselineAggLSTM4(BaseModel):
 
         self.data = h5py.File(data_path, 'r')
         self.series = self.data['views']
-        self.edges = self.data['edges']
+        self.train_edges = self.data[train_edges_ns]
+        self.test_edges = self.data[test_edges_ns]
         self.masks = self.data['masks']
         with open(key2pos_path, 'rb') as f:
             self.key2pos = pickle.load(f)
@@ -384,8 +389,12 @@ class BaselineAggLSTM4(BaseModel):
         key_map = {k: i for i, k in enumerate(sorted_keys)}
         C = len(sorted_keys)
 
-        edges = self.edges[sorted_keys, start:start +
-                           total_len, :self.max_neighbours]
+        if self.training:
+            edges = self.train_edges[sorted_keys, start:start +
+                                     total_len, :self.max_neighbours]
+        else:
+            edges = self.test_edges[sorted_keys, start:start +
+                                    total_len, :self.max_neighbours]
         # edges.shape == [batch_size, total_len, max_neighs]
 
         # Mask out parents
@@ -702,11 +711,13 @@ class BaselineAggLSTM4(BaseModel):
                 o_series = series
 
             if self.view_randomize_p:
-                view_p_rs = np.random.RandomState(int(self.history['_n_samples']))
+                view_p_rs = np.random.RandomState(
+                    int(self.history['_n_samples']))
                 prob = view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
-            view_rs = np.random.RandomState(int(self.history['_n_samples']) + 12421)
+            view_rs = np.random.RandomState(
+                int(self.history['_n_samples']) + 12421)
             indices = view_rs.choice(np.arange(o_series.size),
                                      replace=False,
                                      size=int(round(o_series.size * prob)))
