@@ -459,6 +459,14 @@ def clean_wiki(mongo_host):
             mask = np.concatenate(mask_list)
             masks[int(key)] = mask
 
+    with open('data/wiki/key2pos.pkl', 'wb') as f:
+        pickle.dump(key2pos, f)
+
+    count = 0
+    for key in tqdm(mask_f):
+        count += len(mask_f[key])
+    print('Total edges', count)
+
 
 def round_ts(dt):
     if dt.hour < 12:
