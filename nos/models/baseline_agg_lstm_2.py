@@ -78,8 +78,6 @@ class BaselineAggLSTM2(BaseModel):
         self.neigh_sample = neigh_sample
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
-        self.view_rs = np.random.RandomState(3821)
-        self.view_p_rs = np.random.RandomState(2131)
         self.view_randomize_p = view_randomize_p
         self.forward_fill = forward_fill
 
@@ -324,12 +322,16 @@ class BaselineAggLSTM2(BaseModel):
                 o_series = neigh_series
 
             if self.view_randomize_p:
-                prob = self.view_p_rs.uniform(0, self.view_missing_p)
+                view_p_rs = np.random.RandomState(
+                    self.history['_n_samples'] + 124241 * level)
+                prob = view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
-            indices = self.view_rs.choice(np.arange(o_series.size),
-                                          replace=False,
-                                          size=int(round(o_series.size * prob)))
+            view_rs = np.random.RandomState(
+                self.history['_n_samples'] + 52212 * level)
+            indices = view_rs.choice(np.arange(o_series.size),
+                                     replace=False,
+                                     size=int(round(o_series.size * prob)))
             o_series[np.unravel_index(indices, o_series.shape)] = -1
 
             if self.evaluate_mode:
@@ -580,12 +582,14 @@ class BaselineAggLSTM2(BaseModel):
                 o_series = series
 
             if self.view_randomize_p:
-                prob = self.view_p_rs.uniform(0, self.view_missing_p)
+                view_p_rs = np.random.RandomState(self.history['_n_samples'])
+                prob = view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
-            indices = self.view_rs.choice(np.arange(o_series.size),
-                                          replace=False,
-                                          size=int(round(o_series.size * prob)))
+            view_rs = np.random.RandomState(self.history['_n_samples'] + 12421)
+            indices = view_rs.choice(np.arange(o_series.size),
+                                     replace=False,
+                                     size=int(round(o_series.size * prob)))
             o_series[np.unravel_index(indices, o_series.shape)] = -1
 
             if self.evaluate_mode:
