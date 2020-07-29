@@ -270,6 +270,18 @@ def populate_database(seed_word, collection):
     logger.info('Inserting graph into database.')
     result = db[collection].insert_many(docs)
 
+    # Add metadata
+    with open('data/vevo/raw/vevo_en_embeds_60k.txt') as f:
+        for line in tqdm(f):
+            parts = line.strip().split(',')
+            i = int(parts[0])
+            video_id = parts[1]
+            title = parts[2]
+
+            query = {'_id': i}
+            update = {'$set': {'title': title, 'video_id': video_id}}
+            db.graph.update_one(query, update)
+
 
 def populate_tiledb():
     traffic_path = 'data/series/vevo'
