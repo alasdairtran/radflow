@@ -122,9 +122,11 @@ class BaselineAggLSTMInterlaced(BaseModel):
                 self.out_fs.append(GehringLinear(hidden_size, hidden_size))
 
         if agg_type == 'attention':
-            self.attn = nn.MultiheadAttention(
-                hidden_size, 4, dropout=0.1, bias=True,
-                add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+            self.attns_1 = nn.ModuleList([])
+            for i in range(num_layers):
+                self.attns_1.append(nn.MultiheadAttention(
+                    hidden_size, 4, dropout=0.1, bias=True,
+                    add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None))
         elif agg_type == 'sage':
             self.conv = SAGEConv(hidden_size * 2, hidden_size * 2)
         elif agg_type == 'gat':
@@ -456,7 +458,7 @@ class BaselineAggLSTMInterlaced(BaseModel):
 
         return Xn
 
-    def _aggregate_attn(self, X, Xn, masks, level):
+    def _aggregate_attn(self, X, Xn, masks, layer, level):
         # X.shape == [batch_size, seq_len, hidden_size]
         # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
         # masks.shape == [batch_size, n_neighs, seq_len]
@@ -473,7 +475,7 @@ class BaselineAggLSTMInterlaced(BaseModel):
         # key_padding_mask.shape == [n_neighs, batch_size  * seq_len]
 
         if level == 1:
-            X_attn, _ = self.attn(X, Xn, Xn, key_padding_mask, False)
+            X_attn, _ = self.attns_1[layer](X, Xn, Xn, key_padding_mask, False)
         elif level == 2:
             X_attn, _ = self.attn2(X, Xn, Xn, key_padding_mask, False)
 
@@ -637,7 +639,7 @@ class BaselineAggLSTMInterlaced(BaseModel):
             if self.agg_type == 'mean':
                 h_m = self._aggregate_mean(h_m, masks)
             elif self.agg_type == 'attention':
-                h_m = self._aggregate_attn(h, h_m, masks, 1)
+                h_m = self._aggregate_attn(h, h_m, masks, l, 1)
             elif self.agg_type in ['gat', 'sage']:
                 h_m = self._aggregate_gat(h, h_m, masks)
 

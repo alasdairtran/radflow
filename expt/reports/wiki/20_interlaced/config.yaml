@@ -17,7 +17,7 @@ model:
   agg_type: attention
   peek: true
   num_layers: 8
-  hidden_size: 116
+  hidden_size: 104
   dropout: 0.1
   forecast_length: 28
   backcast_length: 112
