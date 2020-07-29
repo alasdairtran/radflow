@@ -281,7 +281,7 @@ class BaselineAggLSTM2(BaseModel):
 
         # Mask out parents
         if parents is None:
-            parents = np.full_like(edges, -99, dtype=np.uint32)
+            parents = np.full_like(edges, -99, dtype=np.int32)
         edges[edges == parents] = -1
 
         # First iteration: grab the top neighbours from each sample
@@ -315,7 +315,7 @@ class BaselineAggLSTM2(BaseModel):
 
         neighs = np.zeros((C, max_n_neighs, total_len), dtype=np.float32)
         n_masks = X.new_zeros(C, max_n_neighs).bool()
-        parents = np.full((C, max_n_neighs), -99, dtype=np.uint32)
+        parents = np.full((C, max_n_neighs), -99, dtype=np.int32)
         neigh_keys = X.new_full((C, max_n_neighs), -1).long()
 
         neigh_list = sorted(neigh_set)
