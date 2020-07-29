@@ -71,7 +71,6 @@ class BaselineAggLSTMInterlaced(BaseModel):
         for i in range(num_layers):
             self.layers.append(LSTMLayer(hidden_size, dropout, variant))
 
-        self.proj_f = GehringLinear(hidden_size, hidden_size)
         self.out_f = GehringLinear(hidden_size, 1)
 
         self.mse = nn.MSELoss()
@@ -757,7 +756,6 @@ class LSTMDecoder(nn.Module):
         for i in range(n_layers):
             self.layers.append(LSTMLayer(hidden_size, dropout, variant))
 
-        self.proj_f = GehringLinear(hidden_size, hidden_size)
         self.out_f = GehringLinear(hidden_size, 1)
 
     def forward(self, X):
