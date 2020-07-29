@@ -22,6 +22,7 @@ model:
   max_agg_neighbours: 4
   neigh_sample: true
   n_hops: 2
+  hop_scale: 1
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
