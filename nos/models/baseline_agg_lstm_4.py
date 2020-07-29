@@ -385,17 +385,22 @@ class BaselineAggLSTM4(BaseModel):
     def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
         B, T, E = X.shape
 
+        edges = np.full((len(keys), total_len, self.max_neighbours),
+                        -1, np.int32)
+
         sorted_keys = sorted(set(keys))
         key_map = {k: i for i, k in enumerate(sorted_keys)}
-        C = len(sorted_keys)
 
         if self.training:
-            edges = self.train_edges[sorted_keys, start:start +
-                                     total_len, :self.max_neighbours]
+            sorted_edges = self.train_edges[sorted_keys, start:start +
+                                            total_len, :self.max_neighbours]
         else:
-            edges = self.test_edges[sorted_keys, start:start +
-                                    total_len, :self.max_neighbours]
-        # edges.shape == [batch_size, total_len, max_neighs]
+            sorted_edges = self.test_edges[sorted_keys, start:start +
+                                           total_len, :self.max_neighbours]
+        # sorted_edges.shape == [batch_size, total_len, max_neighs]
+
+        for i, k in enumerate(keys):
+            edges[i] = sorted_edges[key_map[k]]
 
         # Mask out parents
         if self.allow_loops or parents is None:
@@ -406,7 +411,7 @@ class BaselineAggLSTM4(BaseModel):
         key_neighs = {}
         max_n_neighs = 1
         neigh_set = set()
-        for i, (key, neighs) in enumerate(zip(sorted_keys, edges)):
+        for i, (key, neighs) in enumerate(zip(keys, edges)):
             # neighs.shape == [total_len, max_neighs]
             non_empty_mask = neighs != -1
             if not non_empty_mask.any():
@@ -438,10 +443,10 @@ class BaselineAggLSTM4(BaseModel):
             neigh_set |= set(kn)
             max_n_neighs = max(max_n_neighs, len(kn))
 
-        neighs = np.zeros((C, max_n_neighs, total_len), dtype=np.float32)
-        n_masks = X.new_zeros(C, max_n_neighs).bool()
-        parents = np.full((C, max_n_neighs), -99, dtype=np.int32)
-        neigh_keys = X.new_full((C, max_n_neighs), -1).long()
+        neighs = np.zeros((B, max_n_neighs, total_len), dtype=np.float32)
+        n_masks = X.new_zeros(B, max_n_neighs).bool()
+        parents = np.full((B, max_n_neighs), -99, dtype=np.uint32)
+        neigh_keys = X.new_full((B, max_n_neighs), -1).long()
 
         neigh_list = sorted(neigh_set)
         end = start + self.total_length
@@ -481,7 +486,7 @@ class BaselineAggLSTM4(BaseModel):
 
         neigh_series[neigh_series == -1] = 0
 
-        for i, key in enumerate(sorted_keys):
+        for i, key in enumerate(keys):
             if key in key_neighs:
                 for j, n in enumerate(key_neighs[key]):
                     neighs[i, j] = neigh_series[neigh_map[n]][:total_len]
@@ -490,10 +495,10 @@ class BaselineAggLSTM4(BaseModel):
                     neigh_keys[i, j] = n
 
         neighs = torch.from_numpy(neighs).to(X.device)
-        neighs = neighs.reshape(C * max_n_neighs, total_len)
-        n_masks = n_masks.reshape(C * max_n_neighs)
-        parents = parents.reshape(C * max_n_neighs)
-        neigh_keys = neigh_keys.reshape(C * max_n_neighs)
+        neighs = neighs.reshape(B * max_n_neighs, total_len)
+        n_masks = n_masks.reshape(B * max_n_neighs)
+        parents = parents.reshape(B * max_n_neighs)
+        neigh_keys = neigh_keys.reshape(B * max_n_neighs)
         # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
         neighs = neighs[n_masks]
@@ -516,7 +521,7 @@ class BaselineAggLSTM4(BaseModel):
             Xn = Xn[:, :-1]
 
         if self.n_hops - level > 0:
-            if not self.evaluate_mode:
+            if not self.evaluate_mode and self.hop_scale > 1:
                 size = int(round(len(Xn) / self.hop_scale))
                 idx = self.hop_rs.choice(len(Xn), size=size, replace=False)
             else:
@@ -538,11 +543,10 @@ class BaselineAggLSTM4(BaseModel):
         _, S, E = Xn.shape
 
         # We plus one to give us option to either peek or not
-        Xm = X.new_zeros(C * max_n_neighs, S, E)
+        Xm = X.new_zeros(B * max_n_neighs, S, E)
         Xm[n_masks] = Xn
-        Xm = Xm.reshape(C, max_n_neighs, S, E)
+        Xm = Xm.reshape(B, max_n_neighs, S, E)
 
-        Xm_out = X.new_zeros(B, max_n_neighs, S, E)
         masks = np.ones((B, max_n_neighs, S), dtype=bool)
         sorted_masks = self.masks[sorted_keys]
         for b, key in enumerate(keys):
@@ -558,11 +562,9 @@ class BaselineAggLSTM4(BaseModel):
                     mask = mask[:-1]
                 masks[b, i] = mask
 
-            Xm_out[b] = Xm[key_map[key]]
-
         masks = torch.from_numpy(masks).to(X.device)
 
-        return Xm_out, masks
+        return Xm, masks
 
     def _pool(self, X, Xn):
         X_out = X + Xn
