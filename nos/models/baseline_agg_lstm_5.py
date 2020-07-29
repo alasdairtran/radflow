@@ -706,7 +706,7 @@ class BaselineAggLSTMInterlaced(BaseModel):
                     if self.agg_type == 'mean':
                         h_m = self._aggregate_mean(h_m, masks)
                     elif self.agg_type == 'attention':
-                        h_m = self._aggregate_attn(h, h_m, masks, 1)
+                        h_m = self._aggregate_attn(h, h_m, masks, l, 1)
                     elif self.agg_type in ['gat', 'sage']:
                         h_m = self._aggregate_gat(h, h_m, masks)
 
