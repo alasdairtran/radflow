@@ -213,6 +213,7 @@ class BaselineAggLSTM4(BaseModel):
         self.allow_loops = allow_loops
         self.train_edges_ns = train_edges_ns
         self.test_edges_ns = test_edges_ns
+        self.n_layers = num_layers
 
         self.rs = np.random.RandomState(1234)
         self.sample_rs = np.random.RandomState(3456)
@@ -788,13 +789,14 @@ class BaselineAggLSTM4(BaseModel):
 
             series = log_raw_series[:, :-self.forecast_length]
             current_views = series[:, -1]
-            all_f_parts = [[] for _ in keys]
+            all_f_parts = [[[] for _ in range(self.n_layers + 1)]
+                           for _ in keys]
             for i in range(self.forecast_length):
                 X, pred, f_parts = self._forward_full(series)
                 pred = pred[:, -1]
-                for layer_f in f_parts:
-                    for b, f in enumerate(layer_f):
-                        all_f_parts[b].append(f)
+                for b in range(len(keys)):
+                    for l, f_part in enumerate(f_parts):
+                        all_f_parts[b][l].append(f_part[b])
                 if self.agg_type != 'none':
                     seq_len = self.total_length - self.forecast_length + i + 1
                     X_agg = self._get_neighbour_embeds(
@@ -805,7 +807,7 @@ class BaselineAggLSTM4(BaseModel):
                     # delta.shape == [batch_size]
 
                     for b, f in enumerate(X_agg.cpu().tolist()):
-                        all_f_parts[b].append(f)
+                        all_f_parts[b][-1].append(f)
 
                 current_views = pred
                 preds[:, i] = current_views
