@@ -118,6 +118,7 @@ def evaluate(model: Model,
         daily_errors = []
         preds = []
         keys = []
+        f_parts = []
         for batch in generator_tqdm:
             batch_count += 1
             batch = nn_util.move_to_device(batch, cuda_device)
@@ -128,6 +129,9 @@ def evaluate(model: Model,
             keys += output_dict['keys']
             if 'preds' in output_dict:
                 preds += output_dict['preds']
+
+            if 'f_parts' in output_dict:
+                f_parts += output_dict['f_parts']
 
             metrics = model.get_metrics()
 
@@ -156,6 +160,7 @@ def evaluate(model: Model,
         final_metrics['smapes'] = smape
         final_metrics['daily_errors'] = daily_errors
         final_metrics['preds'] = preds
+        final_metrics['f_parts'] = f_parts
 
         keys = [int(k) for k in keys]
         final_metrics['keys'] = keys

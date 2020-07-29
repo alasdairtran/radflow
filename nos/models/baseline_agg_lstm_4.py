@@ -361,9 +361,9 @@ class BaselineAggLSTM4(BaseModel):
         X = series
         # X.shape == [batch_size, seq_len]
 
-        X, forecast = self.decoder(X)
+        X, forecast, f_parts = self.decoder(X)
 
-        return X, forecast
+        return X, forecast, f_parts
 
     def _get_neighbour_embeds(self, X, keys, start, total_len):
         if self.agg_type == 'none':
@@ -512,7 +512,7 @@ class BaselineAggLSTM4(BaseModel):
             return Xm, masks
 
         neighs = torch.log1p(neighs)
-        Xn, _ = self._forward_full(neighs)
+        Xn, _, _ = self._forward_full(neighs)
         # Xn.shape == [neigh_batch_size, seq_len, hidden_size]
 
         if self.peek:
@@ -748,7 +748,7 @@ class BaselineAggLSTM4(BaseModel):
 
         series = torch.log1p(raw_series)
 
-        X_full, preds_full = self._forward_full(series)
+        X_full, preds_full, _ = self._forward_full(series)
         X = X_full[:, :-1]
         preds = preds_full[:, :-1]
         # X.shape == [batch_size, seq_len, hidden_size]
@@ -788,16 +788,24 @@ class BaselineAggLSTM4(BaseModel):
 
             series = log_raw_series[:, :-self.forecast_length]
             current_views = series[:, -1]
+            all_f_parts = [[] for _ in keys]
             for i in range(self.forecast_length):
-                X, pred = self._forward_full(series)
+                X, pred, f_parts = self._forward_full(series)
                 pred = pred[:, -1]
+                for layer_f in f_parts:
+                    for b, f in enumerate(layer_f):
+                        all_f_parts[b].append(f)
                 if self.agg_type != 'none':
                     seq_len = self.total_length - self.forecast_length + i + 1
                     X_agg = self._get_neighbour_embeds(
                         X, keys, start, seq_len)
                     X_agg = self.fc(X_agg)
-                    pred = pred + X_agg.squeeze(-1)[:, -1]
+                    X_agg = X_agg.squeeze(-1)[:, -1]
+                    pred = pred + X_agg
                     # delta.shape == [batch_size]
+
+                    for b, f in enumerate(X_agg.cpu().tolist()):
+                        all_f_parts[b].append(f)
 
                 current_views = pred
                 preds[:, i] = current_views
@@ -811,6 +819,7 @@ class BaselineAggLSTM4(BaseModel):
             out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
+            out_dict['f_parts'] = all_f_parts
             self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
 
             for k in self.test_lengths:
@@ -845,12 +854,18 @@ class LSTMDecoder(nn.Module):
 
         forecast = X.new_zeros(*X.shape)
         hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
+        f_parts = []
 
         for layer in self.layers:
             h, b, f = layer(X)
             X = X - b
             hidden = hidden + torch.cat([h, b], dim=-1)
             forecast = forecast + f
+
+            if not self.training:
+                f_part = self.out_f(f[:, -1]).squeeze(-1)
+                f_parts.append(f_part.cpu().tolist())
+
         hidden = hidden / len(self.layers)
 
         # h = torch.cat(h_list, dim=-1)
@@ -861,7 +876,7 @@ class LSTMDecoder(nn.Module):
 
         f = self.out_f(forecast).squeeze(-1)
 
-        return hidden, f
+        return hidden, f, f_parts
 
 
 class LSTMLayer(nn.Module):
