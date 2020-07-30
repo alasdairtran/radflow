@@ -46,7 +46,7 @@ def plot_missing_views():
     y3 = get_means(two_hop_ff_00_metrics)
 
     fig = plt.figure(figsize=(6, 4))
-    ax = plt.subplot(1, 1, 1)
+    ax = plt.subplot(1, 2, 1)
 
     xs = [0, 0.2, 0.4, 0.6, 0.8]
     ax.errorbar(xs, y1, marker='x', linestyle=':')
@@ -54,8 +54,13 @@ def plot_missing_views():
     ax.errorbar(xs, y3, marker='x', linestyle='-')
 
     ax.set_ylabel('SMAPE-7')
-    ax.set_xlabel('Proportion of missing views during evaluation')
+    ax.set_xlabel('Proportion of missing views')
     ax.legend(['No hops', 'One hop', 'Two hops'])
+
+    ax = plt.subplot(1, 2, 2)
+    ax.set_ylabel('SMAPE-28')
+    ax.set_xlabel('Proportion of missing views')
+
     fig.tight_layout()
     fig.savefig('figures/vevo_missing_views.pdf')
 
