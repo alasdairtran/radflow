@@ -552,15 +552,16 @@ class BaselineAggLSTM4(BaseModel):
         sorted_masks = self.masks[sorted_keys]
 
         if self.edge_missing_p > 0:
-            edge_rs = np.random.RandomState(
-                (524288 * self.epoch) + int(self.history['_n_samples']) + 124241 * level)
-            edge_idx = (~sorted_masks).nonzero()[0]
-            size = int(round(len(edge_idx) * self.edge_missing_p))
-            if size > 0:
-                delete_idx = edge_rs.choice(edge_idx,
-                                            replace=False,
-                                            size=size)
-                sorted_masks[delete_idx] = True
+            for sorted_mask, key in zip(sorted_masks, sorted_keys):
+                edge_rs = np.random.RandomState(
+                    key + (524288 * self.epoch) + int(self.history['_n_samples']) + 124241 * level)
+                edge_idx = (~sorted_mask).nonzero()[0]
+                size = int(round(len(edge_idx) * self.edge_missing_p))
+                if size > 0:
+                    delete_idx = edge_rs.choice(edge_idx,
+                                                replace=False,
+                                                size=size)
+                    sorted_mask[delete_idx] = True
 
         for b, key in enumerate(keys):
             if key not in key_neighs:
