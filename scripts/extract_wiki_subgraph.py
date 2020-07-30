@@ -492,7 +492,7 @@ def generate_train_test_split():
     with open('data/wiki/title2graphid.pkl', 'rb') as f:
         title2graphid = pickle.load(f)
 
-    seeds = ['global_heatlh', 'global_warming',
+    seeds = ['global_health', 'global_warming',
              'star_wars', 'programming_languages']
     for seed in seeds:
         seed_cats = []

@@ -1,8 +1,10 @@
 import json
+import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from wordcloud import STOPWORDS, WordCloud
 
 sns.set_style("ticks")
 sns.set_context("paper")
@@ -65,8 +67,35 @@ def plot_missing_views():
     fig.savefig('figures/vevo_missing_views.pdf')
 
 
+def generate_word_cloud(seed):
+    with open(f'data/wiki/node_titles/{seed}.pkl', 'rb') as f:
+        titles = pickle.load(f)
+
+    titles = [t.lower() for t in titles]
+    wordcloud = WordCloud(
+        background_color='white',
+        stopwords=STOPWORDS,
+        max_words=200,
+        max_font_size=40,
+        scale=3,
+        random_state=1,
+    ).generate(' '.join(titles))
+
+    fig = plt.figure(1, figsize=(6, 6))
+    plt.axis('off')
+
+    plt.imshow(wordcloud)
+    fig.tight_layout()
+    fig.savefig(f'figures/word_cloud_{seed}.pdf')
+
+
 def main():
     plot_missing_views()
+
+    generate_word_cloud('global_health')
+    generate_word_cloud('programming_languages')
+    generate_word_cloud('star_wars')
+    generate_word_cloud('global_warming')
 
 
 if __name__ == '__main__':
