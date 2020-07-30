@@ -479,6 +479,51 @@ def round_ts(dt):
     return dt
 
 
+def generate_train_test_split():
+    client = MongoClient(host='localhost', port=27017)
+    db = client.wiki2
+
+    os.makedirs('data/wiki/node_ids', exist_ok=True)
+
+    cat_titles = defaultdict(list)
+    cat_ids = defaultdict(list)
+    all_test_ids = set()
+
+    with open('data/wiki/title2graphid.pkl', 'rb') as f:
+        title2graphid = pickle.load(f)
+
+    seeds = ['global_heatlh', 'global_warming',
+             'star_wars', 'programming_languages']
+    for seed in seeds:
+        seed_cats = []
+        with open(f'data/wiki/categories/{seed}.txt') as f:
+            for line in f:
+                seed_cats.append(line.split('\t')[0])
+
+        for p in tqdm(db.pages.find({'cats': {'$in': seed_cats}})):
+            if p['title'] in title2graphid:
+                cat_titles[seed].append(p['title'])
+                cat_ids[seed].append(title2graphid[p['title']])
+
+        with open(f'data/wiki/node_ids/{seed}.pkl', 'wb') as f:
+            pickle.dump(set(sorted(cat_ids[seed])), f)
+
+        all_test_ids |= set(cat_ids[seed])
+
+    with open(f'data/wiki/node_ids/test_ids.pkl', 'wb') as f:
+        pickle.dump(set(sorted(all_test_ids)), f)
+
+    train_ids = set(title2graphid.values()) - all_test_ids
+
+    with open(f'data/wiki/node_ids/train_ids.pkl', 'wb') as f:
+        pickle.dump(set(sorted(train_ids)), f)
+
+    os.makedirs('data/wiki/node_titles', exist_ok=True)
+    for seed in seeds:
+        with open(f'data/wiki/node_titles/{seed}.pkl', 'wb') as f:
+            pickle.dump(set(sorted(cat_titles[seed])), f)
+
+
 def validate(args):
     """Validate command line arguments."""
     args = {k.lstrip('-').lower().replace('-', '_'): v
@@ -505,6 +550,7 @@ def main():
 
     # extract_all(args['mongo'], args['seed'], args['depth'], args['end'])
     clean_wiki(args['mongo'])
+    generate_train_test_split()
 
 
 if __name__ == '__main__':
