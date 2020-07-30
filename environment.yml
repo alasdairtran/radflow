@@ -41,6 +41,7 @@ dependencies:
       - pyzmq==19.0.0
       - redisgraph==2.1.4
       - schema==0.7.1
+      - seaborn==0.10.1
       - snap-stanford==5.0.0
       - spacy==2.1.9
       - stop-words==2018.7.23
