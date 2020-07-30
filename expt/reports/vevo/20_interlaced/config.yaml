@@ -13,7 +13,7 @@ model:
   agg_type: attention
   peek: true
   num_layers: 8
-  hidden_size: 104
+  hidden_size: 84
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42
@@ -47,27 +47,25 @@ trainer:
     t_total: 81920 # 8192 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
-      - - - ^decoder.in_proj
+      - - - ^in_proj
         - {}
-      - - - ^decoder.layers.0
+      - - - ^(layers|neigh_layers|proj_fs|out_fs|attns_1).0
         - {}
-      - - - ^decoder.layers.1
+      - - - ^(layers|neigh_layers|proj_fs|out_fs|attns_1).1
         - {}
-      - - - ^decoder.layers.2
+      - - - ^(layers|neigh_layers|proj_fs|out_fs|attns_1).2
         - {}
-      - - - ^decoder.layers.3
+      - - - ^(layers|neigh_layers|proj_fs|out_fs|attns_1).3
         - {}
-      - - - ^decoder.layers.4
+      - - - ^(layers|neigh_layers|proj_fs|out_fs|attns_1).4
         - {}
-      - - - ^decoder.layers.5
+      - - - ^(layers|neigh_layers|proj_fs|out_fs|attns_1).5
         - {}
-      - - - ^decoder.layers.6
+      - - - ^(layers|neigh_layers|proj_fs|out_fs|attns_1).6
         - {}
-      - - - ^decoder.layers.7
+      - - - ^(layers|neigh_layers|proj_fs|out_fs|attns_1).7
         - {}
-      - - - ^decoder.out_proj
-        - {}
-      - - - ^(fc|out_proj)
+      - - - ^out_f\.
         - {}
   num_epochs: 10
   cuda_device: 0

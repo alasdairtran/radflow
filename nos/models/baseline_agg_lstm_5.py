@@ -68,8 +68,11 @@ class BaselineAggLSTMInterlaced(BaseModel):
         super().__init__(vocab)
         self.in_proj = GehringLinear(1, hidden_size)
         self.layers = nn.ModuleList([])
+        self.neigh_layers = nn.ModuleList([])
         for i in range(num_layers):
             self.layers.append(LSTMLayer(hidden_size, dropout, variant))
+            self.neigh_layers.append(
+                LSTMLayer(hidden_size, dropout, variant, False))
 
         self.out_f = GehringLinear(hidden_size, 1)
 
@@ -627,9 +630,9 @@ class BaselineAggLSTMInterlaced(BaseModel):
         X_neighs = X_neighs.unsqueeze(-1)
         X_neighs = self.in_proj(X_neighs)
 
-        for l, layer in enumerate(self.layers):
+        for l, (layer, neigh_layer) in enumerate(zip(self.layers, self.neigh_layers)):
             h, b, f = layer(X)
-            h_n, b_n, f_n = layer(X_neighs)
+            h_n, b_n, f_n = neigh_layer(X_neighs)
 
             h_m, masks = self.reshape_neighs(
                 h_n, keys, sorted_keys, n_masks, max_n_neighs, key_map,
@@ -688,16 +691,15 @@ class BaselineAggLSTMInterlaced(BaseModel):
 
                 forecast = X.new_zeros(*X.shape)
                 seq_len = self.total_length - self.forecast_length + i + 1
-                X_neighs, sorted_keys, n_masks, max_n_neighs, key_map, key_neighs, B, S, E = \
-                    self._construct_neighs(
-                        X, keys, start, seq_len, 1)
+                X_neighs, sorted_keys, n_masks, max_n_neighs, key_map, key_neighs, B, S, E = self._construct_neighs(
+                    X, keys, start, seq_len, 1)
 
                 X_neighs = X_neighs.unsqueeze(-1)
                 X_neighs = self.in_proj(X_neighs)
 
                 for l, layer in enumerate(self.layers):
                     h, b, f = layer(X)
-                    h_n, b_n, f_n = layer(X_neighs)
+                    h_n, b_n, f_n = neigh_layer(X_neighs)
 
                     h_m, masks = self.reshape_neighs(
                         h_n, keys, sorted_keys, n_masks, max_n_neighs, key_map,
@@ -796,17 +798,20 @@ class LSTMDecoder(nn.Module):
 
 
 class LSTMLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, variant):
+    def __init__(self, hidden_size, dropout, variant, out_proj=True):
         super().__init__()
         self.variant = variant
 
         self.layer = nn.LSTM(hidden_size, hidden_size, 1,
                              batch_first=True, dropout=dropout)
 
-        self.proj_f = GehringLinear(hidden_size, hidden_size)
         self.proj_b = GehringLinear(hidden_size, hidden_size)
-        self.out_f = GehringLinear(hidden_size, hidden_size)
         self.out_b = GehringLinear(hidden_size, hidden_size)
+
+        self.out_proj = out_proj
+        if out_proj:
+            self.out_f = GehringLinear(hidden_size, hidden_size)
+            self.proj_f = GehringLinear(hidden_size, hidden_size)
 
     def forward(self, X):
         # X.shape == [batch_size, seq_len]
@@ -816,7 +821,10 @@ class LSTMLayer(nn.Module):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         b = self.out_b(F.gelu(self.proj_b(X)))
-        f = self.out_f(F.gelu(self.proj_f(X)))
+
+        f = None
+        if self.out_proj:
+            f = self.out_f(F.gelu(self.proj_f(X)))
         # b.shape == f.shape == [batch_size, seq_len, hidden_size]
 
         return X, b, f
