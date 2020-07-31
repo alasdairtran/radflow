@@ -183,8 +183,6 @@ class BaselineAggLSTM4(BaseModel):
                  edge_missing_p: float = 0,
                  view_randomize_p: bool = True,
                  forward_fill: bool = True,
-                 train_edges_ns: str = 'edges',
-                 test_edges_ns: str = 'edges',
                  allow_loops: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
@@ -222,9 +220,9 @@ class BaselineAggLSTM4(BaseModel):
 
         self.data = h5py.File(data_path, 'r')
         self.series = self.data['views']
-        self.train_edges = self.data[train_edges_ns]
-        self.test_edges = self.data[test_edges_ns]
+        self.edges = self.data['edges']
         self.masks = self.data['masks']
+        self.probs = self.data['probs']
         with open(key2pos_path, 'rb') as f:
             self.key2pos = pickle.load(f)
 
@@ -392,16 +390,22 @@ class BaselineAggLSTM4(BaseModel):
         sorted_keys = sorted(set(keys))
         key_map = {k: i for i, k in enumerate(sorted_keys)}
 
-        if self.training:
-            sorted_edges = self.train_edges[sorted_keys, start:start +
-                                            total_len, :self.max_neighbours]
-        else:
-            sorted_edges = self.test_edges[sorted_keys, start:start +
-                                           total_len, :self.max_neighbours]
+        sorted_edges = self.edges[sorted_keys, start:start+total_len]
+        sorted_probs = self.probs[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
         for i, k in enumerate(keys):
-            edges[i] = sorted_edges[key_map[k]]
+            key_edges = sorted_edges[key_map[k]]
+            key_probs = sorted_probs[key_map[k]]
+            for d in range(total_len):
+                day_edges = key_edges[d]
+                day_probs = key_probs[d]
+                seeds = [self.epoch, int(self.history['_n_samples']),
+                         level, d, 24124]
+                edge_rs = np.random.RandomState(seeds)
+                n_neighs = min(self.max_neighbours, len(day_edges))
+                edges[i, :n_neighs] = edge_rs.choice(day_edges, n_neighs,
+                                                     replace=False, p=day_probs)
 
         # Mask out parents
         if self.allow_loops or parents is None:
