@@ -10,10 +10,10 @@ vocabulary:
   type: empty_vocab
 model:
   type: baseline_agg_lstm_4
-  agg_type: attention
+  agg_type: gat
   peek: true
   num_layers: 8
-  hidden_size: 108
+  hidden_size: 128
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42
@@ -21,7 +21,6 @@ model:
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
-  equal_weight: true
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
@@ -68,7 +67,7 @@ trainer:
         - {}
       - - - ^decoder.out_f
         - {}
-      - - - ^attn
+      - - - ^conv
         - {}
       - - - ^fc
         - {}

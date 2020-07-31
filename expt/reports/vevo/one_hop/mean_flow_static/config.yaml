@@ -10,10 +10,10 @@ vocabulary:
   type: empty_vocab
 model:
   type: baseline_agg_lstm_4
-  agg_type: sage
+  agg_type: mean
   peek: true
   num_layers: 8
-  hidden_size: 124
+  hidden_size: 128
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42
@@ -66,8 +66,6 @@ trainer:
       - - - ^decoder.layers.7
         - {}
       - - - ^decoder.out_f
-        - {}
-      - - - ^attn
         - {}
       - - - ^fc
         - {}
