@@ -505,7 +505,7 @@ def generate_probs():
                 continue
 
             prob = counts / total
-            probs[k, d] = np.array(prob, np.float16)
+            probs[k, d] = np.array(prob.cumsum(), np.float16)
 
     count = 0
     for key in tqdm(mask_f):

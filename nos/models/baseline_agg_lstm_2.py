@@ -182,12 +182,11 @@ class BaselineAggLSTM2(BaseModel):
             key_probs = sorted_probs[key_map[k]]
             for d in range(total_len):
                 day_edges = key_edges[d]
-                day_probs = key_probs[d]
-                n_neighs = min(self.max_neighbours, (day_probs > 0).sum())
-                if n_neighs == 0:
+                day_cdf = key_probs[d]
+                n_neighs = min(self.max_neighbours, len(day_edges))
+                if n_neighs == 0 or day_cdf[-1] < 0.1:
                     continue
 
-                day_cdf = day_probs.cumsum()
                 rands = self.edge_rs.rand(n_neighs)
                 rand_mask = day_cdf[None, 0] < rands[:, None]
                 chosen_idx = rand_mask.sum(axis=1)

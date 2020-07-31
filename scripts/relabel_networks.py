@@ -371,7 +371,7 @@ def populate_hdf5(collection, name):
                 continue
 
             prob = counts / total
-            probs[k, d] = np.array(prob, np.float16)
+            probs[k, d] = np.array(prob.cumsum(), np.float16)
 
 
 def populate_redis():
