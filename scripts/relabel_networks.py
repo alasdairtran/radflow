@@ -363,14 +363,14 @@ def populate_hdf5(collection, name):
         for d, ns in enumerate(edge):
             if len(ns) == 0:
                 continue
-            counts = np.array([views[n, d] for n in ns], dtype=np.float64)
+            counts = np.array([views[n, d] for n in ns])
             counts[counts == -1] = 0
             counts = np.log1p(counts)
             total = counts.sum()
             if total < 1e-6:
-                prob = np.full(len(ns), 1 / len(ns), dtype=np.float16)
-            else:
-                prob = counts / total
+                continue
+
+            prob = counts / total
             probs[k, d] = np.array(prob, np.float16)
 
 

@@ -486,7 +486,7 @@ def generate_probs():
     mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
 
     with open(f'data/wiki/node_ids/test_ids.pkl', 'rb') as f:
-        all_test_ids = pickle.load(f)
+        test_ids = list(pickle.load(f))
 
     float16_dt = h5py.vlen_dtype(np.dtype('float16'))
     probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
@@ -496,14 +496,15 @@ def generate_probs():
         for d, ns in enumerate(edge):
             if len(ns) == 0:
                 continue
-            counts = np.array([views[n, d] for n in ns], dtype=np.float64)
+            counts = np.array([views[n, d] for n in ns])
             counts[counts == -1] = 0
+            counts[np.isin(counts, test_ids)] = 0
             counts = np.log1p(counts)
             total = counts.sum()
             if total < 1e-6:
-                prob = np.full(len(ns), 1 / len(ns), dtype=np.float16)
-            else:
-                prob = counts / total
+                continue
+
+            prob = counts / total
             probs[k, d] = np.array(prob, np.float16)
 
     count = 0
