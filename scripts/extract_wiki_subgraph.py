@@ -337,8 +337,6 @@ def extract_all(mongo_host, seed, depth, end):
 def clean_wiki(mongo_host):
     client = MongoClient(host=mongo_host, port=27017)
     db = client.wiki2
-    data_path = 'data/wiki/wiki.hdf5'
-    data_f = h5py.File(data_path, 'a')
 
     db.graph.create_index([
         ('n', pymongo.DESCENDING),
@@ -371,6 +369,19 @@ def clean_wiki(mongo_host):
 
     with open('data/wiki/title2graphid.pkl', 'wb') as f:
         pickle.dump(title2graphid, f)
+
+
+def create_masks(mongo_host):
+    client = MongoClient(host=mongo_host, port=27017)
+    db = client.wiki2
+    data_path = 'data/wiki/wiki.hdf5'
+    data_f = h5py.File(data_path, 'a')
+
+    with open('data/wiki/title2graphid.pkl', 'rb') as f:
+        title2graphid = pickle.load(f)
+
+    with open('data/wiki/trafficid2graphid.pkl', 'rb') as f:
+        old2new = pickle.load(f)
 
     # First get all the views in memory
     views = np.full((len(old2new), 1827), -1, dtype=np.int32)
@@ -417,6 +428,14 @@ def clean_wiki(mongo_host):
             mask_path = f'{to_id}/{from_id}'
             mask_f.create_dataset(mask_path, dtype=np.bool_, data=mask)
 
+
+def generate_hdf5():
+    data_path = 'data/wiki/wiki.hdf5'
+    data_f = h5py.File(data_path, 'a')
+
+    with open('data/wiki/trafficid2graphid.pkl', 'rb') as f:
+        old2new = pickle.load(f)
+
     # Consolidate masks
     bool_dt = h5py.vlen_dtype(np.dtype('bool'))
     masks = data_f.create_dataset('masks', (len(old2new),), bool_dt)
@@ -426,7 +445,7 @@ def clean_wiki(mongo_host):
     edges = data_f.create_dataset('edges', (len(old2new), 1827), int32_dt)
 
     # If there's enough memory, load all masks into memory
-    # mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
+    mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
     views = data_f['views'][...]
     for key in tqdm(mask_f):
         mask_dict = {}
@@ -459,6 +478,15 @@ def clean_wiki(mongo_host):
 
     with open('data/wiki/key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)
+
+
+def generate_probs():
+    data_path = 'data/wiki/wiki.hdf5'
+    data_f = h5py.File(data_path, 'a')
+    mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
+
+    with open(f'data/wiki/node_ids/test_ids.pkl', 'rb') as f:
+        all_test_ids = pickle.load(f)
 
     float16_dt = h5py.vlen_dtype(np.dtype('float16'))
     probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
@@ -567,6 +595,9 @@ def main():
     # extract_all(args['mongo'], args['seed'], args['depth'], args['end'])
     clean_wiki(args['mongo'])
     generate_train_test_split()
+    create_masks(args['mongo'])
+    generate_hdf5()
+    generate_probs()
 
 
 if __name__ == '__main__':
