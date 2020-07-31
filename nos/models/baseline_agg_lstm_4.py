@@ -175,7 +175,6 @@ class BaselineAggLSTM4(BaseModel):
                  max_eval_neighbours: int = 32,
                  hop_scale: int = 4,
                  neigh_sample: bool = False,
-                 equal_weight: bool = False,
                  t_total: int = 163840,
                  variant: str = 'full',
                  static_graph: bool = False,
@@ -184,7 +183,6 @@ class BaselineAggLSTM4(BaseModel):
                  edge_missing_p: float = 0,
                  view_randomize_p: bool = True,
                  forward_fill: bool = True,
-                 allow_loops: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -204,13 +202,11 @@ class BaselineAggLSTM4(BaseModel):
         self.static_graph = static_graph
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
-        self.equal_weight = equal_weight
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
         self.edge_missing_p = edge_missing_p
         self.n_hops = n_hops
         self.hop_scale = hop_scale
-        self.allow_loops = allow_loops
         self.n_layers = num_layers
 
         # Initialising RandomState is slow!
@@ -273,8 +269,9 @@ class BaselineAggLSTM4(BaseModel):
         if self.agg_type == 'none':
             return X
 
+        parents = [-99] * len(keys)
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, 1)
+            X, keys, start, total_len, 1, parents)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -286,46 +283,52 @@ class BaselineAggLSTM4(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _get_training_edges(self, keys, sorted_keys, key_map, start, total_len, level):
-        edges = np.full((len(keys), total_len, self.max_neighbours),
-                        -1, np.int32)
-
+    def _get_training_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
         sorted_probs = self.probs[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
-        for i, k in enumerate(keys):
+        edge_counters = []
+        for k, parent in zip(keys, parents):
+            counter = Counter()
             key_edges = sorted_edges[key_map[k]]
             key_probs = sorted_probs[key_map[k]]
             for d in range(total_len):
                 day_edges = key_edges[d]
                 day_cdf = key_probs[d]
-                n_neighs = min(self.max_neighbours, len(day_edges))
-                if n_neighs == 0 or day_cdf[-1] < 0.1:
+                if len(day_cdf) == 0:
                     continue
-
+                n_neighs = min(self.max_neighbours, len(day_edges))
                 rands = self.edge_rs.rand(n_neighs)
                 rand_mask = day_cdf[None, 0] < rands[:, None]
                 chosen_idx = rand_mask.sum(axis=1)
-                edges[i, d, :n_neighs] = day_edges[chosen_idx]
+                counter.update(day_edges[chosen_idx])
 
-        return edges
+            if parent in counter:
+                del counter[parent]
 
-    def _get_test_edges(self, keys, sorted_keys, key_map, start, total_len):
-        edges = np.full((len(keys), total_len, self.max_eval_neighbours),
-                        -1, np.int32)
+            edge_counters.append(counter)
 
+        return edge_counters
+
+    def _get_test_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
-        for i, k in enumerate(keys):
+        edge_counters = []
+        for k, parent in zip(keys, parents):
+            counter = Counter()
             key_edges = sorted_edges[key_map[k]]
             for d in range(total_len):
                 day_edges = key_edges[d][:self.max_eval_neighbours]
-                n_neighs = len(day_edges)
-                edges[i, d, :n_neighs] = day_edges
+                counter.update(day_edges)
 
-        return edges
+            if parent in counter:
+                del counter[parent]
+
+            edge_counters.append(counter)
+
+        return edge_counters
 
     def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
         B, T, E = X.shape
@@ -334,48 +337,32 @@ class BaselineAggLSTM4(BaseModel):
         key_map = {k: i for i, k in enumerate(sorted_keys)}
 
         if not self.evaluate_mode:
-            edges = self._get_training_edges(
-                keys, sorted_keys, key_map, start, total_len, level)
+            edge_counters = self._get_training_edges(
+                keys, sorted_keys, key_map, start, total_len, parents)
         else:
-            edges = self._get_test_edges(
-                keys, sorted_keys, key_map, start, total_len)
-
-        # Mask out parents
-        if self.allow_loops or parents is None:
-            parents = np.full_like(edges, -99, dtype=np.int32)
-        edges[edges == parents] = -1
+            edge_counters = self._get_test_edges(
+                keys, sorted_keys, key_map, start, total_len, parents)
 
         # First iteration: grab the top neighbours from each sample
         key_neighs = {}
         max_n_neighs = 1
         neigh_set = set()
-        for i, (key, neighs) in enumerate(zip(keys, edges)):
-            # neighs.shape == [total_len, max_neighs]
-            non_empty_mask = neighs != -1
-            if not non_empty_mask.any():
-                continue
-
-            counter = Counter(neighs[non_empty_mask])
+        for i, (key, counter) in enumerate(zip(keys, edge_counters)):
             kn = set(counter)
+            if not kn:
+                continue
 
             if self.neigh_sample and not self.evaluate_mode:
                 pairs = counter.items()
                 candidates = np.array([p[0] for p in pairs])
-                if self.equal_weight:
-                    kn = self.sample_rs.choice(
-                        candidates,
-                        size=min(len(candidates), self.max_agg_neighbours),
-                        replace=False,
-                    ).tolist()
-                else:
-                    probs = np.array([p[1] for p in pairs])
-                    probs = probs / probs.sum()
-                    kn = self.sample_rs.choice(
-                        candidates,
-                        size=min(len(candidates), self.max_agg_neighbours),
-                        replace=False,
-                        p=probs,
-                    ).tolist()
+                probs = np.array([p[1] for p in pairs])
+                probs = probs / probs.sum()
+                kn = self.sample_rs.choice(
+                    candidates,
+                    size=min(len(candidates), self.max_agg_neighbours),
+                    replace=False,
+                    p=probs,
+                ).tolist()
 
             key_neighs[key] = list(kn)
             neigh_set |= set(kn)
@@ -442,7 +429,7 @@ class BaselineAggLSTM4(BaseModel):
         # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
         neighs = neighs[n_masks]
-        parents = parents[n_masks.cpu().numpy(), np.newaxis, np.newaxis]
+        parents = parents[n_masks.cpu().numpy()]
         neigh_keys = neigh_keys[n_masks]
         # neighs.shape == [neigh_batch_size, seq_len]
 
