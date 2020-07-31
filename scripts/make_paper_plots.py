@@ -25,27 +25,17 @@ def get_means(paths):
 
 def plot_missing_views():
     data = 'vevo'
-    no_hops_ff_00_metrics = [f'expt/missing/views/{data}/no_hops_ff_00/00/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/no_hops_ff_00/20/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/no_hops_ff_00/40/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/no_hops_ff_00/60/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/no_hops_ff_00/80/serialization/evaluate-metrics.json']
 
-    one_hop_ff_00_metrics = [f'expt/missing/views/{data}/one_hop_ff_00/00/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/one_hop_ff_00/20/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/one_hop_ff_00/40/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/one_hop_ff_00/60/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/one_hop_ff_00/80/serialization/evaluate-metrics.json']
+    def get_paths(kind, data, n_hops):
+        return [f'expt/missing/{kind}/{data}/{n_hops}_ff_00/00/serialization/evaluate-metrics.json',
+                f'expt/missing/{kind}/{data}/{n_hops}_ff_00/20/serialization/evaluate-metrics.json',
+                f'expt/missing/{kind}/{data}/{n_hops}_ff_00/40/serialization/evaluate-metrics.json',
+                f'expt/missing/{kind}/{data}/{n_hops}_ff_00/60/serialization/evaluate-metrics.json',
+                f'expt/missing/{kind}/{data}/{n_hops}_ff_00/80/serialization/evaluate-metrics.json']
 
-    two_hop_ff_00_metrics = [f'expt/missing/views/{data}/two_hops_ff_00/00/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/two_hops_ff_00/20/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/two_hops_ff_00/40/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/two_hops_ff_00/60/serialization/evaluate-metrics.json',
-                             f'expt/missing/views/{data}/two_hops_ff_00/80/serialization/evaluate-metrics.json']
-
-    y1 = get_means(no_hops_ff_00_metrics)
-    y2 = get_means(one_hop_ff_00_metrics)
-    y3 = get_means(two_hop_ff_00_metrics)
+    y1 = get_means(get_paths('views', 'vevo', 'no_hops'))
+    y2 = get_means(get_paths('views', 'vevo', 'one_hop'))
+    y3 = get_means(get_paths('views', 'vevo', 'two_hops'))
 
     fig = plt.figure(figsize=(6, 3))
     ax = plt.subplot(1, 2, 1)
@@ -60,36 +50,34 @@ def plot_missing_views():
     ax.legend(['No hops', 'One hop', 'Two hops'])
 
     ax = plt.subplot(1, 2, 2)
+
+    y1 = get_means(get_paths('wiki', 'no_hops'))
+    y2 = get_means(get_paths('wiki', 'one_hop'))
+    y3 = get_means(get_paths('wiki', 'two_hops'))
+
+    ax.errorbar(xs, y1, marker='x', linestyle=':')
+    ax.errorbar(xs, y2, marker='x', linestyle='--')
+    ax.errorbar(xs, y3, marker='x', linestyle='-')
+
     ax.set_ylabel('SMAPE-28')
     ax.set_xlabel('% of missing views')
+    ax.legend(['No hops', 'One hop', 'Two hops'])
 
     fig.tight_layout()
     fig.savefig('figures/missing_views.pdf')
 
 
 def plot_missing_edges():
-    data = 'vevo'
-    no_hops_ff_00_metrics = [f'expt/missing/edges/{data}/no_hops_ff_00/00/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/no_hops_ff_00/20/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/no_hops_ff_00/40/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/no_hops_ff_00/60/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/no_hops_ff_00/80/serialization/evaluate-metrics.json']
+    def get_paths(kind, data, n_hops):
+        return [f'expt/missing/{kind}/{data}/{n_hops}_ff_00/00/serialization/evaluate-metrics.json',
+                f'expt/missing/{kind}/{data}/{n_hops}_ff_00/20/serialization/evaluate-metrics.json',
+                f'expt/missing/{kind}/{data}/{n_hops}_ff_00/40/serialization/evaluate-metrics.json',
+                f'expt/missing/{kind}/{data}/{n_hops}_ff_00/60/serialization/evaluate-metrics.json',
+                f'expt/missing/{kind}/{data}/{n_hops}_ff_00/80/serialization/evaluate-metrics.json']
 
-    one_hop_ff_00_metrics = [f'expt/missing/edges/{data}/one_hop_ff_00/00/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/one_hop_ff_00/20/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/one_hop_ff_00/40/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/one_hop_ff_00/60/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/one_hop_ff_00/80/serialization/evaluate-metrics.json']
-
-    two_hop_ff_00_metrics = [f'expt/missing/edges/{data}/two_hops_ff_00/00/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/two_hops_ff_00/20/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/two_hops_ff_00/40/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/two_hops_ff_00/60/serialization/evaluate-metrics.json',
-                             f'expt/missing/edges/{data}/two_hops_ff_00/80/serialization/evaluate-metrics.json']
-
-    y1 = get_means(no_hops_ff_00_metrics)
-    y2 = get_means(one_hop_ff_00_metrics)
-    y3 = get_means(two_hop_ff_00_metrics)
+    y1 = get_means(get_paths('edges', 'vevo', 'no_hops'))
+    y2 = get_means(get_paths('edges', 'vevo', 'one_hop'))
+    y3 = get_means(get_paths('edges', 'vevo', 'two_hops'))
 
     fig = plt.figure(figsize=(6, 3))
     ax = plt.subplot(1, 2, 1)
@@ -104,6 +92,17 @@ def plot_missing_edges():
     ax.legend(['No hops', 'One hop', 'Two hops'], bbox_to_anchor=(0.51, 0.9))
 
     ax = plt.subplot(1, 2, 2)
+
+    y1 = get_means(get_paths('edges', 'wiki', 'no_hops'))
+    y2 = get_means(get_paths('edges', 'wiki', 'one_hop'))
+    y3 = get_means(get_paths('edges', 'wiki', 'two_hops'))
+
+    ax.errorbar(xs, y1, marker=None, linestyle=':')
+    ax.errorbar(xs, y2, marker='x', linestyle='--')
+    ax.errorbar(xs, y3, marker='x', linestyle='-')
+
+    ax.legend(['No hops', 'One hop', 'Two hops'], bbox_to_anchor=(0.51, 0.9))
+
     ax.set_ylabel('SMAPE-28')
     ax.set_xlabel('% of missing edges')
 
