@@ -50,6 +50,7 @@ class BaselineAggLSTM2(BaseModel):
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
+                 max_eval_neighbours: int = 16,
                  hop_scale: int = 4,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
@@ -67,6 +68,7 @@ class BaselineAggLSTM2(BaseModel):
         self.peek = peek
         self.max_neighbours = max_neighbours
         self.max_agg_neighbours = max_agg_neighbours
+        self.max_eval_neighbours = max_eval_neighbours
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
@@ -263,9 +265,7 @@ class BaselineAggLSTM2(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
-        B, T, E = X.shape
-
+    def _get_training_edges(self, keys, start, total_len, level):
         edges = np.full((len(keys), total_len, self.max_neighbours),
                         -1, np.int32)
 
@@ -288,6 +288,13 @@ class BaselineAggLSTM2(BaseModel):
                 n_neighs = min(self.max_neighbours, len(day_edges))
                 edges[i, :n_neighs] = edge_rs.choice(day_edges, n_neighs,
                                                      replace=False, p=day_probs)
+
+        return edges
+
+    def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
+        B, T, E = X.shape
+
+        edges = self._get_training_edges(keys, start, total_len, level)
 
         # Mask out parents
         if parents is None:
