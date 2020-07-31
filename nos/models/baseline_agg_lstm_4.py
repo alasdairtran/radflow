@@ -409,10 +409,32 @@ class BaselineAggLSTM4(BaseModel):
 
         return edges
 
+    def _get_test_edges(self, keys, start, total_len):
+        edges = np.full((len(keys), total_len, self.max_eval_neighbours),
+                        -1, np.int32)
+
+        sorted_keys = sorted(set(keys))
+        key_map = {k: i for i, k in enumerate(sorted_keys)}
+
+        sorted_edges = self.edges[sorted_keys, start:start+total_len]
+        # sorted_edges.shape == [batch_size, total_len, max_neighs]
+
+        for i, k in enumerate(keys):
+            key_edges = sorted_edges[key_map[k]]
+            for d in range(total_len):
+                day_edges = key_edges[d][:self.max_eval_neighbours]
+                n_neighs = len(day_edges)
+                edges[i, :n_neighs] = day_edges
+
+        return edges
+
     def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
         B, T, E = X.shape
 
-        edges = self._get_training_edges(keys, start, total_len, level)
+        if not self.evaluate_mode:
+            edges = self._get_training_edges(keys, start, total_len, level)
+        else:
+            edges = self._get_test_edges(keys, start, total_len)
 
         # Mask out parents
         if self.allow_loops or parents is None:
