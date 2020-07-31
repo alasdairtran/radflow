@@ -462,6 +462,7 @@ def generate_hdf5():
             continue
 
         edges_list = []
+        probs_list = []
         kept_neigh_set = set()
         for day in range(1827):
             day_neighs = [n for n in mask_dict if not mask_dict[n][day]]
@@ -472,6 +473,7 @@ def generate_hdf5():
             kept_neigh_set |= set(sorted_neighs)
 
             if not sorted_neighs:
+                probs_list.append(np.array([], dtype=np.float16))
                 continue
 
             counts = np.array([views[n, day] for n in sorted_neighs])
@@ -480,11 +482,13 @@ def generate_hdf5():
             counts = np.log1p(counts)
             total = counts.sum()
             if total < 1e-6:
+                probs_list.append(np.array([], dtype=np.float16))
                 continue
 
             prob = counts / total
-            probs[int(key), day] = np.array(prob.cumsum(), np.float16)
+            probs_list.append(np.array(prob.cumsum(), np.float16))
 
+        probs[int(key)] = np.array(probs_list, dtype=object)
         edges[int(key)] = np.array(edges_list, dtype=object)
 
         kept_neigh_ids = sorted(kept_neigh_set)
