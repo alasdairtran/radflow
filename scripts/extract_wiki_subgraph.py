@@ -436,6 +436,9 @@ def generate_hdf5():
     with open('data/wiki/trafficid2graphid.pkl', 'rb') as f:
         old2new = pickle.load(f)
 
+    with open(f'data/wiki/node_ids/test_ids.pkl', 'rb') as f:
+        test_ids = list(pickle.load(f))
+
     # Consolidate masks
     bool_dt = h5py.vlen_dtype(np.dtype('bool'))
     masks = data_f.create_dataset('masks', (len(old2new),), bool_dt)
@@ -443,6 +446,9 @@ def generate_hdf5():
 
     int32_dt = h5py.vlen_dtype(np.dtype('int32'))
     edges = data_f.create_dataset('edges', (len(old2new), 1827), int32_dt)
+
+    float16_dt = h5py.vlen_dtype(np.dtype('float16'))
+    probs = data_f.create_dataset('probs', (len(old2new), 1827), float16_dt)
 
     # If there's enough memory, load all masks into memory
     mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
@@ -461,8 +467,23 @@ def generate_hdf5():
             day_neighs = [n for n in mask_dict if not mask_dict[n][day]]
             sorted_neighs = sorted(day_neighs, key=lambda n: views[n, day],
                                    reverse=True)
-            edges_list.append(np.array(sorted_neighs, dtype=np.int32))
+            sorted_array = np.array(sorted_neighs, dtype=np.int32)
+            edges_list.append(sorted_array)
             kept_neigh_set |= set(sorted_neighs)
+
+            if not sorted_neighs:
+                continue
+
+            counts = np.array([views[n, day] for n in sorted_neighs])
+            counts[counts == -1] = 0
+            counts[np.isin(sorted_neighs, test_ids)] = 0
+            counts = np.log1p(counts)
+            total = counts.sum()
+            if total < 1e-6:
+                continue
+
+            prob = counts / total
+            probs[int(key), day] = np.array(prob.cumsum(), np.float16)
 
         edges[int(key)] = np.array(edges_list, dtype=object)
 
@@ -483,33 +504,6 @@ def generate_hdf5():
     for key in tqdm(mask_f):
         count += len(mask_f[key])
     print('Total edges', count)
-
-
-def generate_probs():
-    data_path = 'data/wiki/wiki.hdf5'
-    data_f = h5py.File(data_path, 'a')
-
-    with open(f'data/wiki/node_ids/test_ids.pkl', 'rb') as f:
-        test_ids = list(pickle.load(f))
-
-    float16_dt = h5py.vlen_dtype(np.dtype('float16'))
-    probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
-    edges = data_f['edges'][...]
-    views = data_f['views'][...]
-    for k, edge in tqdm(enumerate(edges)):
-        for d, ns in enumerate(edge):
-            if len(ns) == 0:
-                continue
-            counts = np.array([views[n, d] for n in ns])
-            counts[counts == -1] = 0
-            counts[np.isin(counts, test_ids)] = 0
-            counts = np.log1p(counts)
-            total = counts.sum()
-            if total < 1e-6:
-                continue
-
-            prob = counts / total
-            probs[k, d] = np.array(prob.cumsum(), np.float16)
 
 
 def round_ts(dt):
@@ -597,7 +591,6 @@ def main():
     generate_train_test_split()
     create_masks(args['mongo'])
     generate_hdf5()
-    generate_probs()
 
 
 if __name__ == '__main__':
