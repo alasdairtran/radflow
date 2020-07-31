@@ -418,12 +418,12 @@ def clean_wiki(mongo_host):
             mask_f.create_dataset(mask_path, dtype=np.bool_, data=mask)
 
     # Consolidate masks
-    dt = h5py.vlen_dtype(np.dtype('bool'))
-    masks = data_f.create_dataset('masks', (len(old2new),), dt)
+    bool_dt = h5py.vlen_dtype(np.dtype('bool'))
+    masks = data_f.create_dataset('masks', (len(old2new),), bool_dt)
     key2pos = [{} for _ in range(len(old2new))]
 
-    edges = data_f.create_dataset('edges', (len(old2new), 1827, 10), np.int32,
-                                  fillvalue=-1)
+    int32_dt = h5py.vlen_dtype(np.dtype('int32'))
+    edges = data_f.create_dataset('edges', (len(old2new), 1827), int32_dt)
 
     # If there's enough memory, load all masks into memory
     # mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
@@ -436,18 +436,16 @@ def clean_wiki(mongo_host):
         if not mask_dict:
             continue
 
-        edges_array = np.full((1827, 10), -1, dtype=np.int32)
+        edges_list = []
         kept_neigh_set = set()
-        for d in range(1827):
-            day_neighs = [n for n in mask_dict if not mask_dict[n][d]]
-            if not day_neighs:
-                continue
-            top_neighs = sorted(day_neighs, key=lambda n: views[n, d],
-                                reverse=True)
-            top_neighs = top_neighs[:10]
-            edges_array[d, :len(top_neighs)] = top_neighs
-            kept_neigh_set |= set(top_neighs)
-        edges[int(key)] = edges_array
+        for day in range(1827):
+            day_neighs = [n for n in mask_dict if not mask_dict[n][day]]
+            sorted_neighs = sorted(day_neighs, key=lambda n: views[n, day],
+                                    reverse=True)
+            edges_list.append(np.array(sorted_neighs, dtype=np.int32))
+            kept_neigh_set |= set(sorted_neighs)
+
+        edges[int(key)] = np.array(edges_list, dtype=object)
 
         kept_neigh_ids = sorted(kept_neigh_set)
         mask_list = []

@@ -307,7 +307,9 @@ def populate_hdf5(collection, name):
     data_path = f'data/vevo/{name}.hdf5'
     f = h5py.File(data_path, 'a')
     views = np.full((60740, 63), -1, dtype=np.int32)
-    edges = f.create_dataset('edges', (60740, 63, 10), np.int32, fillvalue=-1)
+
+    int32_dt = h5py.vlen_dtype(np.dtype('int32'))
+    edges = f.create_dataset('edges', (60740, 63), int32_dt)
 
     dt = h5py.vlen_dtype(np.dtype('bool'))
     masks = f.create_dataset('masks', (60740,), dt)
@@ -319,9 +321,14 @@ def populate_hdf5(collection, name):
         s = np.array(p['s'])
         views[p['_id']] = s
 
-        for d, day_ns in enumerate(p['e']):
-            day_ns = day_ns[:10]
-            edges[p['_id'], d, :len(day_ns)] = day_ns
+        if not p['e']:
+            continue
+
+        edges_list = []
+        for day in range(63):
+            edges_list.append(np.array(p['e'][day], dtype=np.int32))
+
+        edges[p['_id']] = np.array(edges_list, dtype=object)
 
         mask = np.ones((len(p['m']), 63), dtype=np.bool_)
         for i, (k, v) in enumerate(p['m'].items()):
@@ -342,10 +349,10 @@ def populate_hdf5(collection, name):
         {'n': {'$gt': 0}}, projection=['_id'])
     connected_ids = set(s['_id'] for s in node_cursor)
 
-    with open(f'data/vevo/vevo_all_nodes.pkl', 'wb') as f:
+    with open(f'data/vevo/{name}_all_nodes.pkl', 'wb') as f:
         pickle.dump(all_ids, f)
 
-    with open(f'data/vevo/vevo_connected_nodes.pkl', 'wb') as f:
+    with open(f'data/vevo/{name}_connected_nodes.pkl', 'wb') as f:
         pickle.dump(connected_ids, f)
 
 
