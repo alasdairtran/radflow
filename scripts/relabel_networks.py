@@ -305,14 +305,14 @@ def populate_tiledb():
 
 def populate_hdf5(collection, name):
     data_path = f'data/vevo/{name}.hdf5'
-    f = h5py.File(data_path, 'a')
+    data_f = h5py.File(data_path, 'a')
     views = np.full((60740, 63), -1, dtype=np.int32)
 
     int32_dt = h5py.vlen_dtype(np.dtype('int32'))
-    edges = f.create_dataset('edges', (60740, 63), int32_dt)
+    edges = data_f.create_dataset('edges', (60740, 63), int32_dt)
 
     dt = h5py.vlen_dtype(np.dtype('bool'))
-    masks = f.create_dataset('masks', (60740,), dt)
+    masks = data_f.create_dataset('masks', (60740,), dt)
 
     logger.info('Populating series in memory')
     client = MongoClient(host='localhost', port=27017)
@@ -336,7 +336,7 @@ def populate_hdf5(collection, name):
             key2pos[p['_id']][int(k)] = i
         masks[p['_id']] = mask.reshape(-1)
 
-    hdf5_views = f.create_dataset("views", (60740, 63), dtype='int32')
+    hdf5_views = data_f.create_dataset("views", (60740, 63), dtype='int32')
     hdf5_views[:] = views
 
     with open(f'data/vevo/{name}.key2pos.pkl', 'wb') as f:
@@ -354,6 +354,24 @@ def populate_hdf5(collection, name):
 
     with open(f'data/vevo/{name}_connected_nodes.pkl', 'wb') as f:
         pickle.dump(connected_ids, f)
+
+    float16_dt = h5py.vlen_dtype(np.dtype('float16'))
+    probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
+    edges = data_f['edges'][...]
+    views = data_f['views'][...]
+    for k, edge in tqdm(enumerate(edges)):
+        for d, ns in enumerate(edge):
+            if len(ns) == 0:
+                continue
+            counts = np.array([views[n, d] for n in ns], dtype=np.float64)
+            counts[counts == -1] = 0
+            counts = np.log1p(counts)
+            total = counts.sum()
+            if total < 1e-6:
+                prob = np.full(len(ns), 1 / len(ns), dtype=np.float16)
+            else:
+                prob = counts / total
+            probs[k, d] = np.array(prob, np.float16)
 
 
 def populate_redis():

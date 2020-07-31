@@ -441,7 +441,7 @@ def clean_wiki(mongo_host):
         for day in range(1827):
             day_neighs = [n for n in mask_dict if not mask_dict[n][day]]
             sorted_neighs = sorted(day_neighs, key=lambda n: views[n, day],
-                                    reverse=True)
+                                   reverse=True)
             edges_list.append(np.array(sorted_neighs, dtype=np.int32))
             kept_neigh_set |= set(sorted_neighs)
 
@@ -459,6 +459,24 @@ def clean_wiki(mongo_host):
 
     with open('data/wiki/key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)
+
+    float16_dt = h5py.vlen_dtype(np.dtype('float16'))
+    probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
+    edges = data_f['edges'][...]
+    views = data_f['views'][...]
+    for k, edge in tqdm(enumerate(edges)):
+        for d, ns in enumerate(edge):
+            if len(ns) == 0:
+                continue
+            counts = np.array([views[n, d] for n in ns], dtype=np.float64)
+            counts[counts == -1] = 0
+            counts = np.log1p(counts)
+            total = counts.sum()
+            if total < 1e-6:
+                prob = np.full(len(ns), 1 / len(ns), dtype=np.float16)
+            else:
+                prob = counts / total
+            probs[k, d] = np.array(prob, np.float16)
 
     count = 0
     for key in tqdm(mask_f):
