@@ -479,11 +479,15 @@ def generate_hdf5():
     with open('data/wiki/key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)
 
+    count = 0
+    for key in tqdm(mask_f):
+        count += len(mask_f[key])
+    print('Total edges', count)
+
 
 def generate_probs():
     data_path = 'data/wiki/wiki.hdf5'
     data_f = h5py.File(data_path, 'a')
-    mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
 
     with open(f'data/wiki/node_ids/test_ids.pkl', 'rb') as f:
         test_ids = list(pickle.load(f))
@@ -506,11 +510,6 @@ def generate_probs():
 
             prob = counts / total
             probs[k, d] = np.array(prob.cumsum(), np.float16)
-
-    count = 0
-    for key in tqdm(mask_f):
-        count += len(mask_f[key])
-    print('Total edges', count)
 
 
 def round_ts(dt):
