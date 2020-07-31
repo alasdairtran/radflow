@@ -69,9 +69,11 @@ trainer:
         - {}
       - - - ^decoder.layers.7
         - {}
-      - - - ^decoder.out_proj
+      - - - ^decoder.out_f
         - {}
-      - - - ^(fc|out_proj)
+      - - - ^attn
+        - {}
+      - - - ^fc
         - {}
   num_epochs: 20
   cuda_device: 0
