@@ -389,6 +389,10 @@ class BaselineAggLSTM4(BaseModel):
         sorted_probs = self.probs[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
+        # Initialising RandomState is slow!
+        seeds = [self.epoch, int(self.history['_n_samples']), level, 24124]
+        edge_rs = np.random.RandomState(seeds)
+
         for i, k in enumerate(keys):
             key_edges = sorted_edges[key_map[k]]
             key_probs = sorted_probs[key_map[k]]
@@ -399,9 +403,6 @@ class BaselineAggLSTM4(BaseModel):
                 if n_neighs == 0:
                     continue
 
-                seeds = [self.epoch, int(self.history['_n_samples']),
-                         level, d, 24124]
-                edge_rs = np.random.RandomState(seeds)
                 day_cdf = day_probs.cumsum()
                 rands = edge_rs.rand(n_neighs)
                 rand_mask = day_cdf[None, 0] < rands[:, None]
