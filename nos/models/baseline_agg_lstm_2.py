@@ -277,14 +277,18 @@ class BaselineAggLSTM2(BaseModel):
             for d in range(total_len):
                 day_edges = key_edges[d]
                 day_probs = key_probs[d]
-                seeds = [self.epoch, int(self.history['_n_samples']),
-                         level, d, 24124]
-                edge_rs = np.random.RandomState(seeds)
                 n_neighs = min(self.max_neighbours, (day_probs > 0).sum())
                 if n_neighs == 0:
                     continue
-                edges[i, d, :n_neighs] = edge_rs.choice(day_edges, n_neighs,
-                                                        replace=False, p=day_probs)
+
+                seeds = [self.epoch, int(self.history['_n_samples']),
+                         level, d, 24124]
+                edge_rs = np.random.RandomState(seeds)
+                day_cdf = day_probs.cumsum()
+                rands = edge_rs.rand(n_neighs)
+                rand_mask = day_cdf[None, 0] < rands[:, None]
+                chosen_idx = rand_mask.sum(axis=1)
+                edges[i, d, :n_neighs] = day_edges[chosen_idx]
 
         return edges
 
