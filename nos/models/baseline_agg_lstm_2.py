@@ -78,7 +78,10 @@ class BaselineAggLSTM2(BaseModel):
         self.static_graph = static_graph
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
+
+        # Initialising RandomState is slow!
         self.rs = np.random.RandomState(1234)
+        self.edge_rs = np.random.RandomState(63242)
         self.sample_rs = np.random.RandomState(3456)
         self.view_randomize_p = view_randomize_p
         self.forward_fill = forward_fill
@@ -271,10 +274,6 @@ class BaselineAggLSTM2(BaseModel):
         sorted_probs = self.probs[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
-        # Initialising RandomState is slow!
-        seeds = [self.epoch, int(self.history['_n_samples']), level, 24124]
-        edge_rs = np.random.RandomState(seeds)
-
         for i, k in enumerate(keys):
             key_edges = sorted_edges[key_map[k]]
             key_probs = sorted_probs[key_map[k]]
@@ -286,7 +285,7 @@ class BaselineAggLSTM2(BaseModel):
                     continue
 
                 day_cdf = day_probs.cumsum()
-                rands = edge_rs.rand(n_neighs)
+                rands = self.edge_rs.rand(n_neighs)
                 rand_mask = day_cdf[None, 0] < rands[:, None]
                 chosen_idx = rand_mask.sum(axis=1)
                 edges[i, d, :n_neighs] = day_edges[chosen_idx]
@@ -374,13 +373,15 @@ class BaselineAggLSTM2(BaseModel):
                 o_series = neigh_series
 
             if self.view_randomize_p:
-                view_p_rs = np.random.RandomState(
-                    (524288 * self.epoch) + int(self.history['_n_samples']) + 124241 * level)
+                seeds = [self.epoch, int(self.history['_n_samples']),
+                         level, 124241]
+                view_p_rs = np.random.RandomState(seeds)
                 prob = view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
-            view_rs = np.random.RandomState(
-                (524288 * self.epoch) + int(self.history['_n_samples']) + 52212 * level)
+            seeds = [self.epoch, int(self.history['_n_samples']),
+                     level, 52212]
+            view_rs = np.random.RandomState(seeds)
             indices = view_rs.choice(np.arange(o_series.size),
                                      replace=False,
                                      size=int(round(o_series.size * prob)))
@@ -466,8 +467,9 @@ class BaselineAggLSTM2(BaseModel):
 
         if self.edge_missing_p > 0:
             for sorted_mask, key in zip(sorted_masks, sorted_keys):
-                edge_rs = np.random.RandomState(
-                    key + (524288 * self.epoch) + int(self.history['_n_samples']) + 124241 * level)
+                seeds = [key, self.epoch, int(self.history['_n_samples']),
+                         level, 124241]
+                edge_rs = np.random.RandomState(seeds)
                 edge_idx = (~sorted_mask).nonzero()[0]
                 size = int(round(len(edge_idx) * self.edge_missing_p))
                 if size > 0:
@@ -644,13 +646,13 @@ class BaselineAggLSTM2(BaseModel):
                 o_series = series
 
             if self.view_randomize_p:
-                view_p_rs = np.random.RandomState(
-                    (524288 * self.epoch) + int(self.history['_n_samples']))
+                seeds = [self.epoch, int(self.history['_n_samples']), 6235]
+                view_p_rs = np.random.RandomState(seeds)
                 prob = view_p_rs.uniform(0, self.view_missing_p)
             else:
                 prob = self.view_missing_p
-            view_rs = np.random.RandomState(
-                (524288 * self.epoch) + int(self.history['_n_samples']) + 12421)
+            seeds = [self.epoch, int(self.history['_n_samples']), 12421]
+            view_rs = np.random.RandomState(seeds)
             indices = view_rs.choice(np.arange(o_series.size),
                                      replace=False,
                                      size=int(round(o_series.size * prob)))
