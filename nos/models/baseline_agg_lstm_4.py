@@ -56,7 +56,7 @@ class NewNaive(BaseModel):
         self.end_offset = end_offset
 
         self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views']
+        self.series = self.data['views'][...]
 
         assert method in ['previous_day', 'previous_week']
 
@@ -221,7 +221,7 @@ class BaselineAggLSTM4(BaseModel):
         self.forward_fill = forward_fill
 
         self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views']
+        self.series = self.data['views'][...]
         self.edges = self.data['edges']
         self.masks = self.data['masks']
         self.probs = self.data['probs']

@@ -93,7 +93,7 @@ class BaselineAggLSTM2(BaseModel):
         self.hop_scale = hop_scale
 
         self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views']
+        self.series = self.data['views'][...]
         self.edges = self.data['edges']
         self.masks = self.data['masks']
         self.probs = self.data['probs']

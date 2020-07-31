@@ -71,7 +71,7 @@ class NBEATSWiki(BaseModel):
         initializer(self)
 
         self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views']
+        self.series = self.data['views'][...]
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \

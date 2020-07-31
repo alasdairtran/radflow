@@ -107,7 +107,7 @@ class BaselineAggLSTMInterlaced(BaseModel):
         self.forward_fill = forward_fill
 
         self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views']
+        self.series = self.data['views'][...]
         self.train_edges = self.data[train_edges_ns]
         self.test_edges = self.data[test_edges_ns]
         self.masks = self.data['masks']
