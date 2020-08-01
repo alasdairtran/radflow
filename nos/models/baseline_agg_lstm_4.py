@@ -172,7 +172,7 @@ class BaselineAggLSTM4(BaseModel):
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
-                 max_eval_neighbours: int = 32,
+                 cut_off_edge_prob: float = 0.8,
                  hop_scale: int = 4,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
@@ -192,7 +192,7 @@ class BaselineAggLSTM4(BaseModel):
         self.peek = peek
         self.max_neighbours = max_neighbours
         self.max_agg_neighbours = max_agg_neighbours
-        self.max_eval_neighbours = max_eval_neighbours
+        self.cut_off_edge_prob = cut_off_edge_prob
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
         self.total_length = forecast_length + backcast_length
@@ -313,15 +313,19 @@ class BaselineAggLSTM4(BaseModel):
 
     def _get_test_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
+        sorted_probs = self.probs[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
         edge_counters = []
         for k, parent in zip(keys, parents):
             counter = Counter()
             key_edges = sorted_edges[key_map[k]]
+            key_probs = sorted_probs[key_map[k]]
             for d in range(total_len):
-                day_edges = key_edges[d][:self.max_eval_neighbours]
-                counter.update(day_edges)
+                day_edges = key_edges[d]
+                day_cdf = key_probs[d]
+                cut_off = (day_cdf <= self.cut_off_edge_prob).sum()
+                counter.update(day_edges[:cut_off])
 
             if parent in counter:
                 del counter[parent]
