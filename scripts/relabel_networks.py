@@ -317,6 +317,7 @@ def populate_hdf5(collection, name):
     logger.info('Populating series in memory')
     client = MongoClient(host='localhost', port=27017)
     key2pos = [{} for _ in range(60740)]
+    outdegrees = np.zeros((60740, 63), dtype=np.int32)
     for p in tqdm(client.vevo[collection].find({})):
         s = np.array(p['s'])
         views[p['_id']] = s
@@ -332,10 +333,13 @@ def populate_hdf5(collection, name):
 
         mask = np.ones((len(p['m']), 63), dtype=np.bool_)
         for i, (k, v) in enumerate(p['m'].items()):
-            mask[i] = np.array(v, dtype=np.bool_)
+            m = np.array(v, dtype=np.bool_)
+            mask[i] = m
             key2pos[p['_id']][int(k)] = i
+            outdegrees[int(k)] += (~m).astype(np.int32)
         masks[p['_id']] = mask.reshape(-1)
 
+    data_f.create_dataset('outdegrees', dtype=np.int32, data=outdegrees)
     hdf5_views = data_f.create_dataset("views", (60740, 63), dtype='int32')
     hdf5_views[:] = views
 
@@ -359,11 +363,12 @@ def populate_hdf5(collection, name):
     probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
     edges = data_f['edges'][...]
     views = data_f['views'][...]
+    normalised_views = views / outdegrees
     for k, edge in tqdm(enumerate(edges)):
         for d, ns in enumerate(edge):
             if len(ns) == 0:
                 continue
-            counts = np.array([views[n, d] for n in ns])
+            counts = np.array([normalised_views[n, d] for n in ns])
             counts[counts == -1] = 0
             # counts = np.log1p(counts)
             total = counts.sum()

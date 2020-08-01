@@ -453,6 +453,18 @@ def generate_hdf5():
     # If there's enough memory, load all masks into memory
     mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
     views = data_f['views'][...]
+
+    outdegrees = np.zeros((len(old2new), 1827), dtype=np.int32)
+    for key in tqdm(mask_f):
+        for i, neigh in enumerate(mask_f[key]):
+            m = mask_f[key][neigh][...]
+            n_edges = (~m).astype(np.int32)
+            outdegrees[int(neigh)] += n_edges
+
+    data_f.create_dataset('outdegrees', dtype=np.int32, data=outdegrees)
+
+    normalised_views = views / outdegrees
+
     for key in tqdm(mask_f):
         mask_dict = {}
         for i, neigh in enumerate(mask_f[key]):
@@ -476,7 +488,8 @@ def generate_hdf5():
                 probs_list.append(np.array([], dtype=np.float16))
                 continue
 
-            counts = np.array([views[n, day] for n in sorted_neighs])
+            counts = np.array([normalised_views[n, day]
+                               for n in sorted_neighs])
             counts[counts == -1] = 0
             counts[np.isin(sorted_neighs, test_ids)] = 0
             # counts = np.log1p(counts)
