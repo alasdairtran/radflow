@@ -19,7 +19,7 @@ model:
   backcast_length: 42
   test_lengths: [7]
   max_neighbours: 4
-  max_agg_neighbours: 4
+  max_agg_neighbours: 8
   neigh_sample: true
   initializer:
     - - ^decoder.layers.*.layer.weight*
