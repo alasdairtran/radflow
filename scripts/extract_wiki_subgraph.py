@@ -454,7 +454,7 @@ def generate_hdf5():
     mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
     views = data_f['views'][...]
 
-    outdegrees = np.zeros((len(old2new), 1827), dtype=np.int32)
+    outdegrees = np.ones((len(old2new), 1827), dtype=np.int32)  # self-loops
     for key in tqdm(mask_f):
         for i, neigh in enumerate(mask_f[key]):
             m = mask_f[key][neigh][...]

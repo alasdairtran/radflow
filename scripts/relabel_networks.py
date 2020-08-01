@@ -317,7 +317,7 @@ def populate_hdf5(collection, name):
     logger.info('Populating series in memory')
     client = MongoClient(host='localhost', port=27017)
     key2pos = [{} for _ in range(60740)]
-    outdegrees = np.zeros((60740, 63), dtype=np.int32)
+    outdegrees = np.ones((60740, 63), dtype=np.int32)  # add self-loops
     for p in tqdm(client.vevo[collection].find({})):
         s = np.array(p['s'])
         views[p['_id']] = s
