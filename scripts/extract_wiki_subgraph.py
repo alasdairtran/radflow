@@ -479,7 +479,7 @@ def generate_hdf5():
             counts = np.array([views[n, day] for n in sorted_neighs])
             counts[counts == -1] = 0
             counts[np.isin(sorted_neighs, test_ids)] = 0
-            counts = np.log1p(counts)
+            # counts = np.log1p(counts)
             total = counts.sum()
             if total < 1e-6:
                 probs_list.append(np.array([], dtype=np.float16))
