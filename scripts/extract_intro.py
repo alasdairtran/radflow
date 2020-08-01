@@ -14,8 +14,11 @@ import pickle
 import random
 import time
 
+import h5py
+import numpy as np
 import ptvsd
 import requests
+import torch
 from docopt import docopt
 from joblib import Parallel, delayed
 from pymongo import MongoClient
@@ -96,6 +99,31 @@ def get_all_intros(mongo_host, n_jobs):
                  for i, s in enumerate(range(0, len(to_do_titles), batch_size)))
 
 
+def get_intro_embeds(mongo_host):
+    roberta = torch.hub.load('pytorch/fairseq', 'roberta.large')
+    roberta = roberta.eval().cuda()
+
+    client = MongoClient(host=mongo_host, port=27017)
+    db = client.wiki2
+
+    data_f = h5py.File('data/wiki/embeds.hdf5', 'a')
+    embeds = np.zeros((366802, 1024), dtype=np.float64)
+
+    with torch.no_grad():
+        for p in tqdm(db.intros.find({})):
+            if not p['e']:
+                continue
+
+            i = p['_id']
+
+            text = p['e']
+            tokens = roberta.encode(text)[:512]
+            last_layer_features = roberta.extract_features(tokens[:512])
+            embeds[i] = last_layer_features[0][0].cpu().numpy()
+
+    data_f.create_dataset('probs', dtype=np.float64, data=embeds)
+
+
 def validate(args):
     """Validate command line arguments."""
     args = {k.lstrip('-').lower().replace('-', '_'): v
@@ -119,6 +147,7 @@ def main():
         ptvsd.wait_for_attach()
 
     get_all_intros(args['mongo'], args['n_jobs'])
+    get_intro_embeds(args['mongo'])
 
 
 if __name__ == '__main__':
