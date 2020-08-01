@@ -18,7 +18,7 @@ model:
   forecast_length: 7
   backcast_length: 42
   test_lengths: [7]
-  max_neighbours: 4
+  max_neighbours: 8
   max_agg_neighbours: 8
   neigh_sample: true
   n_hops: 2
