@@ -1,4 +1,4 @@
-"""Annotate Good News with parts of speech.
+"""Extract wiki traffic.
 
 Usage:
     get_traffic.py [options]

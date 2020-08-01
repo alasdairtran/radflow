@@ -1,4 +1,4 @@
-"""Annotate Good News with parts of speech.
+"""Extract Wiki dump.
 
 Usage:
     extract_graph.py [options]
