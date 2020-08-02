@@ -441,7 +441,7 @@ def generate_hdf5():
 
     # Consolidate masks
     bool_dt = h5py.vlen_dtype(np.dtype('bool'))
-    masks = data_f.create_dataset('masks', (len(old2new),), bool_dt)
+    masks = data_f.create_dataset('masks', (len(old2new), 1827), bool_dt)
     key2pos = [{} for _ in range(len(old2new))]
 
     int32_dt = h5py.vlen_dtype(np.dtype('int32'))
@@ -475,12 +475,14 @@ def generate_hdf5():
 
         edges_list = []
         probs_list = []
+        max_count = 0
         kept_neigh_set = set()
         for day in range(1827):
             day_neighs = [n for n in mask_dict if not mask_dict[n][day]]
             sorted_neighs = sorted(day_neighs, key=lambda n: normalised_views[n, day],
                                    reverse=True)
             sorted_array = np.array(sorted_neighs, dtype=np.int32)
+            max_count = max(max_count, len(sorted_neighs))
             edges_list.append(sorted_array)
             kept_neigh_set |= set(sorted_neighs)
 
@@ -501,18 +503,24 @@ def generate_hdf5():
             prob = counts / total
             probs_list.append(np.array(prob.cumsum(), np.float16))
 
-        probs[int(key)] = np.array(probs_list, dtype=object)
-        edges[int(key)] = np.array(edges_list, dtype=object)
+        # Pad arrays
+        edges_array = np.full((1827, max_count), -1, dtype=np.int32)
+        probs_array = np.ones((1827, max_count), dtype=np.float16)
+
+        for day in range(1827):
+            edges_array[day, :len(edges_list[day])] = edges_list[day]
+            probs_array[day, :len(probs_list[day])] = probs_list[day]
+
+        probs[int(key)] = edges_array
+        edges[int(key)] = probs_array
 
         kept_neigh_ids = sorted(kept_neigh_set)
-        mask_list = []
+        mask = np.ones((len(kept_neigh_ids), 1827), dtype=np.bool_)
         for i, n in enumerate(kept_neigh_ids):
-            mask_list.append(mask_dict[n])
+            mask[i] = mask_dict[n]
             key2pos[int(key)][n] = i
 
-        if len(mask_list) > 0:
-            mask = np.concatenate(mask_list)
-            masks[int(key)] = mask
+        masks[int(key)] = mask.transpose()
 
     with open('data/wiki/key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)

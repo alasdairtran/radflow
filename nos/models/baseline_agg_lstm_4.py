@@ -291,14 +291,10 @@ class BaselineAggLSTM4(BaseModel):
         edge_counters = []
         for k, parent in zip(keys, parents):
             counter = Counter()
-            key_edges = sorted_edges[key_map[k]]
-            key_probs = sorted_probs[key_map[k]]
-            for d in range(total_len):
-                day_edges = key_edges[d]
-                day_cdf = key_probs[d]
-                cut_off = (day_cdf <= self.cut_off_edge_prob).sum()
-                counter.update(day_edges[:cut_off])
-
+            key_edges = np.vstack(sorted_edges[key_map[k]])
+            key_cdfs = np.vstack(sorted_probs[key_map[k]])
+            mask = key_cdfs <= self.cut_off_edge_prob
+            counter.update(key_edges[mask])
             if parent in counter:
                 del counter[parent]
 
@@ -314,14 +310,10 @@ class BaselineAggLSTM4(BaseModel):
         edge_counters = []
         for k, parent in zip(keys, parents):
             counter = Counter()
-            key_edges = sorted_edges[key_map[k]]
-            key_probs = sorted_probs[key_map[k]]
-            for d in range(total_len):
-                day_edges = key_edges[d]
-                day_cdf = key_probs[d]
-                cut_off = (day_cdf <= self.cut_off_edge_prob).sum()
-                counter.update(day_edges[:cut_off])
-
+            key_edges = np.vstack(sorted_edges[key_map[k]])
+            key_cdfs = np.vstack(sorted_probs[key_map[k]])
+            mask = key_cdfs <= self.cut_off_edge_prob
+            counter.update(key_edges[mask])
             if parent in counter:
                 del counter[parent]
 
@@ -474,7 +466,7 @@ class BaselineAggLSTM4(BaseModel):
         Xm = Xm.reshape(B, max_n_neighs, S, E)
 
         masks = np.ones((B, max_n_neighs, S), dtype=bool)
-        sorted_masks = self.masks[sorted_keys]
+        sorted_masks = self.masks[sorted_keys, start:start+total_len]
 
         if self.edge_missing_p > 0:
             for sorted_mask, key in zip(sorted_masks, sorted_keys):
@@ -492,10 +484,9 @@ class BaselineAggLSTM4(BaseModel):
         for b, key in enumerate(keys):
             if key not in key_neighs:
                 continue
-            n_mask = sorted_masks[key_map[key]].reshape(-1, self.series_len)
+            n_mask = np.vstack(sorted_masks[key_map[key]])
             for i, k in enumerate(key_neighs[key]):
-                mask = n_mask[self.key2pos[key][k]]
-                mask = mask[start:start+total_len]
+                mask = n_mask[:, self.key2pos[key][k]]
                 if self.peek:
                     mask = mask[1:]
                 else:

@@ -312,7 +312,7 @@ def populate_hdf5(collection, name):
     edges = data_f.create_dataset('edges', (60740, 63), int32_dt)
 
     dt = h5py.vlen_dtype(np.dtype('bool'))
-    masks = data_f.create_dataset('masks', (60740,), dt)
+    masks = data_f.create_dataset('masks', (60740, 63), dt)
 
     logger.info('Populating series in memory')
     client = MongoClient(host='localhost', port=27017)
@@ -329,7 +329,8 @@ def populate_hdf5(collection, name):
             mask[i] = m
             key2pos[p['_id']][int(k)] = i
             outdegrees[int(k)] += (~m).astype(np.int32)
-        masks[p['_id']] = mask.reshape(-1)
+
+        masks[p['_id']] = mask.transpose()
 
     data_f.create_dataset('outdegrees', dtype=np.int32, data=outdegrees)
     data_f.create_dataset("views", dtype='int32', data=views)
@@ -337,20 +338,22 @@ def populate_hdf5(collection, name):
     with open(f'data/vevo/{name}.key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)
 
+    views[views == -1] = 0
     normalised_views = views / outdegrees
     for p in tqdm(client.vevo[collection].find({})):
         if not p['e']:
             continue
 
-        edges_list = []
+        max_count = max([len(es) for es in p['e']])
+        edges_array = np.full((63, max_count), -1, dtype=np.int32)
         for day in range(63):
             day_edges = p['e'][day]
             sorted_edges = sorted(day_edges, key=lambda n: normalised_views[n, day],
                                   reverse=True)
             sorted_edges = np.array(sorted_edges, dtype=np.int32)
-            edges_list.append(sorted_edges)
+            edges_array[day, :len(sorted_edges)] = sorted_edges
 
-        edges[p['_id']] = np.array(edges_list, dtype=object)
+        edges[p['_id']] = edges_array
 
     all_cursor = client.vevo[collection].find({}, projection=['_id'])
     all_ids = set(s['_id'] for s in all_cursor)
@@ -368,21 +371,24 @@ def populate_hdf5(collection, name):
     float16_dt = h5py.vlen_dtype(np.dtype('float16'))
     probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
     edges = data_f['edges'][...]
-    views = data_f['views'][...]
 
     for k, edge in tqdm(enumerate(edges)):
+        if len(edge[0]) == 0:
+            continue
+
+        key_probs = np.ones((63, len(edge[0])), dtype=np.float16)
         for d, ns in enumerate(edge):
-            if len(ns) == 0:
+            if len(ns) == 0 or ns[0] == -1:
                 continue
-            counts = np.array([normalised_views[n, d] for n in ns])
-            counts[counts == -1] = 0
-            # counts = np.log1p(counts)
+            counts = np.array([normalised_views[n, d] for n in ns[ns != -1]])
+
             total = counts.sum()
             if total < 1e-6:
                 continue
 
             prob = counts / total
-            probs[k, d] = np.array(prob.cumsum(), np.float16)
+            key_probs[d, :len(prob)] = np.array(prob.cumsum(), np.float16)
+        probs[k] = key_probs
 
 
 def populate_redis():
