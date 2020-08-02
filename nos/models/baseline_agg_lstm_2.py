@@ -44,6 +44,7 @@ class BaselineAggLSTM2(BaseModel):
                  peek: bool = True,
                  data_path: str = './data/vevo/vevo.hdf5',
                  key2pos_path: str = './data/vevo/vevo.key2pos.pkl',
+                 test_keys_path: str = None,
                  series_len: int = 63,
                  num_layers: int = 8,
                  hidden_size: int = 128,
@@ -78,6 +79,11 @@ class BaselineAggLSTM2(BaseModel):
         self.static_graph = static_graph
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
+
+        self.test_keys = set()
+        if test_keys_path:
+            with open(test_keys_path, 'rb') as f:
+                self.test_keys = pickle.load(f)
 
         # Initialising RandomState is slow!
         self.rs = np.random.RandomState(1234)
@@ -194,7 +200,9 @@ class BaselineAggLSTM2(BaseModel):
 
             counter = {}
             for i, count in enumerate(counts):
-                counter[palette[i]] = count
+                key = palette[i]
+                if key not in self.test_keys:
+                    counter[key] = count
 
             if parent in counter:
                 del counter[parent]
