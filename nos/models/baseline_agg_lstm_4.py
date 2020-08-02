@@ -296,13 +296,8 @@ class BaselineAggLSTM4(BaseModel):
             for d in range(total_len):
                 day_edges = key_edges[d]
                 day_cdf = key_probs[d]
-                if len(day_cdf) == 0:
-                    continue
-                n_neighs = min(self.max_neighbours, len(day_edges))
-                rands = self.edge_rs.rand(n_neighs)
-                rand_mask = day_cdf[None, 0] < rands[:, None]
-                chosen_idx = rand_mask.sum(axis=1)
-                counter.update(day_edges[chosen_idx])
+                cut_off = (day_cdf <= self.cut_off_edge_prob).sum()
+                counter.update(day_edges[:cut_off])
 
             if parent in counter:
                 del counter[parent]
