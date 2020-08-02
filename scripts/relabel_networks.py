@@ -316,20 +316,12 @@ def populate_hdf5(collection, name):
 
     logger.info('Populating series in memory')
     client = MongoClient(host='localhost', port=27017)
-    key2pos = [{} for _ in range(60740)]
+
     outdegrees = np.ones((60740, 63), dtype=np.int32)  # add self-loops
+    key2pos = [{} for _ in range(60740)]
     for p in tqdm(client.vevo[collection].find({})):
         s = np.array(p['s'])
         views[p['_id']] = s
-
-        if not p['e']:
-            continue
-
-        edges_list = []
-        for day in range(63):
-            edges_list.append(np.array(p['e'][day], dtype=np.int32))
-
-        edges[p['_id']] = np.array(edges_list, dtype=object)
 
         mask = np.ones((len(p['m']), 63), dtype=np.bool_)
         for i, (k, v) in enumerate(p['m'].items()):
@@ -340,11 +332,25 @@ def populate_hdf5(collection, name):
         masks[p['_id']] = mask.reshape(-1)
 
     data_f.create_dataset('outdegrees', dtype=np.int32, data=outdegrees)
-    hdf5_views = data_f.create_dataset("views", (60740, 63), dtype='int32')
-    hdf5_views[:] = views
+    data_f.create_dataset("views", dtype='int32', data=views)
 
     with open(f'data/vevo/{name}.key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)
+
+    normalised_views = views / outdegrees
+    for p in tqdm(client.vevo[collection].find({})):
+        if not p['e']:
+            continue
+
+        edges_list = []
+        for day in range(63):
+            day_edges = p['e'][day]
+            sorted_edges = sorted(day_edges, key=lambda n: normalised_views[n, day],
+                                  reverse=True)
+            sorted_edges = np.array(sorted_edges, dtype=np.int32)
+            edges_list.append(sorted_edges)
+
+        edges[p['_id']] = np.array(edges_list, dtype=object)
 
     all_cursor = client.vevo[collection].find({}, projection=['_id'])
     all_ids = set(s['_id'] for s in all_cursor)
@@ -363,7 +369,7 @@ def populate_hdf5(collection, name):
     probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
     edges = data_f['edges'][...]
     views = data_f['views'][...]
-    normalised_views = views / outdegrees
+
     for k, edge in tqdm(enumerate(edges)):
         for d, ns in enumerate(edge):
             if len(ns) == 0:

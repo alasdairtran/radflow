@@ -478,7 +478,7 @@ def generate_hdf5():
         kept_neigh_set = set()
         for day in range(1827):
             day_neighs = [n for n in mask_dict if not mask_dict[n][day]]
-            sorted_neighs = sorted(day_neighs, key=lambda n: views[n, day],
+            sorted_neighs = sorted(day_neighs, key=lambda n: normalised_views[n, day],
                                    reverse=True)
             sorted_array = np.array(sorted_neighs, dtype=np.int32)
             edges_list.append(sorted_array)
