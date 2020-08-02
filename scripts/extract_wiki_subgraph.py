@@ -436,8 +436,8 @@ def generate_hdf5():
     with open('data/wiki/trafficid2graphid.pkl', 'rb') as f:
         old2new = pickle.load(f)
 
-    with open(f'data/wiki/node_ids/test_ids.pkl', 'rb') as f:
-        test_ids = list(pickle.load(f))
+    # with open(f'data/wiki/node_ids/test_ids.pkl', 'rb') as f:
+    #     test_ids = list(pickle.load(f))
 
     # Consolidate masks
     bool_dt = h5py.vlen_dtype(np.dtype('bool'))
@@ -447,8 +447,9 @@ def generate_hdf5():
     int32_dt = h5py.vlen_dtype(np.dtype('int32'))
     edges = data_f.create_dataset('edges', (len(old2new), 1827), int32_dt)
 
-    float16_dt = h5py.vlen_dtype(np.dtype('float16'))
-    probs = data_f.create_dataset('probs', (len(old2new), 1827), float16_dt)
+    # float16_dt = h5py.vlen_dtype(np.dtype('float16'))
+    # probs = data_f.create_dataset('probs', (len(old2new), 1827), float16_dt)
+    flows = data_f.create_dataset('flows', (len(old2new), 1827), int32_dt)
 
     # If there's enough memory, load all masks into memory
     mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
@@ -474,7 +475,8 @@ def generate_hdf5():
             continue
 
         edges_list = []
-        probs_list = []
+        # probs_list = []
+        flows_list = []
         max_count = 0
         kept_neigh_set = set()
         for day in range(1827):
@@ -487,32 +489,38 @@ def generate_hdf5():
             kept_neigh_set |= set(sorted_neighs)
 
             if not sorted_neighs:
-                probs_list.append(np.array([], dtype=np.float16))
+                # probs_list.append(np.array([], dtype=np.float16))
+                flows_list.append(np.array([], dtype=np.int32))
                 continue
 
             counts = np.array([normalised_views[n, day]
                                for n in sorted_neighs])
             counts[counts == -1] = 0
-            counts[np.isin(sorted_neighs, test_ids)] = 0
+            # counts[np.isin(sorted_neighs, test_ids)] = 0
             # counts = np.log1p(counts)
             total = counts.sum()
             if total < 1e-6:
-                probs_list.append(np.array([], dtype=np.float16))
+                # probs_list.append(np.array([], dtype=np.float16))
+                flows_list.append(np.array([], dtype=np.int32))
                 continue
 
-            prob = counts / total
-            probs_list.append(np.array(prob.cumsum(), np.float16))
+            # prob = counts / total
+            # probs_list.append(np.array(prob.cumsum(), np.float16))
+            flows_list.append(np.round(counts).astype(np.int32))
 
         # Pad arrays
         edges_array = np.full((1827, max_count), -1, dtype=np.int32)
-        probs_array = np.ones((1827, max_count), dtype=np.float16)
+        # probs_array = np.ones((1827, max_count), dtype=np.float16)
+        flows_array = np.zeros((1827, max_count), dtype=np.int32)
 
         for day in range(1827):
             edges_array[day, :len(edges_list[day])] = edges_list[day]
-            probs_array[day, :len(probs_list[day])] = probs_list[day]
+            # probs_array[day, :len(probs_list[day])] = probs_list[day]
+            flows_array[day, :len(flows_list[day])] = flows_list[day]
 
-        probs[int(key)] = edges_array
-        edges[int(key)] = probs_array
+        # probs[int(key)] = probs_array
+        edges[int(key)] = edges_array
+        flows[int(key)] = flows_array
 
         kept_neigh_ids = sorted(kept_neigh_set)
         mask = np.ones((len(kept_neigh_ids), 1827), dtype=np.bool_)

@@ -96,7 +96,8 @@ class BaselineAggLSTM2(BaseModel):
         self.series = self.data['views'][...]
         self.edges = self.data['edges']
         self.masks = self.data['masks']
-        self.probs = self.data['probs']
+        # self.probs = self.data['probs']
+        self.flows = self.data['flows']
 
         with open(key2pos_path, 'rb') as f:
             self.key2pos = pickle.load(f)
@@ -172,18 +173,22 @@ class BaselineAggLSTM2(BaseModel):
 
     def _get_training_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
-        sorted_probs = self.probs[sorted_keys, start:start+total_len]
+        sorted_flows = self.flows[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
         edge_counters = []
         for k, parent in zip(keys, parents):
-            counter = Counter()
+            counter = defaultdict(int)
             key_edges = np.vstack(sorted_edges[key_map[k]])
-            key_cdfs = np.vstack(sorted_probs[key_map[k]])
-            mask = key_cdfs <= self.cut_off_edge_prob
-            counter.update(key_edges[mask])
-            if parent in counter:
-                del counter[parent]
+            key_flows = np.vstack(sorted_flows[key_map[k]])
+
+            mask = key_edges != -1
+            key_edges = key_edges[mask]
+            key_flows = key_flows[mask]
+
+            for e, f in zip(key_edges, key_flows):
+                if e != parent:
+                    counter[e] += f
 
             edge_counters.append(counter)
 
@@ -191,18 +196,22 @@ class BaselineAggLSTM2(BaseModel):
 
     def _get_test_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
-        sorted_probs = self.probs[sorted_keys, start:start+total_len]
+        sorted_flows = self.flows[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
         edge_counters = []
         for k, parent in zip(keys, parents):
-            counter = Counter()
+            counter = defaultdict(int)
             key_edges = np.vstack(sorted_edges[key_map[k]])
-            key_cdfs = np.vstack(sorted_probs[key_map[k]])
-            mask = key_cdfs <= self.cut_off_edge_prob
-            counter.update(key_edges[mask])
-            if parent in counter:
-                del counter[parent]
+            key_flows = np.vstack(sorted_flows[key_map[k]])
+
+            mask = key_edges != -1
+            key_edges = key_edges[mask]
+            key_flows = key_flows[mask]
+
+            for e, f in zip(key_edges, key_flows):
+                if e != parent:
+                    counter[e] += f
 
             edge_counters.append(counter)
 
