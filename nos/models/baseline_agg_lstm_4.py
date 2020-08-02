@@ -291,7 +291,6 @@ class BaselineAggLSTM4(BaseModel):
 
         edge_counters = []
         for k, parent in zip(keys, parents):
-            counter = defaultdict(int)
             key_edges = np.vstack(sorted_edges[key_map[k]])
             key_flows = np.vstack(sorted_flows[key_map[k]])
 
@@ -299,9 +298,19 @@ class BaselineAggLSTM4(BaseModel):
             key_edges = key_edges[mask]
             key_flows = key_flows[mask]
 
-            for e, f in zip(key_edges, key_flows):
-                if e != parent:
-                    counter[e] += f
+            # Re-map keys - faster than using loops and Counter
+            palette = np.unique(key_edges)
+            keys = np.array(range(len(palette)), dtype=np.int32)
+            index = np.digitize(key_edges, palette, right=True)
+            mapped_key_edges = keys[index]
+            counts = np.bincount(mapped_key_edges, weights=key_flows)
+
+            counter = {}
+            for i, count in enumerate(counts):
+                counter[palette[i]] = count
+
+            if parent in counter:
+                del counter[parent]
 
             edge_counters.append(counter)
 
@@ -314,7 +323,6 @@ class BaselineAggLSTM4(BaseModel):
 
         edge_counters = []
         for k, parent in zip(keys, parents):
-            counter = defaultdict(int)
             key_edges = np.vstack(sorted_edges[key_map[k]])
             key_flows = np.vstack(sorted_flows[key_map[k]])
 
@@ -322,9 +330,19 @@ class BaselineAggLSTM4(BaseModel):
             key_edges = key_edges[mask]
             key_flows = key_flows[mask]
 
-            for e, f in zip(key_edges, key_flows):
-                if e != parent:
-                    counter[e] += f
+            # Re-map keys - faster than using loops and Counter
+            palette = np.unique(key_edges)
+            keys = np.array(range(len(palette)), dtype=np.int32)
+            index = np.digitize(key_edges, palette, right=True)
+            mapped_key_edges = keys[index]
+            counts = np.bincount(mapped_key_edges, weights=key_flows)
+
+            counter = {}
+            for i, count in enumerate(counts):
+                counter[palette[i]] = count
+
+            if parent in counter:
+                del counter[parent]
 
             edge_counters.append(counter)
 
@@ -359,7 +377,7 @@ class BaselineAggLSTM4(BaseModel):
                 probs = probs / probs.sum()
                 kn = self.sample_rs.choice(
                     candidates,
-                    size=min(len(candidates), self.max_agg_neighbours),
+                    size=min(len(probs[probs > 0]), self.max_agg_neighbours),
                     replace=False,
                     p=probs,
                 ).tolist()
