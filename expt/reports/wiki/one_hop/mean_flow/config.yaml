@@ -78,7 +78,6 @@ trainer:
   num_epochs: 10
   cuda_device: 0
   grad_norm: 0.1
-  shuffle: false
   callbacks:
     - type: checkpoint
     # - type: archive

@@ -75,7 +75,6 @@ trainer:
   num_epochs: 10
   cuda_device: 0
   grad_norm: 0.1
-  shuffle: false
   patience: 10
   validation_metric: "-smape_7"
   tensorboard_writer:
