@@ -24,10 +24,11 @@ model:
   n_hops: 2
   hop_scale: 1
   initializer:
-    - - ^decoder.layers.*.layer.weight*
-      - type: orthogonal
-    - - ^decoder.layers.*.layer.bias
-      - type: zero
+    regexes:
+      - - ^decoder.layers.*.layer.weight*
+        - orthogonal
+      - - ^decoder.layers.*.layer.bias
+        - zero
 data_loader:
   batch_sampler:
     type: basic

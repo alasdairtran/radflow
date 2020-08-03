@@ -23,10 +23,11 @@ model:
   view_randomize_p: false
   forward_fill: true
   initializer:
-    - - ^decoder.layers.*.layer.weight*
-      - type: orthogonal
-    - - ^decoder.layers.*.layer.bias
-      - type: zero
+    regexes:
+      - - ^decoder.layers.*.layer.weight*
+        - orthogonal
+      - - ^decoder.layers.*.layer.bias
+        - zero
 data_loader:
   batch_sampler:
     type: basic
