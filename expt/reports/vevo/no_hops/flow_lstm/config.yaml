@@ -38,8 +38,7 @@ validation_data_loader:
     cache_instances: false
 trainer:
   type: gradient_descent
-  apex_opt_level: O1
-  keep_batchnorm_fp32: None
+  use_amp: true
   optimizer:
     type: adamw
     lr: 0.001
