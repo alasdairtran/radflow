@@ -9,23 +9,26 @@ test_data_path: test
 vocabulary:
   type: empty_vocab
 model:
-  type: baseline_agg_lstm_2
+  type: baseline_agg_lstm_4
   data_path: ./data/wiki/wiki.hdf5
   key2pos_path: ./data/wiki/key2pos.pkl
-  train_edges_ns: train_edges
+  test_keys_path: ./data/wiki/node_ids/test_ids.pkl
   series_len: 1827
-  agg_type: none
+  agg_type: attention
   peek: true
   num_layers: 8
-  hidden_size: 164
+  hidden_size: 120
   dropout: 0.1
-  backcast_length: 112
   forecast_length: 28
+  backcast_length: 112
   test_lengths: [7, 14, 21, 28]
+  max_neighbours: 4
+  max_agg_neighbours: 4
+  neigh_sample: true
   initializer:
-    - - ^decoder.weight*
+    - - ^decoder.layers.*.layer.weight*
       - type: orthogonal
-    - - ^decoder.bias*
+    - - ^decoder.layers.*.layer.bias
       - type: zero
 iterator:
   type: basic
@@ -48,7 +51,27 @@ trainer:
     t_total: 81920 # 8192 batches per epoch
     max_grad_norm: 0.1
     parameter_groups:
-      - - - ^decoder
+      - - - ^decoder.in_proj
+        - {}
+      - - - ^decoder.layers.0
+        - {}
+      - - - ^decoder.layers.1
+        - {}
+      - - - ^decoder.layers.2
+        - {}
+      - - - ^decoder.layers.3
+        - {}
+      - - - ^decoder.layers.4
+        - {}
+      - - - ^decoder.layers.5
+        - {}
+      - - - ^decoder.layers.6
+        - {}
+      - - - ^decoder.layers.7
+        - {}
+      - - - ^decoder.out_f
+        - {}
+      - - - ^attn
         - {}
       - - - ^fc
         - {}

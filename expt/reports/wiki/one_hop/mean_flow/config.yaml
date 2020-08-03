@@ -12,18 +12,18 @@ model:
   type: baseline_agg_lstm_4
   data_path: ./data/wiki/wiki.hdf5
   key2pos_path: ./data/wiki/key2pos.pkl
-  train_edges_ns: train_edges
+  test_keys_path: ./data/wiki/node_ids/test_ids.pkl
   series_len: 1827
   agg_type: mean
   peek: true
   num_layers: 8
-  hidden_size: 124
+  hidden_size: 128
   dropout: 0.1
   forecast_length: 28
   backcast_length: 112
   test_lengths: [7, 14, 21, 28]
   max_neighbours: 4
-  static_graph: true
+  max_agg_neighbours: 4
   neigh_sample: true
   initializer:
     - - ^decoder.layers.*.layer.weight*

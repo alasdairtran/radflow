@@ -392,8 +392,12 @@ class BaselineAggLSTM4(BaseModel):
 
             if self.neigh_sample and not self.evaluate_mode:
                 pairs = counter.items()
-                candidates = np.array([p[0] for p in pairs])
-                probs = np.array([p[1] for p in pairs])
+                candidates = np.array([p[0] for p in pairs
+                                       if p[0] not in self.test_keys])
+                if len(candidates) == 0:
+                    continue
+                probs = np.array([p[1] for p in pairs
+                                  if p[0] not in self.test_keys])
                 probs = probs / probs.sum()
                 kn = self.sample_rs.choice(
                     candidates,
