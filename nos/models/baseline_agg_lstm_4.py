@@ -175,6 +175,7 @@ class BaselineAggLSTM4(BaseModel):
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
                  max_eval_neighbours: int = 32,
+                 use_flow_edges: bool = False,
                  cut_off_edge_prob: float = 0.8,
                  hop_scale: int = 4,
                  neigh_sample: bool = False,
@@ -211,6 +212,8 @@ class BaselineAggLSTM4(BaseModel):
         self.static_graph = static_graph
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
+        self.use_flow_edges = use_flow_edges
+
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
         self.edge_missing_p = edge_missing_p
@@ -353,7 +356,7 @@ class BaselineAggLSTM4(BaseModel):
 
         return edge_counters
 
-    def _get_training_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
+    def _get_test_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
@@ -380,7 +383,10 @@ class BaselineAggLSTM4(BaseModel):
         sorted_keys = sorted(set(keys))
         key_map = {k: i for i, k in enumerate(sorted_keys)}
 
-        if not self.evaluate_mode:
+        if self.use_flow_edges:
+            edge_counters = self._get_edges_by_flows(
+                keys, sorted_keys, key_map, start, total_len, parents)
+        elif not self.evaluate_mode:
             edge_counters = self._get_training_edges(
                 keys, sorted_keys, key_map, start, total_len, parents)
         else:
