@@ -370,8 +370,8 @@ def populate_hdf5(collection, name):
     with open(f'data/vevo/{name}_connected_nodes.pkl', 'wb') as f:
         pickle.dump(connected_ids, f)
 
-    # float16_dt = h5py.vlen_dtype(np.dtype('float16'))
-    # probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
+    float16_dt = h5py.vlen_dtype(np.dtype('float16'))
+    probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
     flows = data_f.create_dataset('flows', (60740, 63), int32_dt)
     edges = data_f['edges'][...]
 
@@ -379,7 +379,7 @@ def populate_hdf5(collection, name):
         if len(edge[0]) == 0:
             continue
 
-        # key_probs = np.ones((63, len(edge[0])), dtype=np.float16)
+        key_probs = np.ones((63, len(edge[0])), dtype=np.float16)
         key_flows = np.zeros((63, len(edge[0])), dtype=np.int32)
         for d, ns in enumerate(edge):
             if len(ns) == 0 or ns[0] == -1:
@@ -390,10 +390,10 @@ def populate_hdf5(collection, name):
             if total < 1e-6:
                 continue
 
-            # prob = counts / total
-            # key_probs[d, :len(prob)] = np.array(prob.cumsum(), np.float16)
+            prob = counts / total
+            key_probs[d, :len(prob)] = np.array(prob.cumsum(), np.float16)
             key_flows[d, :len(counts)] = np.round(counts).astype(np.int32)
-        # probs[k] = np.ascontiguousarray(key_probs)
+        probs[k] = np.ascontiguousarray(key_probs)
         flows[k] = np.ascontiguousarray(key_flows)
 
 
