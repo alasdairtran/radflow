@@ -41,7 +41,6 @@ from docopt import docopt
 from schema import And, Or, Schema, Use
 
 from nos.commands.evaluate import evaluate_from_file
-from nos.commands.generate import generate
 from nos.commands.train import train_model_from_file
 from nos.utils import setup_logger
 
@@ -93,9 +92,6 @@ def main():
             file_friendly_logging=args['file_friendly_logging'],
             recover=args['recover'],
             force=args['force'])
-
-    elif args['generate']:
-        generate(args['param_path'], args['model_path'], args['overrides'])
 
     elif args['evaluate']:
         evaluate_from_file(args['param_path'], args['model_path'],
