@@ -1,6 +1,8 @@
 
 
 import os
+from os import PathLike
+from typing import List, Union
 
 import yaml
 from allennlp.commands.train import train_model
@@ -9,42 +11,44 @@ from allennlp.common.params import Params, parse_overrides, with_fallback
 from allennlp.models import Model
 
 
-def train_model_from_file(parameter_filename: str,
-                          serialization_dir: str,
+def train_model_from_file(parameter_filename: Union[str, PathLike],
+                          serialization_dir: Union[str, PathLike],
                           overrides: str = "",
-                          file_friendly_logging: bool = False,
                           recover: bool = False,
                           force: bool = False,
-                          cache_directory: str = None,
-                          cache_prefix: str = None) -> Model:
+                          node_rank: int = 0,
+                          include_package: List[str] = None,
+                          dry_run: bool = False,
+                          file_friendly_logging: bool = False) -> Model:
     """
-    A wrapper around :func:`train_model` which loads the params from a file.
-
-    We overwrite the AllenNLP function to support YAML config files. We also
-    set the default serialization directory to be where the config file lives.
-
-    Parameters
-    ----------
-    parameter_filename : ``str``
+    A wrapper around [`train_model`](#train_model) which loads the params from a file.
+    # Parameters
+    parameter_filename : `str`
         A json parameter file specifying an AllenNLP experiment.
-    serialization_dir : ``str``
+    serialization_dir : `str`
         The directory in which to save results and logs. We just pass this along to
-        :func:`train_model`.
-    overrides : ``str``
+        [`train_model`](#train_model).
+    overrides : `str`
         A JSON string that we will use to override values in the input parameter file.
-    file_friendly_logging : ``bool``, optional (default=False)
-        If ``True``, we make our output more friendly to saved model files.  We just pass this
-        along to :func:`train_model`.
-    recover : ``bool`, optional (default=False)
-        If ``True``, we will try to recover a training run from an existing serialization
+    recover : `bool`, optional (default=`False`)
+        If `True`, we will try to recover a training run from an existing serialization
         directory.  This is only intended for use when something actually crashed during the middle
-        of a run.  For continuing training a model on new data, see the ``fine-tune`` command.
-    force : ``bool``, optional (default=False)
-        If ``True``, we will overwrite the serialization directory if it already exists.
-    cache_directory : ``str``, optional
-        For caching data pre-processing.  See :func:`allennlp.training.util.datasets_from_params`.
-    cache_prefix : ``str``, optional
-        For caching data pre-processing.  See :func:`allennlp.training.util.datasets_from_params`.
+        of a run.  For continuing training a model on new data, see `Model.from_archive`.
+    force : `bool`, optional (default=`False`)
+        If `True`, we will overwrite the serialization directory if it already exists.
+    node_rank : `int`, optional
+        Rank of the current node in distributed training
+    include_package : `str`, optional
+        In distributed mode, extra packages mentioned will be imported in trainer workers.
+    dry_run : `bool`, optional (default=`False`)
+        Do not train a model, but create a vocabulary, show dataset statistics and other training
+        information.
+    file_friendly_logging : `bool`, optional (default=`False`)
+        If `True`, we add newlines to tqdm output, even on an interactive terminal, and we slow
+        down tqdm's output to only once every 10 seconds.
+    # Returns
+    best_model : `Optional[Model]`
+        The model with the best epoch weights or `None` if in dry run.
     """
     # Load the experiment config from a file and pass it to ``train_model``.
     if parameter_filename.endswith(('.yaml', '.yml')):
@@ -56,9 +60,13 @@ def train_model_from_file(parameter_filename: str,
         config_dir = os.path.dirname(parameter_filename)
         serialization_dir = os.path.join(config_dir, 'serialization')
 
-    return train_model(params, serialization_dir,
+    return train_model(params=params,
+                       serialization_dir=serialization_dir,
                        recover=recover,
                        force=force,
+                       node_rank=node_rank,
+                       include_package=include_package,
+                       dry_run=dry_run,
                        file_friendly_logging=file_friendly_logging)
 
 
