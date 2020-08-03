@@ -464,7 +464,7 @@ def generate_hdf5():
 
     data_f.create_dataset('outdegrees', dtype=np.int32, data=outdegrees)
 
-    normalised_views = views / outdegrees
+    normalised_views = views  # / outdegrees
 
     for key in tqdm(mask_f):
         mask_dict = {}

@@ -339,7 +339,7 @@ def populate_hdf5(collection, name):
         pickle.dump(key2pos, f)
 
     views[views == -1] = 0
-    normalised_views = views / outdegrees
+    normalised_views = views  # / outdegrees
     for p in tqdm(client.vevo[collection].find({})):
         if not p['e']:
             continue
