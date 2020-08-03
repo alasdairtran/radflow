@@ -82,14 +82,8 @@ trainer:
   cuda_device: 0
   grad_norm: 0.1
   shuffle: false
-  callbacks:
-    - type: checkpoint
-    # - type: archive
-    - type: track_metrics
-      patience: 10
-      validation_metric: "-smape_7"
-    - type: validate
-    - type: log_to_tensorboard
-      summary_interval: 100
-      should_log_parameter_statistics: false
-      log_batch_size_period: 1000
+  patience: 10
+  validation_metric: "-smape_7"
+  tensorboard_writer:
+    summary_interval: 100
+    should_log_parameter_statistics: false
