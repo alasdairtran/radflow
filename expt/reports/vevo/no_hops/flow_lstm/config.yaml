@@ -33,7 +33,7 @@ validation_data_loader:
   batch_size: 64
 trainer:
   type: gradient_descent
-  use_amp: true
+  use_amp: false
   optimizer:
     type: adamw
     lr: 0.001
