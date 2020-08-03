@@ -15,6 +15,8 @@ import random
 import time
 from datetime import datetime, timedelta
 
+import h5py
+import numpy as np
 import ptvsd
 import requests
 from docopt import docopt
@@ -163,6 +165,22 @@ def get_traffic_all(mongo_host, n_jobs):
                  for i, s in enumerate(range(0, len(to_do_titles), batch_size)))
 
 
+def generate_hdf5(mongo_host):
+    client = MongoClient(host=mongo_host, port=27017)
+    db = client.wiki2
+    pages = db.series.find({})
+
+    views = np.full((366802, 1827, 3), -1, dtype=np.int32)
+    for page in tqdm(pages):
+        series = np.array([page['d']['series'], page['m']
+                           ['series'], page['a']['series']], dtype=np.int32)
+        series = series.transpose()
+        views[page['_id']] = series
+
+    f = h5py.File('data/wiki/views_all.hdf5', 'a')
+    f.create_dataset('views', dtype=np.int32, data=views)
+
+
 def validate(args):
     """Validate command line arguments."""
     args = {k.lstrip('-').lower().replace('-', '_'): v
@@ -186,6 +204,7 @@ def main():
         ptvsd.wait_for_attach()
 
     get_traffic_all(args['mongo'], args['n_jobs'])
+    generate_hdf5(args['mongo'])
 
 
 if __name__ == '__main__':

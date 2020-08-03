@@ -44,6 +44,7 @@ class BaselineAggLSTM2(BaseModel):
                  peek: bool = True,
                  data_path: str = './data/vevo/vevo.hdf5',
                  key2pos_path: str = './data/vevo/vevo.key2pos.pkl',
+                 multi_views_path: str = None,
                  test_keys_path: str = None,
                  series_len: int = 63,
                  num_layers: int = 8,
@@ -107,10 +108,15 @@ class BaselineAggLSTM2(BaseModel):
         # self.probs = self.data['probs']
         self.flows = self.data['flows']
 
+        self.views_all = None
+        if multi_views_path:
+            self.views_all = h5py.File(multi_views_path, 'r')['views']
+
         with open(key2pos_path, 'rb') as f:
             self.key2pos = pickle.load(f)
 
-        self.decoder = nn.LSTM(1, hidden_size, num_layers,
+        input_size = 3 if self.views_all else 1
+        self.decoder = nn.LSTM(input_size, hidden_size, num_layers,
                                bias=True, batch_first=True, dropout=dropout)
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
@@ -154,7 +160,8 @@ class BaselineAggLSTM2(BaseModel):
 
         inputs = series
 
-        X = inputs.unsqueeze(-1)
+        if len(X.shape) == 2:
+            X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
         X, _ = self.decoder(X)
@@ -544,12 +551,19 @@ class BaselineAggLSTM2(BaseModel):
         end = start + self.total_length
         series = self.series[keys, start:end].astype(np.float32)
 
+        if self.views_all:
+            series_v = self.views_all[keys, start:end].astype(np.float32)
+        else:
+            series_v = series
+
         if self.view_missing_p > 0:
             # Don't delete test data during evaluation
             if self.evaluate_mode:
                 o_series = series[:, :self.backcast_length]
+                o_series_v = series_v[:, :self.backcast_length]
             else:
                 o_series = series
+                o_series_v = o_series_v
 
             if self.view_randomize_p:
                 seeds = [self.epoch, int(self.history['_n_samples']), 6235]
@@ -563,11 +577,14 @@ class BaselineAggLSTM2(BaseModel):
                                      replace=False,
                                      size=int(round(o_series.size * prob)))
             o_series[np.unravel_index(indices, o_series.shape)] = -1
+            o_series_v[np.unravel_index(indices, o_series.shape)] = -1
 
             if self.evaluate_mode:
                 series[:, :self.backcast_length] = o_series
+                series_v[:, :self.backcast_length] = o_series_v
             else:
                 series = o_series
+                series_v = o_series_v
 
         non_missing_idx = torch.from_numpy(series[:, 1:] != -1).to(p.device)
 
@@ -577,8 +594,21 @@ class BaselineAggLSTM2(BaseModel):
             np.maximum.accumulate(idx, axis=1, out=idx)
             series = series[np.arange(idx.shape[0])[:, None], idx]
 
+            if self.views_all:
+                B, S, E = series_v.shape
+                series_v = series_v.transpose((0, 2, 1)).reshape(B, E * S)
+                mask = series_v == -1
+                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+                np.maximum.accumulate(idx, axis=1, out=idx)
+                series_v = series_v[np.arange(idx.shape[0])[:, None], idx]
+                series_v = series_v.reshape(B, E, S).transpose((0, 2, 1))
+            else:
+                series_v = series
+
         series[series == -1] = 0
+        series_v[series_v == -1] = 0
         raw_series = torch.from_numpy(series).to(p.device)
+        raw_series_v = torch.from_numpy(series_v).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
 
         # non_missing_idx = torch.stack(non_missing_list, dim=0)[:, 1:]
@@ -586,8 +616,9 @@ class BaselineAggLSTM2(BaseModel):
         log_raw_series = torch.log1p(raw_series)
 
         series = torch.log1p(raw_series)
+        series_v = torch.log1p(raw_series_v)
 
-        X_full = self._forward_full(series)
+        X_full = self._forward_full(series_v)
         X = X_full[:, :-1]
         # X.shape == [batch_size, seq_len, hidden_size]
 
