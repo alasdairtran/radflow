@@ -13,15 +13,17 @@ model:
   method: previous_day
   forecast_length: 7
   backcast_length: 42
-iterator:
-  type: basic
-  batch_size: 64
-  cache_instances: false
-  instances_per_epoch: 2097152
-validation_iterator:
-  type: basic
-  batch_size: 64
-  cache_instances: false
+data_loader:
+  batch_sampler:
+    type: basic
+    batch_size: 64
+    cache_instances: false
+    instances_per_epoch: 524288
+validation_dataloader:
+  batch_sampler:
+    type: basic
+    batch_size: 64
+    cache_instances: false
 trainer:
   type: gradient_descent
   apex_opt_level: O1

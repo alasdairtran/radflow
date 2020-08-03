@@ -30,15 +30,17 @@ model:
       - type: orthogonal
     - - ^decoder.bias*
       - type: zero
-iterator:
-  type: basic
-  batch_size: 64
-  cache_instances: false
-  instances_per_epoch: 524288
-validation_iterator:
-  type: basic
-  batch_size: 64
-  cache_instances: false
+data_loader:
+  batch_sampler:
+    type: basic
+    batch_size: 64
+    cache_instances: false
+    instances_per_epoch: 524288
+validation_dataloader:
+  batch_sampler:
+    type: basic
+    batch_size: 64
+    cache_instances: false
 trainer:
   type: gradient_descent
   apex_opt_level: O1

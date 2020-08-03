@@ -8,8 +8,7 @@ import torch
 from allennlp.common.checks import check_for_gpu
 from allennlp.common.tqdm import Tqdm
 from allennlp.common.util import prepare_environment
-from allennlp.data import Instance
-from allennlp.data.iterators import DataIterator
+from allennlp.data import DataLoader, Instance
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models import Model
 from allennlp.models.archival import load_archive
@@ -52,8 +51,8 @@ def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='',
         model.load_state_dict(best_model_state)
 
     instances = all_datasets.get('test')
-    iterator = DataIterator.from_params(
-        config.pop("validation_iterator"))
+    iterator = DataLoader.from_params(
+        config.pop("validation_dataloader"))
 
     iterator.index_with(model.vocab)
     model.eval().to(device)
@@ -88,7 +87,7 @@ def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='',
 
 def evaluate(model: Model,
              instances: Iterable[Instance],
-             data_iterator: DataIterator,
+             data_iterator: DataLoader,
              cuda_device: int,
              serialization_dir: str,
              eval_suffix: str,
