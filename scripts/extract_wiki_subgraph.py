@@ -462,9 +462,10 @@ def generate_hdf5():
             n_edges = (~m).astype(np.int32)
             outdegrees[int(neigh)] += n_edges
 
+    assert outdegrees.data.c_contiguous
     data_f.create_dataset('outdegrees', dtype=np.int32, data=outdegrees)
 
-    normalised_views = views  # / outdegrees
+    normalised_views = views / outdegrees
 
     for key in tqdm(mask_f):
         mask_dict = {}
@@ -518,9 +519,9 @@ def generate_hdf5():
             # probs_array[day, :len(probs_list[day])] = probs_list[day]
             flows_array[day, :len(flows_list[day])] = flows_list[day]
 
-        # probs[int(key)] = probs_array
-        edges[int(key)] = edges_array
-        flows[int(key)] = flows_array
+        # probs[int(key)] = np.ascontiguousarray(probs_array)
+        edges[int(key)] = np.ascontiguousarray(edges_array)
+        flows[int(key)] = np.ascontiguousarray(flows_array)
 
         kept_neigh_ids = sorted(kept_neigh_set)
         mask = np.ones((len(kept_neigh_ids), 1827), dtype=np.bool_)
@@ -528,7 +529,7 @@ def generate_hdf5():
             mask[i] = mask_dict[n]
             key2pos[int(key)][n] = i
 
-        masks[int(key)] = mask.transpose()
+        masks[int(key)] = np.ascontiguousarray(mask.transpose())
 
     with open('data/wiki/key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)

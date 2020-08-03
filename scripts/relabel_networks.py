@@ -311,8 +311,8 @@ def populate_hdf5(collection, name):
     int32_dt = h5py.vlen_dtype(np.dtype('int32'))
     edges = data_f.create_dataset('edges', (60740, 63), int32_dt)
 
-    dt = h5py.vlen_dtype(np.dtype('bool'))
-    masks = data_f.create_dataset('masks', (60740, 63), dt)
+    bool_dt = h5py.vlen_dtype(np.dtype('bool'))
+    masks = data_f.create_dataset('masks', (60740, 63), bool_dt)
 
     logger.info('Populating series in memory')
     client = MongoClient(host='localhost', port=27017)
@@ -330,16 +330,18 @@ def populate_hdf5(collection, name):
             key2pos[p['_id']][int(k)] = i
             outdegrees[int(k)] += (~m).astype(np.int32)
 
-        masks[p['_id']] = mask.transpose()
+        masks[p['_id']] = np.ascontiguousarray(mask.transpose())
 
+    assert outdegrees.data.c_contiguous
+    assert views.data.c_contiguous
     data_f.create_dataset('outdegrees', dtype=np.int32, data=outdegrees)
-    data_f.create_dataset("views", dtype='int32', data=views)
+    data_f.create_dataset('views', dtype=np.int32, data=views)
 
     with open(f'data/vevo/{name}.key2pos.pkl', 'wb') as f:
         pickle.dump(key2pos, f)
 
     views[views == -1] = 0
-    normalised_views = views  # / outdegrees
+    normalised_views = views / outdegrees
     for p in tqdm(client.vevo[collection].find({})):
         if not p['e']:
             continue
@@ -391,8 +393,8 @@ def populate_hdf5(collection, name):
             # prob = counts / total
             # key_probs[d, :len(prob)] = np.array(prob.cumsum(), np.float16)
             key_flows[d, :len(counts)] = np.round(counts).astype(np.int32)
-        # probs[k] = key_probs
-        flows[k] = key_flows
+        # probs[k] = np.ascontiguousarray(key_probs)
+        flows[k] = np.ascontiguousarray(key_flows)
 
 
 def populate_redis():
