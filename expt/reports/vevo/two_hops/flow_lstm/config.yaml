@@ -30,16 +30,11 @@ model:
       - - ^decoder.layers.*.layer.bias
         - zero
 data_loader:
-  batch_sampler:
-    type: basic
-    batch_size: 64
-    cache_instances: false
-    instances_per_epoch: 524288
+  batch_size: 64
+  shuffle: false
+  batches_per_epoch: 10000
 validation_data_loader:
-  batch_sampler:
-    type: basic
-    batch_size: 64
-    cache_instances: false
+  batch_size: 64
 trainer:
   type: gradient_descent
   use_amp: true
@@ -76,7 +71,7 @@ trainer:
     type: linear_with_warmup
     warmup_steps: 5000
     last_epoch: -1
-    num_steps_per_epoch: 8192
+    num_steps_per_epoch: 10000
     num_epochs: 10
   num_epochs: 10
   cuda_device: 0
