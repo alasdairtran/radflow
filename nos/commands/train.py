@@ -56,12 +56,10 @@ def train_model_from_file(parameter_filename: str,
         config_dir = os.path.dirname(parameter_filename)
         serialization_dir = os.path.join(config_dir, 'serialization')
 
-    return train_model(params,
-                       serialization_dir,
-                       file_friendly_logging,
-                       recover,
-                       force,
-                       cache_directory, cache_prefix)
+    return train_model(params, serialization_dir,
+                       recover=recover,
+                       force=force,
+                       file_friendly_logging=file_friendly_logging)
 
 
 def yaml_to_params(params_file: str, overrides: str = "") -> Params:
