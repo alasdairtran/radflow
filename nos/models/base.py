@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict
-from typing import Any, Dict, Type
+from typing import Any, Callable, Dict, Type, TypeVar
 
 from allennlp.common.params import Params
 from allennlp.data.vocabulary import Vocabulary
@@ -11,6 +11,8 @@ from overrides import overrides
 from nos.modules import LoadStateDictWithPrefix
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T", bound="FromParams")
 
 
 class BaseModel(LoadStateDictWithPrefix, Model):
@@ -63,7 +65,10 @@ class BaseModel(LoadStateDictWithPrefix, Model):
     @classmethod
     def from_params(cls: Type['BaseModel'],
                     vocab: Vocabulary,
-                    params: Params) -> 'BaseModel':
+                    params: Params,
+                    constructor_to_call: Callable[..., T] = None,
+                    constructor_to_inspect: Callable[..., T] = None,
+                    **extras) -> 'BaseModel':
         logger.info(f"instantiating class {cls} from params "
                     f"{getattr(params, 'params', params)} and vocab {vocab}")
 
