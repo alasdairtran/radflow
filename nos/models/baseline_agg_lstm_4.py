@@ -173,6 +173,7 @@ class BaselineAggLSTM4(BaseModel):
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
+                 max_eval_neighbours: int = 32,
                  cut_off_edge_prob: float = 0.8,
                  hop_scale: int = 4,
                  neigh_sample: bool = False,
@@ -193,6 +194,7 @@ class BaselineAggLSTM4(BaseModel):
         self.peek = peek
         self.max_neighbours = max_neighbours
         self.max_agg_neighbours = max_agg_neighbours
+        self.max_eval_neighbours = max_eval_neighbours
         self.cut_off_edge_prob = cut_off_edge_prob
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
@@ -311,7 +313,7 @@ class BaselineAggLSTM4(BaseModel):
             mapped_key_edges = keys[index]
             counts = np.bincount(mapped_key_edges, weights=key_flows)
 
-            counter = {}
+            counter = Counter()
             for i, count in enumerate(counts):
                 key = palette[i]
                 if key not in self.test_keys:
@@ -345,7 +347,7 @@ class BaselineAggLSTM4(BaseModel):
             mapped_key_edges = keys[index]
             counts = np.bincount(mapped_key_edges, weights=key_flows)
 
-            counter = {}
+            counter = Counter()
             for i, count in enumerate(counts):
                 counter[palette[i]] = count
 
@@ -389,6 +391,9 @@ class BaselineAggLSTM4(BaseModel):
                     replace=False,
                     p=probs,
                 ).tolist()
+            else:
+                pairs = counter.most_common(self.max_eval_neighbours)
+                kn = [p[0] for p in pairs]
 
             key_neighs[key] = list(kn)
             neigh_set |= set(kn)
