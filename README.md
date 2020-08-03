@@ -17,10 +17,10 @@ pip install -v --no-cache-dir --global-option="--pyprof" --global-option="--cpp_
 cd ../..
 
 # Install PyTorch Geometric
-pip install -U torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
-pip install -U torch-sparse==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
-pip install -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
-pip install -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.5.0.html
+pip install -U torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
+pip install -U torch-sparse==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
+pip install -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
+pip install -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
 pip install -U torch-geometric
 
 # Install redis from source
