@@ -292,7 +292,7 @@ class BaselineAggLSTM4(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
-    def _get_training_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
+    def _get_edges_by_flows(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
         sorted_flows = self.flows[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
@@ -326,30 +326,40 @@ class BaselineAggLSTM4(BaseModel):
 
         return edge_counters
 
-    def _get_test_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
+    def _get_training_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
-        sorted_flows = self.flows[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
         edge_counters = []
         for k, parent in zip(keys, parents):
             key_edges = np.vstack(sorted_edges[key_map[k]])
-            key_flows = np.vstack(sorted_flows[key_map[k]])
-
+            key_edges = key_edges[:, :self.max_neighbours]
             mask = key_edges != -1
             key_edges = key_edges[mask]
-            key_flows = key_flows[mask]
-
-            # Re-map keys - faster than using loops and Counter
-            palette = np.unique(key_edges)
-            keys = np.array(range(len(palette)), dtype=np.int32)
-            index = np.digitize(key_edges, palette, right=True)
-            mapped_key_edges = keys[index]
-            counts = np.bincount(mapped_key_edges, weights=key_flows)
 
             counter = Counter()
-            for i, count in enumerate(counts):
-                counter[palette[i]] = count
+            counter.update(key_edges)
+
+            if parent in counter:
+                del counter[parent]
+
+            edge_counters.append(counter)
+
+        return edge_counters
+
+    def _get_training_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
+        sorted_edges = self.edges[sorted_keys, start:start+total_len]
+        # sorted_edges.shape == [batch_size, total_len, max_neighs]
+
+        edge_counters = []
+        for k, parent in zip(keys, parents):
+            key_edges = np.vstack(sorted_edges[key_map[k]])
+            key_edges = key_edges[:, :self.max_neighbours]
+            mask = key_edges != -1
+            key_edges = key_edges[mask]
+
+            counter = Counter()
+            counter.update(key_edges)
 
             if parent in counter:
                 del counter[parent]
