@@ -39,7 +39,7 @@ trainer:
   optimizer:
     type: adamw
     lr: 0.0001
-    weight_decay: 0.0001
+    weight_decay: 0.00025
     parameter_groups:
       - - - ^decoder.in_proj
         - {}
