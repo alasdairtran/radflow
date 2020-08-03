@@ -21,7 +21,7 @@ model:
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
-  edge_selection_method: flow
+  edge_selection_method: top
   initializer:
     - - ^decoder.layers.*.layer.weight*
       - type: orthogonal

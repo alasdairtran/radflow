@@ -174,8 +174,7 @@ class BaselineAggLSTM4(BaseModel):
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
-                 max_eval_neighbours: int = 32,
-                 use_flow_edges: bool = False,
+                 edge_selection_method: str = 'prob',
                  cut_off_edge_prob: float = 0.8,
                  hop_scale: int = 4,
                  neigh_sample: bool = False,
@@ -201,7 +200,6 @@ class BaselineAggLSTM4(BaseModel):
         self.peek = peek
         self.max_neighbours = max_neighbours
         self.max_agg_neighbours = max_agg_neighbours
-        self.max_eval_neighbours = max_eval_neighbours
         self.cut_off_edge_prob = cut_off_edge_prob
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
@@ -212,7 +210,7 @@ class BaselineAggLSTM4(BaseModel):
         self.static_graph = static_graph
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
-        self.use_flow_edges = use_flow_edges
+        self.edge_selection_method = edge_selection_method
 
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
@@ -237,7 +235,7 @@ class BaselineAggLSTM4(BaseModel):
         self.series = self.data['views'][...]
         self.edges = self.data['edges']
         self.masks = self.data['masks']
-        # self.probs = self.data['probs']
+        self.probs = self.data['probs']
         self.flows = self.data['flows']
         with open(key2pos_path, 'rb') as f:
             self.key2pos = pickle.load(f)
@@ -301,17 +299,39 @@ class BaselineAggLSTM4(BaseModel):
         X_out = self._pool(X, Xm)
         return X_out
 
+    def _get_edges_by_probs(self, keys, sorted_keys, key_map, start, total_len, parents):
+        sorted_edges = self.edges[sorted_keys, start:start+total_len]
+        sorted_probs = self.probs[sorted_keys, start:start+total_len]
+        # sorted_edges.shape == [batch_size, total_len, max_neighs]
+
+        edge_counters = []
+        for k, parent in zip(keys, parents):
+            counter = Counter()
+            key_edges = np.vstack(sorted_edges[key_map[k]])
+            key_probs = np.vstack(sorted_probs[key_map[k]])
+            cutoff_mask = key_probs <= self.cut_off_edge_prob
+            counter.update(key_edges[cutoff_mask])
+
+            if parent in counter:
+                del counter[parent]
+
+            edge_counters.append(counter)
+
+        return edge_counters
+
     def _get_edges_by_flows(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
         sorted_flows = self.flows[sorted_keys, start:start+total_len]
+        sorted_probs = self.probs[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
         edge_counters = []
         for k, parent in zip(keys, parents):
             key_edges = np.vstack(sorted_edges[key_map[k]])
             key_flows = np.vstack(sorted_flows[key_map[k]])
+            key_probs = np.vstack(sorted_probs[key_map[k]])
 
-            mask = key_edges != -1
+            mask = (key_probs <= self.cut_off_edge_prob)
             key_edges = key_edges[mask]
             key_flows = key_flows[mask]
 
@@ -335,28 +355,7 @@ class BaselineAggLSTM4(BaseModel):
 
         return edge_counters
 
-    def _get_training_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
-        sorted_edges = self.edges[sorted_keys, start:start+total_len]
-        # sorted_edges.shape == [batch_size, total_len, max_neighs]
-
-        edge_counters = []
-        for k, parent in zip(keys, parents):
-            key_edges = np.vstack(sorted_edges[key_map[k]])
-            key_edges = key_edges[:, :self.max_neighbours]
-            mask = key_edges != -1
-            key_edges = key_edges[mask]
-
-            counter = Counter()
-            counter.update(key_edges)
-
-            if parent in counter:
-                del counter[parent]
-
-            edge_counters.append(counter)
-
-        return edge_counters
-
-    def _get_test_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
+    def _get_top_edges(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
         # sorted_edges.shape == [batch_size, total_len, max_neighs]
 
@@ -383,14 +382,14 @@ class BaselineAggLSTM4(BaseModel):
         sorted_keys = sorted(set(keys))
         key_map = {k: i for i, k in enumerate(sorted_keys)}
 
-        if self.use_flow_edges:
+        if self.edge_selection_method == 'prob':
+            edge_counters = self._get_edges_by_probs(
+                keys, sorted_keys, key_map, start, total_len, parents)
+        elif self.edge_selection_method == 'flow':
             edge_counters = self._get_edges_by_flows(
                 keys, sorted_keys, key_map, start, total_len, parents)
-        elif not self.evaluate_mode:
-            edge_counters = self._get_training_edges(
-                keys, sorted_keys, key_map, start, total_len, parents)
-        else:
-            edge_counters = self._get_test_edges(
+        elif self.edge_selection_method == 'top':
+            edge_counters = self._get_top_edges(
                 keys, sorted_keys, key_map, start, total_len, parents)
 
         # First iteration: grab the top neighbours from each sample
@@ -417,9 +416,6 @@ class BaselineAggLSTM4(BaseModel):
                     replace=False,
                     p=probs,
                 ).tolist()
-            else:
-                pairs = counter.most_common(self.max_eval_neighbours)
-                kn = [p[0] for p in pairs]
 
             key_neighs[key] = list(kn)
             neigh_set |= set(kn)
