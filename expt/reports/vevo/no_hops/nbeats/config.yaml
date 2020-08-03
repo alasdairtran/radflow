@@ -24,7 +24,7 @@ data_loader:
     batch_size: 64
     cache_instances: false
     instances_per_epoch: 524288
-validation_dataloader:
+validation_data_loader:
   batch_sampler:
     type: basic
     batch_size: 64
