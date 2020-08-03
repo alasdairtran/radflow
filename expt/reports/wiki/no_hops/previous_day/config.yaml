@@ -26,7 +26,7 @@ validation_iterator:
   batch_size: 64
   cache_instances: false
 trainer:
-  type: callback_apex
+  type: gradient_descent
   apex_opt_level: O1
   keep_batchnorm_fp32: None
   optimizer:
