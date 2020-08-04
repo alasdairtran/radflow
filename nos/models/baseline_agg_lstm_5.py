@@ -22,7 +22,6 @@ from torch_geometric.data import Data
 from torch_geometric.nn import GATConv, SAGEConv
 from tqdm import tqdm
 
-from nos.modules import Decoder
 from nos.modules.linear import GehringLinear
 from nos.utils import keystoint
 

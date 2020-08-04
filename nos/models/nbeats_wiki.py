@@ -23,14 +23,12 @@ from torch_geometric.data import Data
 from torch_geometric.nn import SAGEConv
 from tqdm import tqdm
 
-from nos.modules import Decoder
 from nos.modules.linear import GehringLinear
 from nos.utils import keystoint
 
 from .base import BaseModel
 from .metrics import get_smape
 from .nbeats_base import NBeatsNet
-from .nbeats_plus import NBeatsPlusNet
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -91,20 +89,6 @@ class NBEATSWiki(BaseModel):
                                  max_neighbours=max_neighbours,
                                  peek=peek,
                                  )
-        elif net == 'plus':
-            self.net = NBeatsPlusNet(device=torch.device('cuda:0'),
-                                     stack_types=[
-                                     NBeatsNet.GENERIC_BLOCK] * n_stacks,
-                                     nb_blocks_per_stack=nb_blocks_per_stack,
-                                     forecast_length=forecast_length,
-                                     backcast_length=backcast_length,
-                                     thetas_dims=[thetas_dims] * n_stacks,
-                                     hidden_layer_units=hidden_size,
-                                     share_weights_in_stack=share_weights_in_stack,
-                                     dropout=dropout,
-                                     max_neighbours=max_neighbours,
-                                     peek=peek,
-                                     )
 
         # Shortcut to create new tensors in the same device as the module
         self.register_buffer('_long', torch.LongTensor(1))
