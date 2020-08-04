@@ -55,14 +55,8 @@ trainer:
   num_epochs: 10
   cuda_device: 0
   grad_norm: 0.1
-  callbacks:
-    - type: checkpoint
-    # - type: archive
-    - type: track_metrics
-      patience: 10
-      validation_metric: "-smape_28"
-    - type: validate
-    - type: log_to_tensorboard
-      summary_interval: 100
-      should_log_parameter_statistics: false
-      log_batch_size_period: 1000
+  patience: 10
+  validation_metric: "-smape_28"
+  tensorboard_writer:
+    summary_interval: 100
+    should_log_parameter_statistics: false
