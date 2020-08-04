@@ -628,4 +628,4 @@ class TrainModel(Registrable):
         )
 
 
-TrainModel.register("default_fixed", constructor="from_partial_objects")(TrainModel)
+TrainModel.register("default", constructor="from_partial_objects")(TrainModel)
