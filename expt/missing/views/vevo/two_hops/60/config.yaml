@@ -21,11 +21,11 @@ model:
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
+  view_missing_p: 0.6
+  view_randomize_p: false
+  forward_fill: true
   n_hops: 2
   hop_scale: 1
-  view_missing_p: 0.6
-  view_randomize_p: true
-  forward_fill: true
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*
