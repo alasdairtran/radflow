@@ -192,48 +192,21 @@ class BaselineAggLSTM2(BaseModel):
 
         edge_counters = []
         for k, parent in zip(keys, parents):
-            counter = Counter()
             key_edges = np.vstack(sorted_edges[key_map[k]])
             key_probs = np.vstack(sorted_probs[key_map[k]])
             cutoff_mask = key_probs <= self.cut_off_edge_prob
-            counter.update(key_edges[cutoff_mask])
-
-            if parent in counter:
-                del counter[parent]
-
-            edge_counters.append(counter)
-
-        return edge_counters
-
-    def _get_edges_by_flows(self, keys, sorted_keys, key_map, start, total_len, parents):
-        sorted_edges = self.edges[sorted_keys, start:start+total_len]
-        sorted_flows = self.flows[sorted_keys, start:start+total_len]
-        sorted_probs = self.probs[sorted_keys, start:start+total_len]
-        # sorted_edges.shape == [batch_size, total_len, max_neighs]
-
-        edge_counters = []
-        for k, parent in zip(keys, parents):
-            key_edges = np.vstack(sorted_edges[key_map[k]])
-            key_flows = np.vstack(sorted_flows[key_map[k]])
-            key_probs = np.vstack(sorted_probs[key_map[k]])
-
-            mask = (key_probs <= self.cut_off_edge_prob)
-            key_edges = key_edges[mask]
-            key_flows = key_flows[mask]
+            key_edges = key_edges[cutoff_mask]
 
             # Re-map keys - faster than using loops and Counter
             palette = np.unique(key_edges)
             keys = np.array(range(len(palette)), dtype=np.int32)
             index = np.digitize(key_edges, palette, right=True)
             mapped_key_edges = keys[index]
-            counts = np.bincount(mapped_key_edges, weights=key_flows)
+            # We can even specify a weight matrix (e.g. probs) if needed
+            counts = np.bincount(mapped_key_edges)
+            # counts = np.bincount(mapped_key_edges, weights=key_flows)
 
-            counter = Counter()
-            for i, count in enumerate(counts):
-                key = palette[i]
-                if key not in self.test_keys:
-                    counter[key] = count
-
+            counter = {palette[i]: count for i, count in enumerate(counts)}
             if parent in counter:
                 del counter[parent]
 
@@ -270,9 +243,6 @@ class BaselineAggLSTM2(BaseModel):
 
         if self.edge_selection_method == 'prob':
             edge_counters = self._get_edges_by_probs(
-                keys, sorted_keys, key_map, start, total_len, parents)
-        elif self.edge_selection_method == 'flow':
-            edge_counters = self._get_edges_by_flows(
                 keys, sorted_keys, key_map, start, total_len, parents)
         elif self.edge_selection_method == 'top':
             edge_counters = self._get_top_edges(
