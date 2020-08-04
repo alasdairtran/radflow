@@ -11,6 +11,8 @@ vocabulary:
 model:
   type: baseline_agg_lstm_2
   agg_type: mean
+  data_path: ./data/vevo/vevo_static.hdf5
+  key2pos_path: ./data/vevo/vevo_static.key2pos.pkl
   peek: true
   num_layers: 8
   hidden_size: 160
