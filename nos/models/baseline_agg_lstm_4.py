@@ -242,7 +242,7 @@ class BaselineAggLSTM4(BaseModel):
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
         if agg_type in ['mean', 'attention', 'sage', 'gat']:
-            self.fc = GehringLinear(2 * self.hidden_size, 1)
+            self.fc = GehringLinear(2 * self.hidden_size, input_size)
 
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
