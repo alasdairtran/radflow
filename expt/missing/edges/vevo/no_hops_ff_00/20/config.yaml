@@ -35,8 +35,10 @@ data_loader:
 validation_data_loader:
   batch_size: 64
 trainer:
-  type: gradient_descent
+  type: apex_gradient_descent
   use_amp: false
+  apex_opt_level: O1
+  keep_batchnorm_fp32: None
   optimizer:
     type: adamw
     lr: 0.0001
