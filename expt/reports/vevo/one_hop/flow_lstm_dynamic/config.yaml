@@ -32,7 +32,7 @@ data_loader:
   shuffle: false
   batches_per_epoch: 10000
 validation_data_loader:
-  batch_size: 64
+  batch_size: 4
 trainer:
   type: apex_gradient_descent
   use_amp: false
@@ -41,7 +41,7 @@ trainer:
   optimizer:
     type: adamw
     lr: 0.0001
-    weight_decay: 0.00025
+    weight_decay: 0.0001
     parameter_groups:
       - - - ^decoder.in_proj
         - {}
