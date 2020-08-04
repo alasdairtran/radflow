@@ -51,14 +51,14 @@ def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='',
         model.load_state_dict(best_model_state)
 
     instances = all_datasets.get('test')
-    iterator = DataLoader.from_params(
-        config.pop("validation_dataloader"))
+    data_loader_params = config.pop("validation_data_loader")
+    data_loader = DataLoader.from_params(
+        dataset=instances, params=data_loader_params)
 
-    iterator.index_with(model.vocab)
     model.eval().to(device)
     model.evaluate_mode = True
 
-    metrics = evaluate(model, instances, iterator,
+    metrics = evaluate(model, data_loader,
                        device, serialization_dir, eval_suffix, batch_weight_key='')
 
     logger.info("Finished evaluating.")
@@ -86,8 +86,7 @@ def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='',
 
 
 def evaluate(model: Model,
-             instances: Iterable[Instance],
-             data_iterator: DataLoader,
+             data_loader: DataLoader,
              cuda_device: int,
              serialization_dir: str,
              eval_suffix: str,
@@ -97,12 +96,9 @@ def evaluate(model: Model,
     with torch.no_grad():
         model.eval()
 
-        iterator = data_iterator(instances,
-                                 num_epochs=1,
-                                 shuffle=False)
+        iterator = iter(data_loader)
         logger.info("Iterating over dataset")
-        generator_tqdm = Tqdm.tqdm(
-            iterator, total=data_iterator.get_num_batches(instances))
+        generator_tqdm = Tqdm.tqdm(iterator)
 
         # Number of batches in instances.
         batch_count = 0
