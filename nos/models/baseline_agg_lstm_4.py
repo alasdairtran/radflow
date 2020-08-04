@@ -420,7 +420,11 @@ class BaselineAggLSTM4(BaseModel):
             neigh_set |= set(kn)
             max_n_neighs = max(max_n_neighs, len(kn))
 
-        neighs = np.zeros((B, max_n_neighs, total_len), dtype=np.float32)
+        if self.views_all:
+            neighs = np.zeros((B, max_n_neighs, total_len, 3),
+                              dtype=np.float32)
+        else:
+            neighs = np.zeros((B, max_n_neighs, total_len), dtype=np.float32)
         n_masks = X.new_zeros(B, max_n_neighs).bool()
         parents = np.full((B, max_n_neighs), -99, dtype=np.uint32)
         neigh_keys = X.new_full((B, max_n_neighs), -1).long()
@@ -428,7 +432,12 @@ class BaselineAggLSTM4(BaseModel):
         neigh_list = sorted(neigh_set)
         end = start + self.total_length
         neigh_map = {k: i for i, k in enumerate(neigh_list)}
-        neigh_series = self.series[neigh_list, start:end].astype(np.float32)
+
+        if self.views_all:
+            neigh_series = self.views_all[neigh_list, start:end]
+        else:
+            neigh_series = self.series[neigh_list, start:end]
+        neigh_series = neigh_series.astype(np.float32)
 
         if self.view_missing_p > 0:
             # Don't delete test data during evaluation
@@ -458,10 +467,23 @@ class BaselineAggLSTM4(BaseModel):
                 neigh_series = o_series
 
         if self.forward_fill:
-            mask = neigh_series == -1
-            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
-            np.maximum.accumulate(idx, axis=1, out=idx)
-            neigh_series = neigh_series[np.arange(idx.shape[0])[:, None], idx]
+            if self.views_all:
+                NB, NS, NE = neigh_series.shape
+                neigh_series = neigh_series.transpose(
+                    (0, 2, 1)).reshape(NB, NE * NS)
+                mask = neigh_series == -1
+                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+                np.maximum.accumulate(idx, axis=1, out=idx)
+                neigh_series = neigh_series[np.arange(idx.shape[0])[
+                    :, None], idx]
+                neigh_series = neigh_series.reshape(
+                    NB, NE, NS).transpose((0, 2, 1))
+            else:
+                mask = neigh_series == -1
+                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+                np.maximum.accumulate(idx, axis=1, out=idx)
+                neigh_series = neigh_series[np.arange(idx.shape[0])[
+                    :, None], idx]
 
         neigh_series[neigh_series == -1] = 0
 
@@ -474,7 +496,10 @@ class BaselineAggLSTM4(BaseModel):
                     neigh_keys[i, j] = n
 
         neighs = torch.from_numpy(neighs).to(X.device)
-        neighs = neighs.reshape(B * max_n_neighs, total_len)
+        if self.views_all:
+            neighs = neighs.reshape(B * max_n_neighs, total_len, 3)
+        else:
+            neighs = neighs.reshape(B * max_n_neighs, total_len)
         n_masks = n_masks.reshape(B * max_n_neighs)
         parents = parents.reshape(B * max_n_neighs)
         neigh_keys = neigh_keys.reshape(B * max_n_neighs)
