@@ -120,7 +120,7 @@ class BaselineAggLSTM2(BaseModel):
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
-        self.fc = GehringLinear(self.hidden_size, 1)
+        self.fc = GehringLinear(self.hidden_size, input_size)
 
         if agg_type in ['mean', 'attention', 'sage', 'gat']:
             self.out_proj = GehringLinear(
@@ -553,21 +553,18 @@ class BaselineAggLSTM2(BaseModel):
 
         # Find all series of given keys
         end = start + self.total_length
-        series = self.series[keys, start:end].astype(np.float32)
 
         if self.views_all:
-            series_v = self.views_all[keys, start:end].astype(np.float32)
+            series = self.views_all[keys, start:end].astype(np.float32)
         else:
-            series_v = series
+            series = self.series[keys, start:end].astype(np.float32)
 
         if self.view_missing_p > 0:
             # Don't delete test data during evaluation
             if self.evaluate_mode:
                 o_series = series[:, :self.backcast_length]
-                o_series_v = series_v[:, :self.backcast_length]
             else:
                 o_series = series
-                o_series_v = series_v
 
             if self.view_randomize_p:
                 seeds = [self.epoch, int(self.history['_n_samples']), 6235]
@@ -581,38 +578,31 @@ class BaselineAggLSTM2(BaseModel):
                                      replace=False,
                                      size=int(round(o_series.size * prob)))
             o_series[np.unravel_index(indices, o_series.shape)] = -1
-            o_series_v[np.unravel_index(indices, o_series.shape)] = -1
 
             if self.evaluate_mode:
                 series[:, :self.backcast_length] = o_series
-                series_v[:, :self.backcast_length] = o_series_v
             else:
                 series = o_series
-                series_v = o_series_v
 
         non_missing_idx = torch.from_numpy(series[:, 1:] != -1).to(p.device)
 
         if self.forward_fill:
-            mask = series == -1
+            if self.views_all:
+                B, S, E = series.shape
+                series = series.transpose((0, 2, 1)).reshape(B, E * S)
+                mask = series == -1
+                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+                np.maximum.accumulate(idx, axis=1, out=idx)
+                series = series[np.arange(idx.shape[0])[:, None], idx]
+                series = series.reshape(B, E, S).transpose((0, 2, 1))
+            else:
+                mask = series == -1
             idx = np.where(~mask, np.arange(mask.shape[1]), 0)
             np.maximum.accumulate(idx, axis=1, out=idx)
             series = series[np.arange(idx.shape[0])[:, None], idx]
 
-            if self.views_all:
-                B, S, E = series_v.shape
-                series_v = series_v.transpose((0, 2, 1)).reshape(B, E * S)
-                mask = series_v == -1
-                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
-                np.maximum.accumulate(idx, axis=1, out=idx)
-                series_v = series_v[np.arange(idx.shape[0])[:, None], idx]
-                series_v = series_v.reshape(B, E, S).transpose((0, 2, 1))
-            else:
-                series_v = series
-
         series[series == -1] = 0
-        series_v[series_v == -1] = 0
         raw_series = torch.from_numpy(series).to(p.device)
-        raw_series_v = torch.from_numpy(series_v).to(p.device)
         # raw_series.shape == [batch_size, seq_len]
 
         # non_missing_idx = torch.stack(non_missing_list, dim=0)[:, 1:]
@@ -620,9 +610,8 @@ class BaselineAggLSTM2(BaseModel):
         log_raw_series = torch.log1p(raw_series)
 
         series = torch.log1p(raw_series)
-        series_v = torch.log1p(raw_series_v)
 
-        X_full = self._forward_full(series_v)
+        X_full = self._forward_full(series)
         X = X_full[:, :-1]
         # X.shape == [batch_size, seq_len, hidden_size]
 
@@ -632,7 +621,8 @@ class BaselineAggLSTM2(BaseModel):
         X_agg = self.fc(X_agg)
         # X_agg.shape == [batch_size, seq_len, 1]
 
-        preds = X_agg.squeeze(-1)
+        if X_agg.shape[-1] == 1:
+            preds = X_agg.squeeze(-1)
         preds = torch.exp(preds)
         # preds.shape == [batch_size, seq_len]
 
