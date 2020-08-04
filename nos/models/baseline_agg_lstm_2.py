@@ -597,7 +597,7 @@ class BaselineAggLSTM2(BaseModel):
                 o_series_v = series_v[:, :self.backcast_length]
             else:
                 o_series = series
-                o_series_v = o_series_v
+                o_series_v = series_v
 
             if self.view_randomize_p:
                 seeds = [self.epoch, int(self.history['_n_samples']), 6235]
