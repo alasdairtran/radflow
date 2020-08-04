@@ -159,7 +159,7 @@ class BaselineAggLSTM2(BaseModel):
 
         inputs = series
 
-        if len(X.shape) == 2:
+        if len(inputs.shape) == 2:
             X = inputs.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
