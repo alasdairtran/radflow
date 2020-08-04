@@ -67,8 +67,6 @@ trainer:
         - {}
       - - - ^decoder.out_f
         - {}
-      - - - ^attn
-        - {}
       - - - ^fc
         - {}
   learning_rate_scheduler:
