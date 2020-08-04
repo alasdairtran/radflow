@@ -5,10 +5,12 @@ from os import PathLike
 from typing import List, Union
 
 import yaml
-from allennlp.commands.train import train_model
+# from allennlp.commands.train import train_model
 from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params, parse_overrides, with_fallback
 from allennlp.models import Model
+
+from .train_utils import train_model
 
 
 def train_model_from_file(parameter_filename: Union[str, PathLike],
