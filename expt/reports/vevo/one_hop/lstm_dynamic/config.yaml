@@ -22,10 +22,11 @@ model:
   max_agg_neighbours: 4
   neigh_sample: true
   initializer:
-    - - ^decoder.weight*
-      - type: orthogonal
-    - - ^decoder.bias*
-      - type: zero
+    regexes:
+      - - ^decoder.weight*
+        - orthogonal
+      - - ^decoder.bias*
+        - zero
 data_loader:
   batch_size: 64
   shuffle: false

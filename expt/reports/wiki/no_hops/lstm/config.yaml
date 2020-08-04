@@ -23,10 +23,11 @@ model:
   forecast_length: 28
   test_lengths: [7, 14, 21, 28]
   initializer:
-    - - ^decoder.weight*
-      - type: orthogonal
-    - - ^decoder.bias*
-      - type: zero
+    regexes:
+      - - ^decoder.weight*
+        - orthogonal
+      - - ^decoder.bias*
+        - zero
 data_loader:
   batch_size: 64
   shuffle: false
