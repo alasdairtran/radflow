@@ -62,7 +62,8 @@ class NBEATSWiki(BaseModel):
         self.device = torch.device('cuda:0')
         self.missing_p = missing_p
         self.end_offset = end_offset
-        initializer(self)
+        if initializer:
+            initializer(self)
 
         self.data = h5py.File(data_path, 'r')
         self.series = self.data['views'][...]
@@ -95,17 +96,9 @@ class NBEATSWiki(BaseModel):
         # Occasionally we get duplicate keys due random sampling
         keys = sorted(set(keys))
         split = splits[0]
-        B = len(keys)
+
         p = next(self.parameters())
         # keys.shape == [batch_size]
-
-        self.history['_n_batches'] += 1
-        self.history['_n_samples'] += B
-
-        out_dict = {
-            'loss': None,
-            'sample_size': p.new_tensor(B),
-        }
 
         if split == 'train':
             if self.max_start == 0:
@@ -118,17 +111,33 @@ class NBEATSWiki(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        series_dict = {}
-        sorted_keys = sorted(keys)
         end = start + self.total_length
-        sorted_series = self.series[sorted_keys, start:end]
-        sorted_series[sorted_series == -1] = 0
-        for i, k in enumerate(sorted_keys):
-            series_dict[sorted_keys[i]] = sorted_series[i]
+        series = self.series[keys, start:end].astype(np.float32)
 
-        series_list = np.array([series_dict[k]
-                                for k in keys], dtype=np.float32)
-        series = torch.from_numpy(series_list).to(p.device)
+        # Forward-fill missing values
+        mask = series == -1
+        idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+        np.maximum.accumulate(idx, axis=1, out=idx)
+        series = series[np.arange(idx.shape[0])[:, None], idx]
+
+        # Mask out series with missing values in forecast
+        keep_mask = series[:, -self.forecast_length] > -1
+        series = series[keep_mask]
+        keys = np.array(keys)[keep_mask].tolist()
+
+        B = len(keys)
+        self.history['_n_batches'] += 1
+        self.history['_n_samples'] += B
+
+        out_dict = {
+            'loss': None,
+            'sample_size': p.new_tensor(B),
+        }
+
+        # Fill remaining missing values with 0
+        series[series == -1] = 0
+
+        series = torch.from_numpy(series).to(p.device)
 
         sources = series[:, :self.backcast_length]
         targets = series[:, -self.forecast_length:]
