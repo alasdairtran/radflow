@@ -19,7 +19,6 @@ model:
   backcast_length: 112
   test_lengths: [7, 14, 21, 28]
   dropout: 0.1
-  max_neighbours: 0
 data_loader:
   batch_size: 64
   shuffle: false
