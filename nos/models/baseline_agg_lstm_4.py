@@ -67,7 +67,8 @@ class NewNaive(BaseModel):
         self.max_start = series_len - self.forecast_length * \
             2 - self.total_length - self.end_offset
 
-        initializer(self)
+        if initializer:
+            initializer(self)
 
     def _initialize_series(self):
         if isinstance(next(iter(self.series.values())), torch.Tensor):
