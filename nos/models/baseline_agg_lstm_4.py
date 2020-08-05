@@ -185,6 +185,7 @@ class BaselineAggLSTM4(BaseModel):
                  edge_missing_p: float = 0,
                  view_randomize_p: bool = True,
                  forward_fill: bool = True,
+                 optimize_sum: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -210,6 +211,7 @@ class BaselineAggLSTM4(BaseModel):
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
         self.edge_selection_method = edge_selection_method
+        self.optimize_sum = optimize_sum
 
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
@@ -766,6 +768,11 @@ class BaselineAggLSTM4(BaseModel):
 
         preds = torch.exp(preds)
         targets = raw_series[:, 1:]
+
+        if self.views_all and self.optimize_sum:
+            preds = preds.sum(-1)
+            targets = targets.sum(-1)
+            non_missing_idx = non_missing_idx.all(-1)
 
         preds = torch.masked_select(preds, non_missing_idx)
         targets = torch.masked_select(targets, non_missing_idx)
