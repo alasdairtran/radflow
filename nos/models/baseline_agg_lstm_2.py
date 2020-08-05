@@ -194,7 +194,8 @@ class BaselineAggLSTM2(BaseModel):
         for k, parent in zip(keys, parents):
             key_edges = np.vstack(sorted_edges[key_map[k]])
             key_probs = np.vstack(sorted_probs[key_map[k]])
-            cutoff_mask = key_probs <= self.cut_off_edge_prob
+            cutoff_mask = (key_edges != -1)
+            cutoff_mask[:, 1:] = key_probs[:, 1:] <= self.cut_off_edge_prob
             key_edges = key_edges[cutoff_mask]
 
             # Re-map keys - faster than using loops and Counter
