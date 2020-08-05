@@ -386,7 +386,7 @@ def populate_hdf5(collection, name):
                 continue
             counts = np.array([normalised_views[n, d] for n in ns[ns != -1]])
 
-            counts = np.log1p(counts)
+            # counts = np.log1p(counts)
             total = counts.sum()
             if total < 1e-6:
                 continue
