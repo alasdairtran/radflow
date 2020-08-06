@@ -827,6 +827,15 @@ class BaselineAggLSTM4(BaseModel):
 
             preds = torch.exp(preds)
             if self.views_all:
+                smapes, daily_errors = get_smape(targets, preds)
+                n_cats = smapes.shape[-1]
+                out_dict['smapes_all'] = smapes.tolist()
+                out_dict['preds_all'] = preds.cpu().numpy().tolist()
+                for i in range(n_cats):
+                    for k in self.test_lengths:
+                        self.step_history[f'smape_{i}_{k}'] += np.sum(
+                            smapes[:, :k, i])
+
                 targets = targets.sum(-1)
                 preds = preds.sum(-1)
             smapes, daily_errors = get_smape(targets, preds)
