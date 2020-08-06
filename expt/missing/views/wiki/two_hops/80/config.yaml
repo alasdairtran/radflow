@@ -24,6 +24,7 @@ model:
   test_lengths: [7, 14, 21, 28]
   max_neighbours: 4
   max_agg_neighbours: 4
+  max_eval_neighbours: 8
   neigh_sample: true
   view_missing_p: 0.8
   view_randomize_p: false

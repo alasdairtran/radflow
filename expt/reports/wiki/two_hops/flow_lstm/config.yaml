@@ -24,6 +24,7 @@ model:
   test_lengths: [7, 14, 21, 28]
   max_neighbours: 4
   max_agg_neighbours: 4
+  max_eval_neighbours: 8
   n_hops: 2
   hop_scale: 1
   neigh_sample: true
