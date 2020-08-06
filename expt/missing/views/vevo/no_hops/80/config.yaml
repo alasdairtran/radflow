@@ -62,7 +62,7 @@ trainer:
         - {}
       - - - ^decoder.layers.7
         - {}
-      - - - ^decoder.out_proj
+      - - - ^decoder.out_f
         - {}
   learning_rate_scheduler:
     type: linear_with_warmup
