@@ -51,6 +51,7 @@ class BaselineAggLSTM2(BaseModel):
                  dropout: float = 0.1,
                  max_neighbours: int = 4,
                  max_agg_neighbours: int = 4,
+                 max_eval_neighbours: int = 16,
                  edge_selection_method: str = 'prob',
                  cut_off_edge_prob: float = 0.9,
                  hop_scale: int = 4,
@@ -70,6 +71,7 @@ class BaselineAggLSTM2(BaseModel):
         self.peek = peek
         self.max_neighbours = max_neighbours
         self.max_agg_neighbours = max_agg_neighbours
+        self.max_eval_neighbours = max_eval_neighbours
         self.cut_off_edge_prob = cut_off_edge_prob
         self.forecast_length = forecast_length
         self.backcast_length = backcast_length
@@ -269,6 +271,9 @@ class BaselineAggLSTM2(BaseModel):
                     replace=False,
                     p=probs,
                 ).tolist()
+            else:
+                pairs = Counter(counter).most_common(self.max_eval_neighbours)
+                kn = [p[0] for p in pairs]
 
             key_neighs[key] = list(kn)
             neigh_set |= set(kn)
