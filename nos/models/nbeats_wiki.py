@@ -49,7 +49,7 @@ class NBEATSWiki(BaseModel):
                  missing_p: float = 0.0,
                  thetas_dims: int = 128,
                  share_weights_in_stack: bool = False,
-                 peek: bool = False,
+                 slice_idx: int = None,
                  end_offset: int = 0,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -67,6 +67,8 @@ class NBEATSWiki(BaseModel):
 
         self.data = h5py.File(data_path, 'r')
         self.series = self.data['views'][...]
+        if slice_idx is not None:
+            self.series = self.series[:, :, slice_idx]
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \
