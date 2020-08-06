@@ -194,7 +194,8 @@ class BaselineAggLSTM4(BaseModel):
         self.views_all = None
         if multi_views_path:
             self.views_all = h5py.File(multi_views_path, 'r')['views']
-        input_size = 3 if self.views_all else 1
+        input_size = 2 if self.views_all else 1
+        self.input_size = input_size
         self.decoder = LSTMDecoder(
             hidden_size, num_layers, dropout, variant, input_size)
         self.mse = nn.MSELoss()
@@ -400,7 +401,7 @@ class BaselineAggLSTM4(BaseModel):
             max_n_neighs = max(max_n_neighs, len(kn))
 
         if self.views_all:
-            neighs = np.zeros((B, max_n_neighs, total_len, 3),
+            neighs = np.zeros((B, max_n_neighs, total_len, self.input_size),
                               dtype=np.float32)
         else:
             neighs = np.zeros((B, max_n_neighs, total_len), dtype=np.float32)
@@ -476,7 +477,8 @@ class BaselineAggLSTM4(BaseModel):
 
         neighs = torch.from_numpy(neighs).to(X.device)
         if self.views_all:
-            neighs = neighs.reshape(B * max_n_neighs, total_len, 3)
+            neighs = neighs.reshape(
+                B * max_n_neighs, total_len, self.input_size)
         else:
             neighs = neighs.reshape(B * max_n_neighs, total_len)
         n_masks = n_masks.reshape(B * max_n_neighs)
