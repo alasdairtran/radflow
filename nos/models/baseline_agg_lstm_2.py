@@ -389,23 +389,21 @@ class BaselineAggLSTM2(BaseModel):
         masks = np.ones((B, max_n_neighs, S), dtype=bool)
         sorted_masks = self.masks[sorted_keys, start:start+total_len]
 
-        if self.edge_missing_p > 0:
-            for sorted_mask, key in zip(sorted_masks, sorted_keys):
+        for b, key in enumerate(keys):
+            if key not in key_neighs:
+                continue
+            n_mask = np.vstack(sorted_masks[key_map[key]])
+            if self.edge_missing_p > 0:
                 seeds = [key, self.epoch, int(self.history['_n_samples']),
                          level, 124241]
                 edge_rs = np.random.RandomState(seeds)
-                edge_idx = (~sorted_mask).nonzero()[0]
+                edge_idx = (~n_mask).nonzero()[0]
                 size = int(round(len(edge_idx) * self.edge_missing_p))
                 if size > 0:
                     delete_idx = edge_rs.choice(edge_idx,
                                                 replace=False,
                                                 size=size)
-                    sorted_mask[delete_idx] = True
-
-        for b, key in enumerate(keys):
-            if key not in key_neighs:
-                continue
-            n_mask = np.vstack(sorted_masks[key_map[key]])
+                    n_mask[delete_idx] = True
             for i, k in enumerate(key_neighs[key]):
                 mask = n_mask[:, self.key2pos[key][k]]
                 if self.peek:
