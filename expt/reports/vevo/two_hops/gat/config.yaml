@@ -13,7 +13,7 @@ model:
   agg_type: gat
   peek: true
   num_layers: 8
-  hidden_size: 112
+  hidden_size: 124
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42

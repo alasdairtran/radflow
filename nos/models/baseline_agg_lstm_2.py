@@ -139,8 +139,8 @@ class BaselineAggLSTM2(BaseModel):
                                 heads=4, dropout=0.1)
 
         if n_hops == 2:
-            self.proj_hop_2 = GehringLinear(
-                6 * self.hidden_size, 3 * self.hidden_size)
+            self.out_proj_2 = GehringLinear(
+                2 * self.hidden_size, self.hidden_size)
             self.hop_rs = np.random.RandomState(4321)
             if agg_type == 'attention':
                 self.attn2 = nn.MultiheadAttention(
@@ -184,7 +184,7 @@ class BaselineAggLSTM2(BaseModel):
         elif self.agg_type in ['gat', 'sage']:
             Xm = self._aggregate_gat(X, Xm, masks)
 
-        X_out = self._pool(X, Xm)
+        X_out = self._pool(X, Xm, 1)
         return X_out
 
     def _get_edges_by_probs(self, keys, sorted_keys, key_map, start, total_len, parents):
@@ -376,8 +376,9 @@ class BaselineAggLSTM2(BaseModel):
                 Xm_2 = self._aggregate_attn(Xn[idx], Xm_2, masks_2, level + 1)
             elif self.agg_type in ['gat', 'sage']:
                 Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2)
-            X_out = self._pool(Xn[idx], Xm_2)
-            Xn[idx] = F.gelu(self.proj_hop_2(X_out)).type_as(Xn)
+            X_out = self._pool(Xn[idx], Xm_2, level + 1)
+            Xn = Xn.clone()
+            Xn[idx] = X_out
 
         _, S, E = Xn.shape
 
@@ -416,11 +417,16 @@ class BaselineAggLSTM2(BaseModel):
 
         return Xm, masks
 
-    def _pool(self, X, Xn):
+    def _pool(self, X, Xn, level):
         X_out = torch.cat([X, Xn], dim=-1)
         # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
 
-        X_out = F.relu(self.out_proj(X_out))
+        if level == 1:
+            X_out = F.relu(self.out_proj(X_out))
+        elif level == 2:
+            X_out = F.relu(self.out_proj_2(X_out))
+        else:
+            raise NotImplementedError()
         # Xn.shape == [batch_size, seq_len, hidden_size]
 
         return X_out
