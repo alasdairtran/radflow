@@ -296,18 +296,19 @@ class BaselineAggLSTM4(BaseModel):
             return X
 
         parents = [-99] * len(keys)
-        Xm, masks = self._construct_neighs(
+        Xm, masks, neigh_keys = self._construct_neighs(
             X, keys, start, total_len, 1, parents)
 
+        scores = None
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
         elif self.agg_type == 'attention':
-            Xm = self._aggregate_attn(X, Xm, masks, 1)
+            Xm, scores = self._aggregate_attn(X, Xm, masks, 1)
         elif self.agg_type in ['gat', 'sage']:
             Xm = self._aggregate_gat(X, Xm, masks, 1)
 
         X_out = self._pool(X, Xm)
-        return X_out
+        return X_out, scores, neigh_keys
 
     def _get_edges_by_probs(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
@@ -491,6 +492,8 @@ class BaselineAggLSTM4(BaseModel):
         neigh_keys = neigh_keys.reshape(B * max_n_neighs)
         # neighs.shape == [batch_size * max_n_neighs, seq_len]
 
+        out_neigh_keys = neigh_keys.cpu().numpy()
+
         neighs = neighs[n_masks]
         parents = parents[n_masks.cpu().numpy()]
         neigh_keys = neigh_keys[n_masks]
@@ -519,13 +522,14 @@ class BaselineAggLSTM4(BaseModel):
 
             sampled_keys = neigh_keys[idx].cpu().tolist()
 
-            Xm_2, masks_2 = self._construct_neighs(
+            Xm_2, masks_2, _ = self._construct_neighs(
                 Xn[idx], sampled_keys, start, total_len,
                 level + 1, parents[idx])
             if self.agg_type == 'mean':
                 Xm_2 = self._aggregate_mean(Xm_2, masks_2)
             elif self.agg_type == 'attention':
-                Xm_2 = self._aggregate_attn(Xn[idx], Xm_2, masks_2, level + 1)
+                Xm_2, _ = self._aggregate_attn(
+                    Xn[idx], Xm_2, masks_2, level + 1)
             elif self.agg_type in ['gat', 'sage']:
                 Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2, level + 1)
             Xn[idx] = self._pool(Xn[idx], Xm_2).type_as(Xn)
@@ -565,7 +569,7 @@ class BaselineAggLSTM4(BaseModel):
 
         masks = torch.from_numpy(masks).to(X.device)
 
-        return Xm, masks
+        return Xm, masks, out_neigh_keys
 
     def _pool(self, X, Xn):
         X_out = X + Xn
@@ -610,10 +614,14 @@ class BaselineAggLSTM4(BaseModel):
         key_padding_mask = masks.transpose(1, 2).reshape(B * T, N)
         # key_padding_mask.shape == [n_neighs, batch_size  * seq_len]
 
+        return_weights = self.evaluate_mode
+
         if level == 1:
-            X_attn, _ = self.attn(X, Xn, Xn, key_padding_mask, False)
+            X_attn, scores = self.attn(
+                X, Xn, Xn, key_padding_mask, return_weights)
         elif level == 2:
-            X_attn, _ = self.attn2(X, Xn, Xn, key_padding_mask, False)
+            X_attn, scores = self.attn2(
+                X, Xn, Xn, key_padding_mask, return_weights)
 
         # X_attn.shape == [1, batch_size * seq_len, hidden_size]
 
@@ -621,7 +629,10 @@ class BaselineAggLSTM4(BaseModel):
 
         X_out = F.gelu(X_out).type_as(X)
 
-        return X_out
+        if scores is not None:
+            scores = scores.cpu().numpy()
+
+        return X_out, scores
 
     def _aggregate_gat(self, X, Xn, masks, level):
         # X.shape == [batch_size, seq_len, hidden_size]
@@ -773,7 +784,7 @@ class BaselineAggLSTM4(BaseModel):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         if self.agg_type != 'none':
-            X_agg = self._get_neighbour_embeds(
+            X_agg, _, _ = self._get_neighbour_embeds(
                 X, keys, start, self.total_length)
             # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
@@ -814,6 +825,7 @@ class BaselineAggLSTM4(BaseModel):
             current_views = series[:, -1]
             all_f_parts = [[[] for _ in range(self.n_layers + 1)]
                            for _ in keys]
+            all_scores = []
             for i in range(self.forecast_length):
                 X, pred, f_parts = self._forward_full(series)
                 pred = pred[:, -1]
@@ -822,15 +834,18 @@ class BaselineAggLSTM4(BaseModel):
                         all_f_parts[b][l].append(f_part[b])
                 if self.agg_type != 'none':
                     seq_len = self.total_length - self.forecast_length + i + 1
-                    X_agg = self._get_neighbour_embeds(
+                    X_agg, scores, neigh_keys = self._get_neighbour_embeds(
                         X, keys, start, seq_len)
                     X_agg = self.fc(X_agg)
                     X_agg = X_agg.squeeze(-1)[:, -1]
+                    if scores is not None:
+                        scores = scores[:, -1].tolist()
                     pred = pred + X_agg
                     # delta.shape == [batch_size]
 
                     for b, f in enumerate(X_agg.cpu().tolist()):
                         all_f_parts[b][-1].append(f)
+                    all_scores.append(scores)
 
                 current_views = pred
                 preds[:, i] = current_views
@@ -857,6 +872,8 @@ class BaselineAggLSTM4(BaseModel):
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
             out_dict['f_parts'] = all_f_parts
+            out_dict['neigh_keys'] = neigh_keys.tolist()
+            out_dict['all_scores'] = all_scores
             self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
 
             for k in self.test_lengths:

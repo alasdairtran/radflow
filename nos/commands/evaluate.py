@@ -116,6 +116,8 @@ def evaluate(model: Model,
         preds_all = []
         keys = []
         f_parts = []
+        neigh_keys = []
+        all_scores = []
         for batch in generator_tqdm:
             batch_count += 1
             batch = nn_util.move_to_device(batch, cuda_device)
@@ -135,6 +137,12 @@ def evaluate(model: Model,
 
             if 'preds_all' in output_dict:
                 preds_all += output_dict['preds_all']
+
+            if 'neigh_keys' in output_dict:
+                neigh_keys += output_dict['neigh_keys']
+
+            if 'all_scores' in output_dict:
+                all_scores += output_dict['all_scores']
 
             metrics = model.get_metrics()
 
@@ -166,6 +174,8 @@ def evaluate(model: Model,
         final_metrics['preds'] = preds
         final_metrics['preds_all'] = preds_all
         final_metrics['f_parts'] = f_parts
+        final_metrics['neigh_keys'] = neigh_keys
+        final_metrics['all_scores'] = all_scores
 
         keys = [int(k) for k in keys]
         final_metrics['keys'] = keys
