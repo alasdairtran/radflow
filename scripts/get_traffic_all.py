@@ -180,6 +180,11 @@ def generate_hdf5(mongo_host):
     f = h5py.File('data/wiki/views_all.hdf5', 'a')
     f.create_dataset('views', dtype=np.int32, data=views)
 
+    views_2 = views[:, :, :2].copy()
+    views_2[:, :, 1] = views_2[:, :, 1] + views[:, :, 2]
+    f2 = h5py.File('data/wiki/views_split.hdf5', 'a')
+    f2.create_dataset('views', dtype=np.int32, data=views_2)
+
 
 def validate(args):
     """Validate command line arguments."""
