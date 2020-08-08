@@ -481,6 +481,7 @@ class BaselineAggLSTM4(BaseModel):
                     n_masks[i, j] = True
                     neigh_keys[i, j] = n
 
+        out_neigh_keys = neigh_keys.cpu().numpy()
         neighs = torch.from_numpy(neighs).to(X.device)
         if self.views_all:
             neighs = neighs.reshape(
@@ -491,8 +492,6 @@ class BaselineAggLSTM4(BaseModel):
         parents = parents.reshape(B * max_n_neighs)
         neigh_keys = neigh_keys.reshape(B * max_n_neighs)
         # neighs.shape == [batch_size * max_n_neighs, seq_len]
-
-        out_neigh_keys = neigh_keys.cpu().numpy()
 
         neighs = neighs[n_masks]
         parents = parents[n_masks.cpu().numpy()]
@@ -630,6 +629,7 @@ class BaselineAggLSTM4(BaseModel):
         X_out = F.gelu(X_out).type_as(X)
 
         if scores is not None:
+            scores = scores.reshape(B, T, -1)
             scores = scores.cpu().numpy()
 
         return X_out, scores
@@ -825,7 +825,7 @@ class BaselineAggLSTM4(BaseModel):
             current_views = series[:, -1]
             all_f_parts = [[[] for _ in range(self.n_layers + 1)]
                            for _ in keys]
-            all_scores = []
+            all_scores = [[] for _ in keys]
             for i in range(self.forecast_length):
                 X, pred, f_parts = self._forward_full(series)
                 pred = pred[:, -1]
@@ -845,7 +845,7 @@ class BaselineAggLSTM4(BaseModel):
 
                     for b, f in enumerate(X_agg.cpu().tolist()):
                         all_f_parts[b][-1].append(f)
-                    all_scores.append(scores)
+                        all_scores[b].append(scores[b])
 
                 current_views = pred
                 preds[:, i] = current_views
