@@ -12,7 +12,7 @@ model:
   type: baseline_agg_lstm_4
   data_path: ./data/wiki/wiki.hdf5
   key2pos_path: ./data/wiki/key2pos.pkl
-  train_edges_ns: train_edges
+  test_keys_path: ./data/wiki/node_ids/test_ids.pkl
   series_len: 1827
   agg_type: attention
   peek: true
