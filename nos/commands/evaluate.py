@@ -45,9 +45,13 @@ def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='',
     vocab = Vocabulary.from_params(config.pop('vocabulary'))
 
     model = Model.from_params(vocab=vocab, params=config.pop('model'))
+    if torch.cuda.is_available():
+        device = torch.device(f'cuda:{device}')
+    else:
+        device = torch.device('cpu')
 
     if model_path:
-        best_model_state = torch.load(model_path)
+        best_model_state = torch.load(model_path, device)
         model.load_state_dict(best_model_state)
 
     instances = all_datasets.get('test')
