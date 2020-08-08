@@ -54,7 +54,7 @@ class BaselineAggLSTM2(BaseModel):
                  max_eval_neighbours: int = 16,
                  edge_selection_method: str = 'prob',
                  cut_off_edge_prob: float = 0.9,
-                 hop_scale: int = 4,
+                 hop_scale: int = 1,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
                  static_graph: bool = False,
@@ -146,6 +146,11 @@ class BaselineAggLSTM2(BaseModel):
                 self.attn2 = nn.MultiheadAttention(
                     hidden_size * 2, 4, dropout=0.1, bias=True,
                     add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+            elif agg_type == 'sage':
+                self.conv2 = SAGEConv(hidden_size * 3, hidden_size * 3)
+            elif agg_type == 'gat':
+                self.conv2 = GATConv(hidden_size * 3, hidden_size * 3 // 4,
+                                     heads=4, dropout=0.1)
 
         self.series_len = series_len
         self.max_start = series_len - self.forecast_length * \
@@ -182,7 +187,7 @@ class BaselineAggLSTM2(BaseModel):
         elif self.agg_type == 'attention':
             Xm = self._aggregate_attn(X, Xm, masks, 1)
         elif self.agg_type in ['gat', 'sage']:
-            Xm = self._aggregate_gat(X, Xm, masks)
+            Xm = self._aggregate_gat(X, Xm, masks, 1)
 
         X_out = self._pool(X, Xm, 1)
         return X_out
@@ -375,7 +380,7 @@ class BaselineAggLSTM2(BaseModel):
             elif self.agg_type == 'attention':
                 Xm_2 = self._aggregate_attn(Xn[idx], Xm_2, masks_2, level + 1)
             elif self.agg_type in ['gat', 'sage']:
-                Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2)
+                Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2, level + 1)
             X_out = self._pool(Xn[idx], Xm_2, level + 1)
             Xn = Xn.clone()
             Xn[idx] = X_out
@@ -482,7 +487,7 @@ class BaselineAggLSTM2(BaseModel):
 
         return X_out
 
-    def _aggregate_gat(self, X, Xn, masks):
+    def _aggregate_gat(self, X, Xn, masks, level):
         # X.shape == [batch_size, seq_len, hidden_size]
         # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
         # masks.shape == [batch_size, n_neighs, seq_len]
@@ -513,7 +518,12 @@ class BaselineAggLSTM2(BaseModel):
         nodes = torch.cat([X_in, Xn], dim=0)
         # nodes.shape == [BT + BNT, hidden_size]
 
-        nodes = self.conv(nodes, edges)
+        if level == 1:
+            nodes = self.conv(nodes, edges)
+        elif level == 2:
+            nodes = self.conv2(nodes, edges)
+        else:
+            raise NotImplementedError()
         # nodes.shape == [BT + BNT, hidden_size]
 
         nodes = nodes[:B * T]

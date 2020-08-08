@@ -177,7 +177,7 @@ class BaselineAggLSTM4(BaseModel):
                  max_eval_neighbours: int = 16,
                  edge_selection_method: str = 'prob',
                  cut_off_edge_prob: float = 0.9,
-                 hop_scale: int = 4,
+                 hop_scale: int = 1,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
                  variant: str = 'full',
