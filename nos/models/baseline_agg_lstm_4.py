@@ -551,6 +551,8 @@ class BaselineAggLSTM4(BaseModel):
                 seeds = [key, self.epoch, int(self.history['_n_samples']),
                          level, 124241]
                 edge_rs = np.random.RandomState(seeds)
+                D, N = n_mask.shape
+                n_mask = n_mask.reshape(-1)
                 edge_idx = (~n_mask).nonzero()[0]
                 size = int(round(len(edge_idx) * self.edge_missing_p))
                 if size > 0:
@@ -558,6 +560,7 @@ class BaselineAggLSTM4(BaseModel):
                                                 replace=False,
                                                 size=size)
                     n_mask[delete_idx] = True
+                n_mask = n_mask.reshape(D, N)
             for i, k in enumerate(key_neighs[key]):
                 mask = n_mask[:, self.key2pos[key][k]]
                 if self.peek:
