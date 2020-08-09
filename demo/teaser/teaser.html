@@ -1515,7 +1515,7 @@
       {
         id: "d0",
         kind: "decomposition",
-        title: "Decomposed Forecasts",
+        title: "Layer 1",
         fx: 900,
         fy: 142,
         series: [
@@ -1552,6 +1552,7 @@
       {
         id: "d1",
         kind: "decomposition",
+        title: "Layer 2",
         fx: 900,
         fy: 192,
         series: [
@@ -1588,6 +1589,7 @@
       {
         id: "d2",
         kind: "decomposition",
+        title: "Layer 3",
         fx: 900,
         fy: 242,
         series: [
@@ -1624,6 +1626,7 @@
       {
         id: "d3",
         kind: "decomposition",
+        title: "Layer 4",
         fx: 900,
         fy: 292,
         series: [
@@ -1660,6 +1663,7 @@
       {
         id: "d4",
         kind: "decomposition",
+        title: "Layer 5",
         fx: 900,
         fy: 342,
         series: [
@@ -1696,6 +1700,7 @@
       {
         id: "d5",
         kind: "decomposition",
+        title: "Layer 6",
         fx: 900,
         fy: 392,
         series: [
@@ -1732,6 +1737,7 @@
       {
         id: "d6",
         kind: "decomposition",
+        title: "Layer 7",
         fx: 900,
         fy: 442,
         series: [
@@ -1768,6 +1774,7 @@
       {
         id: "d7",
         kind: "decomposition",
+        title: "Layer 8",
         fx: 900,
         fy: 492,
         series: [
@@ -1804,6 +1811,7 @@
       {
         id: "d8",
         kind: "decomposition",
+        title: "Aggregation Layer",
         fx: 900,
         fy: 542,
         series: [
@@ -2277,6 +2285,8 @@
     .style("font-size", (n) => {
       if (n.kind == "concat") {
         return 40;
+      } else if (n.kind == "decomposition") {
+        return 10;
       } else {
         return 14;
       }
@@ -2443,6 +2453,8 @@
         }
         if (d.kind == "concat") {
           return d.y + 26;
+        } else if (d.kind == "decomposition") {
+          return d.y + 10;
         } else {
           return d.y - 10;
         }
@@ -2452,18 +2464,18 @@
   // Vertical dashed line
   g.append("line")
     .attr("x1", 700)
-    .attr("y1", 50)
+    .attr("y1", 80)
     .attr("x2", 700)
-    .attr("y2", 650)
+    .attr("y2", 620)
     .style("stroke", "#003A5D")
     .style("stroke-width", 1)
     .style("stroke-dasharray", 5);
 
   g.append("line")
     .attr("x1", 1080)
-    .attr("y1", 50)
+    .attr("y1", 80)
     .attr("x2", 1080)
-    .attr("y2", 650)
+    .attr("y2", 620)
     .style("stroke", "#003A5D")
     .style("stroke-width", 1)
     .style("stroke-dasharray", 5);
@@ -2474,7 +2486,7 @@
     .style("font-family", "Helvetica")
     .style("font-size", 18)
     .attr("dx", 400)
-    .attr("dy", 70);
+    .attr("dy", 90);
 
   g.append("text")
     .text("(B)")
@@ -2482,7 +2494,7 @@
     .style("font-family", "Helvetica")
     .style("font-size", 18)
     .attr("dx", 870)
-    .attr("dy", 70);
+    .attr("dy", 90);
 
   g.append("text")
     .text("(C)")
@@ -2490,7 +2502,15 @@
     .style("font-family", "Helvetica")
     .style("font-size", 18)
     .attr("dx", 1130)
-    .attr("dy", 70);
+    .attr("dy", 90);
+
+  g.append("text")
+    .text("Decomposed Forecasts")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 14)
+    .attr("dx", 870)
+    .attr("dy", 130);
 
   function dragstarted(d) {
     if (!d3.event.active) simulation.alphaTarget(0.3).restart();
