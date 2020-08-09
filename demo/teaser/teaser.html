@@ -16,8 +16,8 @@
         title: "Yellow vests movement",
         kind: "central",
         attn: 0,
-        fx: 620,
-        fy: 336,
+        fx: 568,
+        fy: 318,
         series: [
           1513,
           1460,
@@ -166,8 +166,8 @@
         title: "Arc de Triomphe",
         kind: "neighbor",
         attn: 0.0354412004484662,
-        fx: 390,
-        fy: 516,
+        fx: 369,
+        fy: 514,
         series: [
           1814,
           1974,
@@ -316,8 +316,8 @@
         title: "Joker (2019 film)",
         kind: "neighbor",
         attn: 0.02799676757838045,
-        fx: 600,
-        fy: 136,
+        fx: 543,
+        fy: 137,
         series: [
           62587,
           52933,
@@ -616,8 +616,8 @@
         title: "Turning Point USA",
         kind: "neighbor",
         attn: 0.03140008707331227,
-        fx: 122,
-        fy: 523,
+        fx: 152,
+        fy: 519,
         series: [
           1715,
           1599,
@@ -916,8 +916,8 @@
         title: "Neoliberalism",
         kind: "neighbor",
         attn: 0.04064391067783747,
-        fx: 237,
-        fy: 401,
+        fx: 250,
+        fy: 393,
         series: [
           4271,
           3790,
@@ -1066,7 +1066,7 @@
         title: "Michel Houellebecq",
         kind: "neighbor",
         attn: 0.021066951266090785,
-        fx: 427,
+        fx: 398,
         fy: 134,
         series: [
           529,
@@ -1216,8 +1216,8 @@
         title: "Black bloc",
         kind: "neighbor",
         attn: 0.03216394981635468,
-        fx: 579,
-        fy: 511,
+        fx: 514,
+        fy: 510,
         series: [
           256,
           278,
@@ -1366,8 +1366,8 @@
         title: "Yellow",
         kind: "neighbor",
         attn: 0.019883899749921902,
-        fx: 320,
-        fy: 266,
+        fx: 294,
+        fy: 259,
         series: [
           860,
           813,
@@ -1511,6 +1511,7 @@
           613,
         ],
       },
+      { id: "model", kind: "module", fx: 723, fy: 318 },
       {
         id: "d0",
         kind: "decomposition",
@@ -1927,6 +1928,60 @@
         target: 12061,
         weight: 840,
       },
+      {
+        kind: "decompose",
+        source: 2367,
+        target: "model",
+        weight: 400,
+      },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d0",
+        weight: 200,
+      },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d1",
+        weight: 200,
+      },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d2",
+        weight: 200,
+      },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d3",
+        weight: 200,
+      },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d4",
+        weight: 200,
+      },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d5",
+        weight: 200,
+      },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d6",
+        weight: 200,
+      },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d7",
+        weight: 200,
+      },
     ],
   };
 
@@ -1988,6 +2043,8 @@
         return 100;
       } else if (n.kind === "decomposition") {
         return 40;
+      } else if (n.kind === "module") {
+        return 100;
       }
     })
     .attr("stroke", "#000")
@@ -2083,6 +2140,9 @@
     });
 
     path.attr("d", function (n, i) {
+      if (n.kind == "module") {
+        return;
+      }
       let xDomain = [0, 112];
       let yDomain = [0, d3.max(n.series)];
       let height = 100;
