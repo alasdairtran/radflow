@@ -848,7 +848,7 @@ class BaselineAggLSTM4(BaseModel):
                         if scores is not None:
                             all_scores[b].append(scores[b])
                 else:
-                    neigh_keys = numpy.array([])
+                    neigh_keys = np.array([])
 
                 current_views = pred
                 preds[:, i] = current_views
