@@ -2025,6 +2025,7 @@
 
   const attnColor = d3.scaleSequential(d3.interpolateBlues).domain([0, 0.05]);
   const edgeWidth = d3.scaleLinear().domain([100, 576]).range([0, 5]);
+  const nodeWidth = 90;
 
   // set the dimensions and margins of the graph
   var margin = { top: 10, right: 30, bottom: 30, left: 30 },
@@ -2075,16 +2076,16 @@
     .data(data.nodes)
     .enter()
     .append("rect")
-    .attr("width", 100)
+    .attr("width", nodeWidth)
     .attr("height", (n) => {
       if (n.kind === "neighbor" || n.kind == "central") {
-        return 100;
+        return nodeWidth;
       } else if (n.kind === "decomposition") {
         return 40;
       } else if (n.kind === "module") {
-        return 100;
+        return nodeWidth;
       } else if (n.kind === "forecast") {
-        return 100;
+        return nodeWidth;
       }
     })
     .attr("stroke", "#000")
@@ -2149,32 +2150,32 @@
   function ticked() {
     link
       .attr("x1", function (d) {
-        return d.source.x + 50;
+        return d.source.x + nodeWidth / 2;
       })
       .attr("y1", function (d) {
-        return d.source.y + 50;
+        return d.source.y + nodeWidth / 2;
       })
       .attr("x2", function (d) {
         var inter = pointOnRect(
           d.source.x,
           d.source.y,
-          d.target.x - 50,
-          d.target.y - 50,
-          d.target.x + 50,
-          d.target.y + 50
+          d.target.x - nodeWidth / 2,
+          d.target.y - nodeWidth / 2,
+          d.target.x + nodeWidth / 2,
+          d.target.y + nodeWidth / 2
         );
-        return inter.x + 50;
+        return inter.x + nodeWidth / 2;
       })
       .attr("y2", function (d) {
         var inter = pointOnRect(
           d.source.x,
           d.source.y,
-          d.target.x - 50,
-          d.target.y - 50,
-          d.target.x + 50,
-          d.target.y + 50
+          d.target.x - nodeWidth / 2,
+          d.target.y - nodeWidth / 2,
+          d.target.x + nodeWidth / 2,
+          d.target.y + nodeWidth / 2
         );
-        return inter.y + 50;
+        return inter.y + nodeWidth / 2;
       });
 
     node.attr("transform", function (d) {
@@ -2187,7 +2188,7 @@
       }
       let xDomain = [0, 112];
       let yDomain = [0, d3.max(n.series)];
-      let height = 100;
+      let height = nodeWidth;
       let yRange = [n.y + height, n.y];
       let series = n.series.slice(0, -28);
       if (n.kind === "decomposition") {
@@ -2199,7 +2200,7 @@
       } else if (n.kind === "forecast") {
         xDomain = [0, 28];
         yDomain = [d3.min(n.series), d3.max(n.series) * 1.05];
-        height = 100;
+        height = nodeWidth;
         yRange = [n.y + height, n.y];
         series = n.series;
       }
@@ -2207,7 +2208,7 @@
       var x = d3
         .scaleLinear()
         .domain(xDomain)
-        .range([n.x + 1, n.x + 100]);
+        .range([n.x, n.x + nodeWidth]);
       var y = d3.scaleLinear().domain(yDomain).range(yRange);
       return d3
         .area()
@@ -2220,7 +2221,7 @@
         .y0(n.y + height)(series);
     });
 
-    text.attr("x", (d) => d.x + 50).attr("y", (d) => d.y - 10);
+    text.attr("x", (d) => d.x + nodeWidth / 2).attr("y", (d) => d.y - 10);
   }
 
   function dragstarted(d) {
