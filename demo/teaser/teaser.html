@@ -1847,7 +1847,7 @@
       {
         id: "forecast",
         kind: "forecast",
-        title: "28-Day Forecasts",
+        title: "Final Forecasts",
         fx: 1100,
         fy: 318,
         series: [
@@ -1977,7 +1977,7 @@
         kind: "decompose",
         source: 2367,
         target: "model",
-        weight: 400,
+        weight: 200,
       },
       {
         kind: "decompose",
@@ -2401,6 +2401,49 @@
         }
       });
   }
+
+  // Vertical dashed line
+  g.append("line")
+    .attr("x1", 700)
+    .attr("y1", 50)
+    .attr("x2", 700)
+    .attr("y2", 650)
+    .style("stroke", "#003A5D")
+    .style("stroke-width", 1)
+    .style("stroke-dasharray", 5);
+
+  g.append("line")
+    .attr("x1", 1080)
+    .attr("y1", 50)
+    .attr("x2", 1080)
+    .attr("y2", 650)
+    .style("stroke", "#003A5D")
+    .style("stroke-width", 1)
+    .style("stroke-dasharray", 5);
+
+  g.append("text")
+    .text("(A)")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 18)
+    .attr("dx", 400)
+    .attr("dy", 70);
+
+  g.append("text")
+    .text("(B)")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 18)
+    .attr("dx", 870)
+    .attr("dy", 70);
+
+  g.append("text")
+    .text("(C)")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 18)
+    .attr("dx", 1130)
+    .attr("dy", 70);
 
   function dragstarted(d) {
     if (!d3.event.active) simulation.alphaTarget(0.3).restart();
