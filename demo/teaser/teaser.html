@@ -1973,6 +1973,8 @@
         target: 12061,
         weight: 840,
       },
+    ],
+    edges: [
       {
         kind: "decompose",
         source: 2367,
@@ -2148,6 +2150,19 @@
       }
     });
 
+  var edge = g
+    .selectAll("edge")
+    .data(data.edges)
+    .enter()
+    .append("line")
+    .style("stroke", "#aaa")
+    .attr("stroke-width", (n) => edgeWidth(n.weight))
+    .attr("marker-end", (n) => {
+      if (n.kind === "neighbor") {
+        return "url(#end)";
+      }
+    });
+
   // Initialize the nodes
   var node = g
     .selectAll("rect")
@@ -2219,7 +2234,7 @@
         }) // This provide  the id of a node
         .distance(50)
         .strength(0.1)
-        .links(data.links) // and this the list of links
+        .links(data.links.concat(data.edges)) // and this the list of links
     )
     .force("charge", d3.forceManyBody().strength(-1000)) // This adds repulsion between nodes. Play with the -400 for the repulsion strength
     .force("center", d3.forceCenter(width / 2, height / 2)) // This force attracts nodes to the center of the svg area
@@ -2270,6 +2285,38 @@
   // This function is run at each iteration of the force algorithm, updating the nodes position.
   function ticked() {
     link
+      .attr("x1", function (d) {
+        return d.source.x + nodeWidth / 2;
+      })
+      .attr("y1", function (d) {
+        return d.source.y + nodeWidth / 2;
+      })
+      .attr("x2", function (d) {
+        let halfHeight = nodeWidth / 2;
+        var inter = pointOnRect(
+          d.source.x,
+          d.source.y,
+          d.target.x - nodeWidth / 2,
+          d.target.y - halfHeight,
+          d.target.x + nodeWidth / 2,
+          d.target.y + halfHeight
+        );
+        return inter.x + nodeWidth / 2;
+      })
+      .attr("y2", function (d) {
+        let halfHeight = nodeWidth / 2;
+        var inter = pointOnRect(
+          d.source.x,
+          d.source.y,
+          d.target.x - nodeWidth / 2,
+          d.target.y - halfHeight,
+          d.target.x + nodeWidth / 2,
+          d.target.y + halfHeight
+        );
+        return inter.y + halfHeight;
+      });
+
+    edge
       .attr("x1", function (d) {
         if (d.target.kind == "decomposition") {
           return d.source.x + nodeWidth;
