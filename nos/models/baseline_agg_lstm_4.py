@@ -846,6 +846,8 @@ class BaselineAggLSTM4(BaseModel):
                     for b, f in enumerate(X_agg.cpu().tolist()):
                         all_f_parts[b][-1].append(f)
                         all_scores[b].append(scores[b])
+                else:
+                    neigh_keys = numpy.array([])
 
                 current_views = pred
                 preds[:, i] = current_views
