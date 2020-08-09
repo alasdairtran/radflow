@@ -2020,12 +2020,19 @@
         target: "d7",
         weight: 200,
       },
+      {
+        kind: "decompose",
+        source: "model",
+        target: "d8",
+        weight: 200,
+      },
     ],
   };
 
   const attnColor = d3.scaleSequential(d3.interpolateBlues).domain([0, 0.05]);
   const edgeWidth = d3.scaleLinear().domain([100, 576]).range([0, 5]);
   const nodeWidth = 90;
+  const layerHeight = 40;
 
   // set the dimensions and margins of the graph
   var margin = { top: 10, right: 30, bottom: 30, left: 30 },
@@ -2081,7 +2088,7 @@
       if (n.kind === "neighbor" || n.kind == "central") {
         return nodeWidth;
       } else if (n.kind === "decomposition") {
-        return 40;
+        return layerHeight;
       } else if (n.kind === "module") {
         return nodeWidth;
       } else if (n.kind === "forecast") {
@@ -2150,32 +2157,46 @@
   function ticked() {
     link
       .attr("x1", function (d) {
+        if (d.target.kind == "decomposition") {
+          return d.source.x + nodeWidth;
+        }
         return d.source.x + nodeWidth / 2;
       })
       .attr("y1", function (d) {
+        if (d.target.kind == "decomposition") {
+          return d.source.y + nodeWidth / 2;
+        }
         return d.source.y + nodeWidth / 2;
       })
       .attr("x2", function (d) {
+        if (d.target.kind == "decomposition") {
+          return d.target.x;
+        }
+        let halfHeight = nodeWidth / 2;
         var inter = pointOnRect(
           d.source.x,
           d.source.y,
           d.target.x - nodeWidth / 2,
-          d.target.y - nodeWidth / 2,
+          d.target.y - halfHeight,
           d.target.x + nodeWidth / 2,
-          d.target.y + nodeWidth / 2
+          d.target.y + halfHeight
         );
         return inter.x + nodeWidth / 2;
       })
       .attr("y2", function (d) {
+        if (d.target.kind == "decomposition") {
+          return d.target.y + layerHeight / 2;
+        }
+        let halfHeight = nodeWidth / 2;
         var inter = pointOnRect(
           d.source.x,
           d.source.y,
           d.target.x - nodeWidth / 2,
-          d.target.y - nodeWidth / 2,
+          d.target.y - halfHeight,
           d.target.x + nodeWidth / 2,
-          d.target.y + nodeWidth / 2
+          d.target.y + halfHeight
         );
-        return inter.y + nodeWidth / 2;
+        return inter.y + halfHeight;
       });
 
     node.attr("transform", function (d) {
@@ -2187,14 +2208,14 @@
         return;
       }
       let xDomain = [0, 112];
-      let yDomain = [0, d3.max(n.series)];
+      let yDomain = [0, d3.max(n.series) * 1.05];
       let height = nodeWidth;
       let yRange = [n.y + height, n.y];
       let series = n.series.slice(0, -28);
       if (n.kind === "decomposition") {
         xDomain = [0, 28];
         yDomain = [d3.min(n.series), d3.max(n.series) * 1.05];
-        height = 40;
+        height = layerHeight;
         yRange = [n.y + height, n.y];
         series = n.series;
       } else if (n.kind === "forecast") {
