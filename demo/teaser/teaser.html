@@ -1515,6 +1515,7 @@
       {
         id: "d0",
         kind: "decomposition",
+        title: "Decomposed Forecasts",
         fx: 900,
         fy: 150,
         series: [
@@ -1836,6 +1837,43 @@
           2.637256383895874,
         ],
       },
+      {
+        id: "forecast",
+        kind: "forecast",
+        title: "28-Day Forecasts",
+        fx: 1100,
+        fy: 318,
+        series: [
+          4535.53432803,
+          4342.49277797,
+          4360.22631886,
+          3855.58993975,
+          3331.39879299,
+          2973.06883911,
+          2633.54944613,
+          2372.27852941,
+          2079.95794287,
+          1887.97507007,
+          1760.74027842,
+          1845.87581827,
+          1816.03916925,
+          1608.52369587,
+          1525.26639635,
+          1500.44427627,
+          1424.97369872,
+          1309.7422961,
+          1403.62645201,
+          1393.97350238,
+          1328.77986823,
+          1264.19288251,
+          1197.53581105,
+          1150.97031292,
+          1138.6511319,
+          1260.2733701,
+          1263.73141834,
+          1166.83121442,
+        ],
+      },
     ],
     links: [
       {
@@ -2045,6 +2083,8 @@
         return 40;
       } else if (n.kind === "module") {
         return 100;
+      } else if (n.kind === "forecast") {
+        return 100;
       }
     })
     .attr("stroke", "#000")
@@ -2085,6 +2125,8 @@
       } else if (n.kind == "central") {
         return "orange";
       } else if (n.kind == "decomposition") {
+        return "orange";
+      } else if (n.kind == "forecast") {
         return "orange";
       }
     })
@@ -2152,6 +2194,12 @@
         xDomain = [0, 28];
         yDomain = [d3.min(n.series), d3.max(n.series) * 1.05];
         height = 40;
+        yRange = [n.y + height, n.y];
+        series = n.series;
+      } else if (n.kind === "forecast") {
+        xDomain = [0, 28];
+        yDomain = [d3.min(n.series), d3.max(n.series) * 1.05];
+        height = 100;
         yRange = [n.y + height, n.y];
         series = n.series;
       }
