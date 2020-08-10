@@ -335,6 +335,8 @@ class BaselineAggLSTM4(BaseModel):
             counter = {palette[i]: count for i, count in enumerate(counts)}
             if parent in counter:
                 del counter[parent]
+            if k in counter:  # self-loops
+                del counter[k]
 
             edge_counters.append(counter)
 
@@ -356,6 +358,8 @@ class BaselineAggLSTM4(BaseModel):
 
             if parent in counter:
                 del counter[parent]
+            if k in counter:  # self-loops
+                del counter[k]
 
             edge_counters.append(counter)
 
