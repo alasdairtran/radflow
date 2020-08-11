@@ -4,6 +4,7 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import seaborn as sns
 from wordcloud import STOPWORDS, WordCloud
 
@@ -218,6 +219,38 @@ def plot_wiki_smape_boxplots():
     fig.savefig('figures/smapes_pair.pdf')
 
 
+def plot_layer_decompositions():
+    path = 'expt/reports/wiki/no_hops/flow_lstm/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o3 = json.load(f)
+
+    col1_dict = defaultdict(list)
+    col2_dict = defaultdict(list)
+
+    for k_parts in o3['f_parts']:
+        for i, k_layer in enumerate(k_parts):
+            col1_dict[i] += list(range(28))
+            col2_dict[i] += k_layer
+            # len(k_layer) == 28
+
+    fig = plt.figure(figsize=(6, 3))
+
+    layer_pred_out = 1
+    order = [1, 2, 3, 4, 5, 6, 7, 8]
+    for i, o in enumerate(order):
+        ax = plt.subplot(2, 4, o)
+        df = pd.DataFrame({'time': col1_dict[i], 'obs': col2_dict[i]})
+        sns.lineplot(x="time", y="obs", data=df, ax=ax)
+        ax.set_title(o)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+
+    fig.tight_layout()
+    fig.savefig('figures/decomposition.pdf')
+
+
 def main():
     plot_missing_views()
     plot_missing_edges()
@@ -228,6 +261,7 @@ def main():
     generate_word_cloud('global_warming')
 
     plot_wiki_smape_boxplots()
+    plot_layer_decompositions()
 
 
 if __name__ == '__main__':
