@@ -2,6 +2,8 @@ import json
 import pickle
 from collections import defaultdict
 
+import h5py
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -251,6 +253,35 @@ def plot_layer_decompositions():
     fig.savefig('figures/decomposition.pdf')
 
 
+def plot_series_averages():
+    f = h5py.File('data/vevo/vevo.hdf5', 'r')
+    vevo_views = f['views'][...]
+    vevo_views = vevo_views.mean(0)
+
+    f = h5py.File('data/wiki/wiki.hdf5', 'r')
+    wiki_views = f['views'][...]
+    wiki_views = wiki_views.mean(0)
+
+    fig = plt.figure(figsize=(6, 3))
+    ax = plt.subplot(2, 1, 1)
+    ax.plot(vevo_views)
+    ax.set_xticks([0, 30, 62])
+    ax.set_xticklabels(['1 Sep 18', '1 Oct 18', '2 Nov 18'])
+    ax.set_xlim([0, 62])
+    ax.axvspan(56, 62, color='grey', alpha=0.3, lw=0)
+    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
+
+    ax = plt.subplot(2, 1, 2)
+    ax.plot(wiki_views[-182:])
+    ax.axvspan(154, 181, color='grey', alpha=0.3, lw=0)
+    ax.set_xlim([0, 181])
+    ax.set_xticks([0, 60, 121, 181])
+    ax.set_xticklabels(['1 Jan 20', '1 Mar 20', '1 May 20', '30 Jun 20'])
+    fig.tight_layout()
+
+    fig.savefig('figures/series_averages.pdf')
+
+
 def main():
     plot_missing_views()
     plot_missing_edges()
@@ -262,6 +293,7 @@ def main():
 
     plot_wiki_smape_boxplots()
     plot_layer_decompositions()
+    plot_series_averages()
 
 
 if __name__ == '__main__':
