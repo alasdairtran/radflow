@@ -1,5 +1,6 @@
 import json
 import pickle
+from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -132,6 +133,91 @@ def generate_word_cloud(seed):
     fig.savefig(f'figures/word_cloud_{seed}.pdf')
 
 
+def plot_wiki_smape_boxplots():
+    path = 'expt/reports/wiki/no_hops/flow_lstm/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o3 = json.load(f)
+
+    path = 'expt/reports/wiki/two_hops/flow_lstm/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o8 = json.load(f)
+
+    smapes_dict_agg = defaultdict(list)
+    smapes_dict_none = defaultdict(list)
+
+    node_ids = {}
+    with open('data/wiki/node_ids/global_health.pkl', 'rb') as f:
+        node_ids['health'] = pickle.load(f)
+    with open('data/wiki/node_ids/global_warming.pkl', 'rb') as f:
+        node_ids['warm'] = pickle.load(f)
+    with open('data/wiki/node_ids/programming_languages.pkl', 'rb') as f:
+        node_ids['program'] = pickle.load(f)
+    with open('data/wiki/node_ids/star_wars.pkl', 'rb') as f:
+        node_ids['star'] = pickle.load(f)
+
+    for k, ns, s in zip(o8['keys'], o8['neigh_keys'], o8['smapes']):
+        for cat in ['health', 'warm', 'program', 'star']:
+            if k in node_ids[cat]:
+                smapes_dict_agg[cat] += s
+
+    for k, s in zip(o3['keys'], o3['smapes']):
+        for cat in ['health', 'warm', 'program', 'star']:
+            if k in node_ids[cat]:
+                smapes_dict_none[cat] += s
+
+    fig = plt.figure(figsize=(6, 3))
+    ax = plt.subplot(1, 1, 1)
+
+    sns.set_palette("muted")
+    current_palette = sns.color_palette()
+
+    def setBoxColors(bp):
+        plt.setp(bp['boxes'][0], color=current_palette[0])
+        plt.setp(bp['caps'][0], color=current_palette[0])
+        plt.setp(bp['caps'][1], color=current_palette[0])
+        plt.setp(bp['whiskers'][0], color=current_palette[0])
+        plt.setp(bp['whiskers'][1], color=current_palette[0])
+        plt.setp(bp['means'][0], color=current_palette[0])
+        plt.setp(bp['medians'][0], color=current_palette[0])
+
+        plt.setp(bp['boxes'][1], color=current_palette[2])
+        plt.setp(bp['caps'][2], color=current_palette[2])
+        plt.setp(bp['caps'][3], color=current_palette[2])
+        plt.setp(bp['whiskers'][2], color=current_palette[2])
+        plt.setp(bp['whiskers'][3], color=current_palette[2])
+        plt.setp(bp['means'][1], color=current_palette[2])
+        plt.setp(bp['medians'][1], color=current_palette[2])
+
+    smapes_pair = [smapes_dict_none['health'], smapes_dict_agg['health']]
+    bp = ax.boxplot(smapes_pair, showfliers=False, meanline=True,
+                    showmeans=True, widths=0.7, positions=[1, 2])
+    setBoxColors(bp)
+
+    smapes_pair = [smapes_dict_none['warm'], smapes_dict_agg['warm']]
+    bp = ax.boxplot(smapes_pair, showfliers=False, meanline=True,
+                    showmeans=True, widths=0.7, positions=[4, 5])
+    setBoxColors(bp)
+
+    smapes_pair = [smapes_dict_none['program'], smapes_dict_agg['program']]
+    bp = ax.boxplot(smapes_pair, showfliers=False, meanline=True,
+                    showmeans=True, widths=0.7, positions=[7, 8])
+    setBoxColors(bp)
+
+    smapes_pair = [smapes_dict_none['star'], smapes_dict_agg['star']]
+    bp = ax.boxplot(smapes_pair, showfliers=False, meanline=True,
+                    showmeans=True, widths=0.7, positions=[10, 11])
+    setBoxColors(bp)
+
+    ax.set_xticks([1.5, 4.5, 7.5, 10.5])
+    ax.set_xticklabels(
+        ['Global Health', 'Global Warming', 'Programming', 'Star Wars'])
+    ax.set_ylabel('SMAPE-28')
+
+    fig.tight_layout()
+    plt.show()
+    fig.savefig('figures/smapes_pair.pdf')
+
+
 def main():
     plot_missing_views()
     plot_missing_edges()
@@ -140,6 +226,8 @@ def main():
     generate_word_cloud('programming_languages')
     generate_word_cloud('star_wars')
     generate_word_cloud('global_warming')
+
+    plot_wiki_smape_boxplots()
 
 
 if __name__ == '__main__':
