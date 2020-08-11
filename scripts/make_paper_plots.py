@@ -258,11 +258,11 @@ def plot_series_averages():
     vevo_views = f['views'][...]
     vevo_views = vevo_views.mean(0)
 
-    f = h5py.File('data/wiki/wiki.hdf5', 'r')
+    f = h5py.File('data/wiki/views_split.hdf5', 'r')
     wiki_views = f['views'][...]
     wiki_views = wiki_views.mean(0)
 
-    fig = plt.figure(figsize=(6, 3))
+    fig = plt.figure(figsize=(6, 3.5))
     ax = plt.subplot(2, 1, 1)
     ax.plot(vevo_views)
     ax.set_xticks([0, 30, 62])
@@ -272,7 +272,8 @@ def plot_series_averages():
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
 
     ax = plt.subplot(2, 1, 2)
-    ax.plot(wiki_views[-182:])
+    ax.plot(wiki_views[-182:, 0])
+    ax.plot(wiki_views[-182:, 1])
     ax.axvspan(154, 181, color='grey', alpha=0.3, lw=0)
     ax.set_xlim([0, 181])
     ax.set_xticks([0, 60, 121, 181])
