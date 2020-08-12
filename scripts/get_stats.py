@@ -31,8 +31,6 @@ def eccentricity(G, v=None, sp=None):
     ecc : dictionary
        A dictionary of eccentricity values keyed by node.
     """
-    order = G.order()
-
     e = {}
     for n in G.nbunch_iter(v):
         length = nx.single_source_shortest_path_length(G, n)
@@ -46,18 +44,7 @@ def eccentricity(G, v=None, sp=None):
 
 def get_stats(G):
     print(f'Number of nodes with edges:', len(G))
-
-    in_degrees = []
-    for n, deg in G.in_degree(None, weight=None):
-        in_degrees.append(deg)
-    avg_in_degree = sum(in_degrees) / len(in_degrees)
-    print(f'Average in-degree of nodes with edges:', avg_in_degree)
-
-    out_degrees = []
-    for n, deg in G.out_degree(None, weight=None):
-        out_degrees.append(deg)
-    avg_out_degree = sum(out_degrees) / len(out_degrees)
-    print(f'Average out-degree of nodes with edges:', avg_out_degree)
+    print(f'Number of edges:', G.number_of_edges())
 
     in_degrees = []
     for n, deg in G.in_degree(None, weight=None):
@@ -66,24 +53,6 @@ def get_stats(G):
     avg_in_degree = sum(in_degrees) / len(in_degrees)
     print(f'Number of nodes with incoming edges', len(in_degrees))
     print(f'Average in-degree of nodes with incoming edges:', avg_in_degree)
-
-    in_degrees = []
-    for n, deg in G.in_degree(None, weight=None):
-        in_neighbours = [pair[0] for pair in G.in_edges(n)]
-        neighbour_degrees = G.in_degree(in_neighbours)
-        in_degrees.append(sum(dict(neighbour_degrees).values()))
-    avg_in_degree = sum(in_degrees) / len(in_degrees)
-    print(f'Average 2-hop in-degree of nodes with edges:', avg_in_degree)
-
-    in_degrees = []
-    for n, deg in G.in_degree(None, weight=None):
-        in_neighbours = [pair[0] for pair in G.in_edges(n)]
-        neighbour_degrees = G.in_degree(in_neighbours)
-        d = sum(dict(neighbour_degrees).values())
-        if d > 0:
-            in_degrees.append(d)
-    avg_in_degree = sum(in_degrees) / len(in_degrees)
-    print(f'Average 2-hop in-degree of nodes with incoming edges:', avg_in_degree)
 
     # e = eccentricity(G)
     # print(f'Diameter:', max(e.values()))
