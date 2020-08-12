@@ -1,8 +1,12 @@
+import os
 import pickle
 
+import h5py
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 
 def eccentricity(G, v=None, sp=None):
@@ -106,35 +110,45 @@ def plot_degree_dist(G, topic):
     fig.savefig(f'{topic}_dist.png')
 
 
-def get_subwiki_stats(topic):
-    with open(f'data/wiki/subgraphs/{topic}.cleaned.pkl', 'rb') as f:
-        _, outlinks = pickle.load(f)
-
-    G = nx.DiGraph()
-    for source, targets in outlinks.items():
-        for target in targets:
-            G.add_edge(source, target)
-
-    print(f'{topic}')
-    get_stats(G)
-    print()
-
-    plot_degree_dist(G, topic)
-
-
 def get_vevo_stats():
-    df = pd.read_csv('data/persistent_network.csv')
-    G = nx.convert_matrix.from_pandas_edgelist(
-        df, 'Source', 'Target', create_using=nx.DiGraph)
+    path = "data/vevo/static_graph.gpickle"
 
-    get_stats(G)
+    if not os.path.exists(path):
+        f = h5py.File('data/vevo/vevo.hdf5', 'r')
+        edges = f['edges']
+        G = nx.DiGraph()
+        for target_id, neighs in tqdm(enumerate(edges)):
+            for n in np.unique(np.vstack(neighs)):
+                if n != -1:
+                    G.add_edge(n, target_id)
+        nx.write_gpickle(G, path)
+
+    G1 = nx.read_gpickle(path)
+
+    get_stats(G1)
+
+
+def get_wiki_stats():
+    path = "data/wiki/static_graph.gpickle"
+    if not os.path.exists(path):
+        f2 = h5py.File('data/wiki/wiki.hdf5', 'r')
+        edges2 = f2['edges']
+        G2 = nx.DiGraph()
+        for target_id, neighs in tqdm(enumerate(edges2)):
+            for n in np.unique(np.vstack(neighs)):
+                if n != -1:
+                    G2.add_edge(n, target_id)
+
+        nx.write_gpickle(G2, path)
+
+    G2 = nx.read_gpickle(path)
+
+    get_stats(G2)
 
 
 def main():
     get_vevo_stats()
-    get_subwiki_stats('Programming languages')
-    get_subwiki_stats('Star Wars')
-    get_subwiki_stats('Graph theory')
+    get_wiki_stats()
 
 
 if __name__ == '__main__':
