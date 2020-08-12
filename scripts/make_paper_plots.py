@@ -1,4 +1,5 @@
 import json
+import os
 import pickle
 from collections import defaultdict
 
@@ -8,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from tqdm import tqdm
 from wordcloud import STOPWORDS, WordCloud
 
 sns.set_style("ticks")
@@ -283,6 +285,62 @@ def plot_series_averages():
     fig.savefig('figures/series_averages.pdf')
 
 
+def plot_edge_dist():
+    f = h5py.File('data/vevo/vevo.hdf5', 'r')
+    f2 = h5py.File('data/wiki/wiki.hdf5', 'r')
+
+    masks = f['masks']
+    masks2 = f2['masks']
+
+    path = 'data/vevo/edge_counter.pkl'
+    if not os.path.exists(path):
+        counter = defaultdict(int)
+        for node_masks in tqdm(masks):
+            node_masks = ~np.vstack(node_masks).transpose()
+            for n_mask in node_masks:
+                counter[n_mask.sum()] += 1
+        with open(path, 'wb') as f:
+            pickle.dump(counter, f)
+
+    with open(path, 'rb') as f:
+        counter = pickle.load(f)
+
+    path = 'data/wiki/edge_counter.pkl'
+    if not os.path.exists(path):
+        counter2 = defaultdict(int)
+        for node_masks in tqdm(masks2):
+            node_masks = ~np.vstack(node_masks).transpose()
+            for n_mask in node_masks:
+                counter2[n_mask.sum()] += 1
+        with open(path, 'wb') as f:
+            pickle.dump(counter2, f)
+
+    with open(path, 'rb') as f:
+        counter2 = pickle.load(f)
+
+    fig = plt.figure(figsize=(6, 2.5))
+
+    ax = plt.subplot(1, 2, 1)
+    xs = range(1, 64)
+    ys = [counter[i] for i in range(1, 64)]
+    ax.plot(xs, ys)
+    ax.set_xlabel('Number of Days')
+    ax.set_ylabel('Number of Edges')
+    ax.set_yscale('log')
+
+    ax = plt.subplot(1, 2, 2)
+    xs = range(1, 1828)
+    ys = [counter2[i] for i in range(1, 1828)]
+    ax.plot(xs, ys)
+    ax.set_xlabel('Number of Days')
+    ylabels = ['{:,.0f}'.format(x) + 'K' for x in ax.get_yticks()/1000]
+    ax.set_yticklabels(ylabels)
+    ax.set_yscale('log')
+
+    fig.tight_layout()
+    fig.savefig('figures/edge_distribution.pdf')
+
+
 def main():
     plot_missing_views()
     plot_missing_edges()
@@ -295,6 +353,7 @@ def main():
     plot_wiki_smape_boxplots()
     plot_layer_decompositions()
     plot_series_averages()
+    plot_edge_dist()
 
 
 if __name__ == '__main__':
