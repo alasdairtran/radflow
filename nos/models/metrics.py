@@ -1,10 +1,14 @@
 import numpy as np
+import torch
 
 
-def get_smape(target_tensors, pred_tensors):
+def get_smape(targets, preds):
 
-    targets = target_tensors.cpu().numpy()
-    preds = pred_tensors.cpu().numpy()
+    if torch.is_tensor(targets):
+        targets = targets.cpu().numpy()
+
+    if torch.is_tensor(preds):
+        preds = preds.cpu().numpy()
 
     # percentage error, zero if both true and pred are zero
     numerator = np.abs(targets - preds)

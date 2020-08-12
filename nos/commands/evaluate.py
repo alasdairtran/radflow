@@ -122,6 +122,7 @@ def evaluate(model: Model,
         f_parts = []
         neigh_keys = []
         all_scores = []
+        arima_sums = []
         for batch in generator_tqdm:
             batch_count += 1
             batch = nn_util.move_to_device(batch, cuda_device)
@@ -147,6 +148,9 @@ def evaluate(model: Model,
 
             if 'all_scores' in output_dict:
                 all_scores += output_dict['all_scores']
+
+            if 'arima' in output_dict:
+                arima_sums += output_dict['arima']
 
             metrics = model.get_metrics()
 
@@ -180,6 +184,7 @@ def evaluate(model: Model,
         final_metrics['f_parts'] = f_parts
         final_metrics['neigh_keys'] = neigh_keys
         final_metrics['all_scores'] = all_scores
+        final_metrics['arima'] = arima_sums
 
         keys = [int(k) for k in keys]
         final_metrics['keys'] = keys
