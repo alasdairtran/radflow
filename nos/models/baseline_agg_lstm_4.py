@@ -296,7 +296,7 @@ class BaselineAggLSTM4(BaseModel):
             best_model_state = torch.load(base_model_weights, device)
             model.load_state_dict(best_model_state)
             model.eval().to(device)
-            self.base_model = model
+            self.base_model = {'model': model}
 
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
@@ -527,7 +527,7 @@ class BaselineAggLSTM4(BaseModel):
         neighs = torch.log1p(neighs)
 
         if self.base_model is not None:
-            preds = self.base_model.predict_no_agg(neighs[:, :-1], 1)
+            preds = self.base_model['model'].predict_no_agg(neighs[:, :-1], 1)
             neighs = torch.cat([neighs[:, :-1], preds], dim=1)
 
         Xn, _, _ = self._forward_full(neighs)
@@ -916,7 +916,10 @@ class BaselineAggLSTM4(BaseModel):
         return out_dict
 
     def predict_no_agg(self, series, n_steps):
-        preds = series.new_zeros(series.shape[0], n_steps)
+        if len(series.shape) == 3:
+            preds = series.new_zeros(series.shape[0], n_steps, series.shape[2])
+        else:
+            preds = series.new_zeros(series.shape[0], n_steps)
 
         for i in range(n_steps):
             X, pred, f_parts = self._forward_full(series)
