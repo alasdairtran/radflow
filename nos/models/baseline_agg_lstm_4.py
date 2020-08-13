@@ -22,6 +22,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import GATConv, SAGEConv
 from tqdm import tqdm
 
+from nos.commands.train import yaml_to_params
 from nos.modules.linear import GehringLinear
 from nos.utils import keystoint
 
@@ -166,6 +167,8 @@ class BaselineAggLSTM4(BaseModel):
                  peek: bool = True,
                  data_path: str = './data/vevo/vevo.hdf5',
                  key2pos_path: str = './data/vevo/vevo.key2pos.pkl',
+                 base_model_config: str = None,
+                 base_model_weights: str = None,
                  multi_views_path: str = None,
                  test_keys_path: str = None,
                  series_len: int = 63,
@@ -280,6 +283,20 @@ class BaselineAggLSTM4(BaseModel):
         self.register_buffer('_long', torch.LongTensor(1))
 
         initializer(self)
+
+        self.base_model = None
+        if base_model_config:
+            config = yaml_to_params(base_model_config)
+            vocab = Vocabulary.from_params(config.pop('vocabulary'))
+            model = Model.from_params(vocab=vocab, params=config.pop('model'))
+            if torch.cuda.is_available():
+                device = torch.device(f'cuda:0')
+            else:
+                device = torch.device('cpu')
+            best_model_state = torch.load(base_model_weights, device)
+            model.load_state_dict(best_model_state)
+            model.eval().to(device)
+            self.base_model = model
 
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
@@ -508,6 +525,11 @@ class BaselineAggLSTM4(BaseModel):
             return Xm, masks
 
         neighs = torch.log1p(neighs)
+
+        if self.base_model is not None:
+            preds = self.base_model.predict_no_agg(neighs[:, :-1], 1)
+            neighs = torch.cat([neighs[:, :-1], preds], dim=1)
+
         Xn, _, _ = self._forward_full(neighs)
         # Xn.shape == [neigh_batch_size, seq_len, hidden_size]
 
@@ -892,6 +914,19 @@ class BaselineAggLSTM4(BaseModel):
             self.current_t += 1
 
         return out_dict
+
+    def predict_no_agg(self, series, n_steps):
+        preds = series.new_zeros(series.shape[0], n_steps)
+
+        for i in range(n_steps):
+            X, pred, f_parts = self._forward_full(series)
+            pred = pred[:, -1]
+            current_views = pred
+            preds[:, i] = current_views
+            current_views = current_views.unsqueeze(1)
+            series = torch.cat([series, current_views], dim=1)
+
+        return preds
 
 
 class LSTMDecoder(nn.Module):
