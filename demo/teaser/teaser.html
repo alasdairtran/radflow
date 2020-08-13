@@ -2282,6 +2282,22 @@
     .attr("stroke-width", 0.5)
     .attr("stroke", "black");
 
+  var path2 = g
+    .selectAll("path2")
+    .data(data.nodes)
+    .enter()
+    .append("path")
+    .attr("fill", (n) => {
+      if (n.kind == "neighbor") {
+        return "#c6d9ec";
+      } else if (n.kind == "central") {
+        return "#ffdb99";
+      }
+    })
+    .attr("stroke", "black")
+    .attr("stroke-width", 0)
+    .attr("stroke", "black");
+
   const text = g
     .selectAll(".label")
     .data(data.nodes)
@@ -2418,7 +2434,7 @@
       let yDomain = [0, d3.max(n.series) * 1.05];
       let height = nodeWidth;
       let yRange = [n.y + height, n.y];
-      let series = n.series; //.slice(0, -28);
+      let series = n.series.slice(0, -28);
       if (n.kind === "decomposition") {
         xDomain = [0, 28];
         yDomain = [d3.min(n.series), d3.max(n.series) * 1.05];
@@ -2440,6 +2456,35 @@
         .area()
         .x(function (d, pos) {
           return x(pos);
+        })
+        .y1(function (d) {
+          return y(d);
+        })
+        .y0(n.y + height)(series);
+    });
+
+    path2.attr("d", function (n, i) {
+      if (
+        n.kind == "module" ||
+        n.kind == "concat" ||
+        n.kind == "decomposition" ||
+        n.kind == "forecast"
+      ) {
+        return;
+      }
+      let xDomain = [0, 140];
+      let xRange = [n.x, n.x + nodeWidth];
+      let yDomain = [0, d3.max(n.series) * 1.05];
+      let height = nodeWidth;
+      let yRange = [n.y + height, n.y];
+      let series = n.series.slice(-28);
+
+      var x = d3.scaleLinear().domain(xDomain).range(xRange);
+      var y = d3.scaleLinear().domain(yDomain).range(yRange);
+      return d3
+        .area()
+        .x(function (d, pos) {
+          return x(pos + 112);
         })
         .y1(function (d) {
           return y(d);
