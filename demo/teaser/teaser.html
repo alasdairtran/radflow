@@ -1896,54 +1896,63 @@
         source: 720,
         target: 353191,
         weight: 576,
+        attn: 0.0354412004484662,
       },
       {
         kind: "neighbor",
         source: 349594,
         target: 353191,
         weight: 150,
+        attn: 0.02799676757838045,
       },
       {
         kind: "neighbor",
         source: 315904,
         target: 353191,
         weight: 548,
+        attn: 0.022770619552050318,
       },
       {
         kind: "neighbor",
         source: 326280,
         target: 353191,
         weight: 570,
+        attn: 0.03140008707331227,
       },
       {
         kind: "neighbor",
         source: 336053,
         target: 353191,
         weight: 187,
+        attn: 0.016711919335648417,
       },
       {
         kind: "neighbor",
         source: 26466,
         target: 353191,
         weight: 217,
+        attn: 0.04064391067783747,
       },
       {
         kind: "neighbor",
         source: 38229,
         target: 353191,
         weight: 258,
+        attn: 0.021066951266090785,
       },
       {
         kind: "neighbor",
         source: 37948,
         target: 353191,
         weight: 462,
+        attn: 0.03216394981635468,
       },
       {
         kind: "neighbor",
         source: 12061,
         target: 353191,
         weight: 567,
+        attn: 0.019883899749921902,
       },
       {
         kind: "neighbor",
@@ -2107,7 +2116,7 @@
   };
 
   const attnColor = d3.scaleSequential(d3.interpolateBlues).domain([0, 0.05]);
-  const edgeWidth = d3.scaleLinear().domain([100, 576]).range([0, 5]);
+  const edgeWidth = d3.scaleLinear().domain([0, 0.04]).range([0, 4.5]);
   const nodeWidth = 90;
   const layerHeight = 40;
 
@@ -2151,7 +2160,7 @@
     .enter()
     .append("line")
     .style("stroke", "#aaa")
-    .attr("stroke-width", (n) => edgeWidth(n.weight))
+    .attr("stroke-width", (n) => edgeWidth(n.attn))
     .attr("marker-end", (n) => {
       if (n.kind === "neighbor") {
         return "url(#end)";
@@ -2164,7 +2173,7 @@
     .enter()
     .append("line")
     .style("stroke", "#aaa")
-    .attr("stroke-width", (n) => edgeWidth(n.weight))
+    .attr("stroke-width", 1)
     .attr("marker-end", (n) => {
       if (n.kind === "neighbor") {
         return "url(#end)";
@@ -2253,14 +2262,14 @@
     d3.drag().on("start", dragstarted).on("drag", dragging).on("end", dragended)
   );
 
-  var path = g
+  var path1 = g
     .selectAll("path")
     .data(data.nodes)
     .enter()
     .append("path")
     .attr("fill", (n) => {
       if (n.kind == "neighbor") {
-        return attnColor(n.attn);
+        return "#6699cc";
       } else if (n.kind == "central") {
         return "orange";
       } else if (n.kind == "decomposition") {
@@ -2400,15 +2409,16 @@
       return "translate(" + d.x + "," + d.y + ")";
     });
 
-    path.attr("d", function (n, i) {
+    path1.attr("d", function (n, i) {
       if (n.kind == "module" || n.kind == "concat") {
         return;
       }
-      let xDomain = [0, 112];
+      let xDomain = [0, 140];
+      let xRange = [n.x, n.x + nodeWidth];
       let yDomain = [0, d3.max(n.series) * 1.05];
       let height = nodeWidth;
       let yRange = [n.y + height, n.y];
-      let series = n.series.slice(0, -28);
+      let series = n.series; //.slice(0, -28);
       if (n.kind === "decomposition") {
         xDomain = [0, 28];
         yDomain = [d3.min(n.series), d3.max(n.series) * 1.05];
@@ -2417,16 +2427,14 @@
         series = n.series;
       } else if (n.kind === "forecast") {
         xDomain = [0, 28];
+        xRange = [n.x + nodeWidth - 28, n.x + nodeWidth];
         yDomain = [d3.min(n.series), d3.max(n.series) * 1.05];
         height = nodeWidth;
         yRange = [n.y + height, n.y];
         series = n.series;
       }
 
-      var x = d3
-        .scaleLinear()
-        .domain(xDomain)
-        .range([n.x, n.x + nodeWidth]);
+      var x = d3.scaleLinear().domain(xDomain).range(xRange);
       var y = d3.scaleLinear().domain(yDomain).range(yRange);
       return d3
         .area()
