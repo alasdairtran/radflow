@@ -37,6 +37,7 @@ class NewNaive(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  data_path: str = './data/vevo/vevo.hdf5',
+                 multi_views_path: str = None,
                  series_len: int = 63,
                  method: str = 'previous_day',
                  forecast_length: int = 7,
@@ -57,6 +58,9 @@ class NewNaive(BaseModel):
 
         self.data = h5py.File(data_path, 'r')
         self.series = self.data['views'][...]
+        self.views_all = None
+        if multi_views_path:
+            self.views_all = h5py.File(multi_views_path, 'r')['views']
 
         assert method in ['previous_day', 'previous_week']
 
@@ -68,26 +72,10 @@ class NewNaive(BaseModel):
         self.max_start = series_len - self.forecast_length * \
             2 - self.total_length - self.end_offset
 
-        if initializer:
-            initializer(self)
-
-    def _initialize_series(self):
-        if isinstance(next(iter(self.series.values())), torch.Tensor):
-            return
-
-        for k, v in self.series.items():
-            v_array = np.asarray(v)
-            self.series[k] = self._float.new_tensor(v_array)
-
-        self.max_start = len(
-            self.series[k]) - self.forecast_length * 2 - self.total_length - self.end_offset
-
     def forward(self, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
         # its gradient.
         # torch.autograd.set_detect_anomaly(True)
-
-        # self._initialize_series()
 
         # Occasionally we get duplicate keys due random sampling
         keys = sorted(set(keys))
@@ -114,26 +102,42 @@ class NewNaive(BaseModel):
             start = self.max_start + self.forecast_length * 2
 
         # Find all series of given keys
-        series_dict = {}
-        sorted_keys = sorted(keys)
         end = start + self.total_length
-        sorted_series = self.series[sorted_keys, start:end]
-        for i, k in enumerate(sorted_keys):
-            series_dict[sorted_keys[i]] = sorted_series[i]
 
-        series_list = np.array([series_dict[k] for k in keys])
-        series = torch.from_numpy(series_list)
-        # series.shape == [batch_size, total_length]
+        if self.views_all:
+            series = self.views_all[keys, start:end].astype(np.float32)
+        else:
+            series = self.series[keys, start:end].astype(np.float32)
+
+        if self.views_all:
+            B, S, E = series.shape
+            series = series.transpose((0, 2, 1)).reshape(B, E * S)
+            mask = series == -1
+            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+            np.maximum.accumulate(idx, axis=1, out=idx)
+            series = series[np.arange(idx.shape[0])[:, None], idx]
+            series = series.reshape(B, E, S).transpose((0, 2, 1))
+        else:
+            mask = series == -1
+            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+            np.maximum.accumulate(idx, axis=1, out=idx)
+            series = series[np.arange(idx.shape[0])[:, None], idx]
 
         sources = series[:, :self.backcast_length]
         targets = series[:, -self.forecast_length:]
         B = sources.shape[0]
         if self.method == 'previous_day':
             preds = sources[:, -1:]
-            preds = preds.expand(B, self.forecast_length)
+            if self.views_all:
+                preds = preds.expand(B, self.forecast_length, 2)
+            else:
+                preds = preds.expand(B, self.forecast_length)
         elif self.method == 'previous_week':
             preds = sources[:, -7:]
-            preds = preds.repeat(1, self.forecast_length // 7 + 1)
+            if self.views_all:
+                preds = preds.repeat(1, self.forecast_length // 7 + 1, 1)
+            else:
+                preds = preds.repeat(1, self.forecast_length // 7 + 1)
             preds = preds[:, :self.forecast_length]
 
         loss = self.mse(torch.log1p(preds.float()),
@@ -143,12 +147,22 @@ class NewNaive(BaseModel):
         # During evaluation, we compute one time step at a time
         if splits[0] in ['test']:
             smapes, daily_errors = get_smape(targets, preds)
+            # if self.views_all:
+            #     n_cats = smapes.shape[-1]
+            #     for i in range(n_cats):
+            #         for k in self.test_lengths:
+            #             self.step_history[f'smape_{i}_{k}'] += np.sum(
+            #                 smapes[:, :k, i])
 
             out_dict['smapes'] = smapes.tolist()
             out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
-            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+            if self.views_all:
+                self.history['_n_steps'] += smapes.shape[0] * \
+                    smapes.shape[1] * smapes.shape[2]
+            else:
+                self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
 
             for k in self.test_lengths:
                 self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
@@ -878,19 +892,14 @@ class BaselineAggLSTM4(BaseModel):
                 series = torch.cat([series, current_views], dim=1)
 
             preds = torch.exp(preds)
-            if self.views_all:
-                smapes, daily_errors = get_smape(targets, preds)
-                n_cats = smapes.shape[-1]
-                out_dict['smapes_all'] = smapes.tolist()
-                out_dict['preds_all'] = preds.cpu().numpy().tolist()
-                for i in range(n_cats):
-                    for k in self.test_lengths:
-                        self.step_history[f'smape_{i}_{k}'] += np.sum(
-                            smapes[:, :k, i])
 
-                targets = targets.sum(-1)
-                preds = preds.sum(-1)
             smapes, daily_errors = get_smape(targets, preds)
+            # if self.views_all:
+            #     n_cats = smapes.shape[-1]
+            #     for i in range(n_cats):
+            #         for k in self.test_lengths:
+            #             self.step_history[f'smape_{i}_{k}'] += np.sum(
+            #                 smapes[:, :k, i])
 
             out_dict['smapes'] = smapes.tolist()
             out_dict['daily_errors'] = daily_errors.tolist()
@@ -899,7 +908,11 @@ class BaselineAggLSTM4(BaseModel):
             out_dict['f_parts'] = all_f_parts
             out_dict['neigh_keys'] = neigh_keys.tolist()
             out_dict['all_scores'] = all_scores
-            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+            if self.views_all:
+                self.history['_n_steps'] += smapes.shape[0] * \
+                    smapes.shape[1] * smapes.shape[2]
+            else:
+                self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
 
             for k in self.test_lengths:
                 self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])

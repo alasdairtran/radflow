@@ -114,10 +114,8 @@ def evaluate(model: Model,
         total_weight = 0.0
 
         smape = []
-        smapes_all = []
         daily_errors = []
         preds = []
-        preds_all = []
         keys = []
         f_parts = []
         neigh_keys = []
@@ -136,12 +134,6 @@ def evaluate(model: Model,
 
             if 'f_parts' in output_dict:
                 f_parts += output_dict['f_parts']
-
-            if 'smapes_all' in output_dict:
-                smapes_all += output_dict['smapes_all']
-
-            if 'preds_all' in output_dict:
-                preds_all += output_dict['preds_all']
 
             if 'neigh_keys' in output_dict:
                 neigh_keys += output_dict['neigh_keys']
@@ -177,10 +169,8 @@ def evaluate(model: Model,
 
         final_metrics = model.get_metrics(reset=True)
         final_metrics['smapes'] = smape
-        final_metrics['smapes_all'] = smapes_all
         final_metrics['daily_errors'] = daily_errors
         final_metrics['preds'] = preds
-        final_metrics['preds_all'] = preds_all
         final_metrics['f_parts'] = f_parts
         final_metrics['neigh_keys'] = neigh_keys
         final_metrics['all_scores'] = all_scores

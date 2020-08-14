@@ -119,7 +119,8 @@ class BaselineAggLSTM2(BaseModel):
         with open(key2pos_path, 'rb') as f:
             self.key2pos = pickle.load(f)
 
-        input_size = 3 if self.views_all else 1
+        input_size = 2 if self.views_all else 1
+        self.input_size = input_size
         self.decoder = nn.LSTM(input_size, hidden_size, num_layers,
                                bias=True, batch_first=True, dropout=dropout)
 
@@ -185,6 +186,8 @@ class BaselineAggLSTM2(BaseModel):
 
         if len(inputs.shape) == 2:
             X = inputs.unsqueeze(-1)
+        else:
+            X = inputs
         # X.shape == [batch_size, seq_len, 1]
 
         X, _ = self.decoder(X)
@@ -305,7 +308,11 @@ class BaselineAggLSTM2(BaseModel):
             neigh_set |= set(kn)
             max_n_neighs = max(max_n_neighs, len(kn))
 
-        neighs = np.zeros((B, max_n_neighs, total_len), dtype=np.float32)
+        if self.views_all:
+            neighs = np.zeros((B, max_n_neighs, total_len, self.input_size),
+                              dtype=np.float32)
+        else:
+            neighs = np.zeros((B, max_n_neighs, total_len), dtype=np.float32)
         n_masks = X.new_zeros(B, max_n_neighs).bool()
         parents = np.full((B, max_n_neighs), -99, dtype=np.uint32)
         neigh_keys = X.new_full((B, max_n_neighs), -1).long()
@@ -313,7 +320,11 @@ class BaselineAggLSTM2(BaseModel):
         neigh_list = sorted(neigh_set)
         end = start + self.total_length
         neigh_map = {k: i for i, k in enumerate(neigh_list)}
-        neigh_series = self.series[neigh_list, start:end].astype(np.float32)
+        if self.views_all:
+            neigh_series = self.views_all[neigh_list, start:end]
+        else:
+            neigh_series = self.series[neigh_list, start:end]
+        neigh_series = neigh_series.astype(np.float32)
 
         if self.view_missing_p > 0:
             # Don't delete test data during evaluation
@@ -343,10 +354,23 @@ class BaselineAggLSTM2(BaseModel):
                 neigh_series = o_series
 
         if self.forward_fill:
-            mask = neigh_series == -1
-            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
-            np.maximum.accumulate(idx, axis=1, out=idx)
-            neigh_series = neigh_series[np.arange(idx.shape[0])[:, None], idx]
+            if self.views_all:
+                NB, NS, NE = neigh_series.shape
+                neigh_series = neigh_series.transpose(
+                    (0, 2, 1)).reshape(NB, NE * NS)
+                mask = neigh_series == -1
+                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+                np.maximum.accumulate(idx, axis=1, out=idx)
+                neigh_series = neigh_series[np.arange(idx.shape[0])[
+                    :, None], idx]
+                neigh_series = neigh_series.reshape(
+                    NB, NE, NS).transpose((0, 2, 1))
+            else:
+                mask = neigh_series == -1
+                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+                np.maximum.accumulate(idx, axis=1, out=idx)
+                neigh_series = neigh_series[np.arange(idx.shape[0])[
+                    :, None], idx]
 
         neigh_series[neigh_series == -1] = 0
 
@@ -359,7 +383,11 @@ class BaselineAggLSTM2(BaseModel):
                     neigh_keys[i, j] = n
 
         neighs = torch.from_numpy(neighs).to(X.device)
-        neighs = neighs.reshape(B * max_n_neighs, total_len)
+        if self.views_all:
+            neighs = neighs.reshape(
+                B * max_n_neighs, total_len, self.input_size)
+        else:
+            neighs = neighs.reshape(B * max_n_neighs, total_len)
         n_masks = n_masks.reshape(B * max_n_neighs)
         parents = parents.reshape(B * max_n_neighs)
         neigh_keys = neigh_keys.reshape(B * max_n_neighs)
@@ -643,9 +671,9 @@ class BaselineAggLSTM2(BaseModel):
                 series = series.reshape(B, E, S).transpose((0, 2, 1))
             else:
                 mask = series == -1
-            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
-            np.maximum.accumulate(idx, axis=1, out=idx)
-            series = series[np.arange(idx.shape[0])[:, None], idx]
+                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+                np.maximum.accumulate(idx, axis=1, out=idx)
+                series = series[np.arange(idx.shape[0])[:, None], idx]
 
         series[series == -1] = 0
         raw_series = torch.from_numpy(series).to(p.device)
@@ -667,8 +695,7 @@ class BaselineAggLSTM2(BaseModel):
         X_agg = self.fc(X_agg)
         # X_agg.shape == [batch_size, seq_len, 1]
 
-        if X_agg.shape[-1] == 1:
-            preds = X_agg.squeeze(-1)
+        preds = X_agg.squeeze(-1)
         preds = torch.exp(preds)
         # preds.shape == [batch_size, seq_len]
 
@@ -706,16 +733,26 @@ class BaselineAggLSTM2(BaseModel):
                 current_views = pred
                 preds[:, i] = current_views
                 series = torch.cat(
-                    [series, current_views.unsqueeze(-1)], dim=-1)
+                    [series, current_views.unsqueeze(1)], dim=1)
 
             preds = torch.exp(preds)
             smapes, daily_errors = get_smape(targets, preds)
+            # if self.views_all:
+            #     n_cats = smapes.shape[-1]
+            #     for i in range(n_cats):
+            #         for k in self.test_lengths:
+            #             self.step_history[f'smape_{i}_{k}'] += np.sum(
+            #                 smapes[:, :k, i])
 
             out_dict['smapes'] = smapes.tolist()
             out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
-            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+            if self.views_all:
+                self.history['_n_steps'] += smapes.shape[0] * \
+                    smapes.shape[1] * smapes.shape[2]
+            else:
+                self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
 
             for k in self.test_lengths:
                 self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
@@ -734,7 +771,7 @@ class BaselineAggLSTM2(BaseModel):
             current_views = pred
             preds[:, i] = current_views
             current_views = current_views.unsqueeze(1)
-            series = torch.cat([series, current_views.unsqueeze(-1)], dim=1)
+            series = torch.cat([series, current_views.unsqueeze(1)], dim=1)
 
         return preds
 

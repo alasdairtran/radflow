@@ -18,16 +18,38 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def train_arima(series, forecast_len, k):
-    # Ignore missing values
-    series = series[series > -1]
-    if len(series) == 0:
-        return [0] * forecast_len, ''
-    automodel = pm.auto_arima(np.log1p(series), m=7, seasonal=True,
-                              suppress_warnings=True)
-    preds = np.exp(automodel.predict(forecast_len)) - 1
-    summary = automodel.summary().as_text()
 
-    return k, preds, summary
+    if len(series.shape) == 1:
+        # Ignore missing values
+        series = series[series > -1]
+        if len(series) == 0:
+            return [0] * forecast_len, ''
+        automodel = pm.auto_arima(np.log1p(series), m=7, seasonal=True,
+                                  suppress_warnings=True)
+        preds = np.exp(automodel.predict(forecast_len)) - 1
+        summary = automodel.summary().as_text()
+
+        return k, preds, summary
+
+    else:
+        preds_list = []
+        summary_list = []
+        for k in range(series.shape[1]):
+            s = series[:, k]
+            s = s[s > -1]
+            if len(s) == 0:
+                return [0] * forecast_len, ''
+            automodel = pm.auto_arima(np.log1p(s), m=7, seasonal=True,
+                                      suppress_warnings=True)
+            preds = np.exp(automodel.predict(forecast_len)) - 1
+            summary = automodel.summary().as_text()
+
+            preds_list.append(preds)
+            summary_list.append(summary)
+
+        preds = np.vstack(preds_list)
+        preds = preds.transpose()
+        return k, preds, summary_list
 
 
 @Model.register('arima')
@@ -35,6 +57,7 @@ class ARIMA(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  data_path: str = './data/vevo/vevo.hdf5',
+                 multi_views_path: str = None,
                  forecast_length: int = 7,
                  backcast_length: int = 42,
                  test_lengths: List[int] = [7],
@@ -48,7 +71,12 @@ class ARIMA(BaseModel):
         self.rs = np.random.RandomState(1234)
 
         self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views'][...]
+
+        self.views_all = None
+        if multi_views_path:
+            self.views_all = h5py.File(multi_views_path, 'r')['views']
+        else:
+            self.series = self.data['views']
 
         self.register_buffer('_float', torch.tensor(0.1))
 
@@ -73,14 +101,26 @@ class ARIMA(BaseModel):
         assert split == 'test'
 
         # Find all series of given keys
-        series = self.series[keys]
+        if self.views_all:
+            series = self.views_all[keys]
+        else:
+            series = self.series[keys]
         # series.shape == [batch_size, total_length]
 
         # Forward-fill out missing values
-        mask = series == -1
-        idx = np.where(~mask, np.arange(mask.shape[1]), 0)
-        np.maximum.accumulate(idx, axis=1, out=idx)
-        series = series[np.arange(idx.shape[0])[:, None], idx]
+        if self.views_all:
+            B, S, E = series.shape
+            series = series.transpose((0, 2, 1)).reshape(B, E * S)
+            mask = series == -1
+            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+            np.maximum.accumulate(idx, axis=1, out=idx)
+            series = series[np.arange(idx.shape[0])[:, None], idx]
+            series = series.reshape(B, E, S).transpose((0, 2, 1))
+        else:
+            mask = series == -1
+            idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+            np.maximum.accumulate(idx, axis=1, out=idx)
+            series = series[np.arange(idx.shape[0])[:, None], idx]
 
         # Train data
         train_series = series[:, :-self.forecast_length]
@@ -107,7 +147,11 @@ class ARIMA(BaseModel):
         out_dict['keys'] = keys
         out_dict['preds'] = preds.tolist()
         out_dict['arima'] = summary_list
-        self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+        if self.views_all:
+            self.history['_n_steps'] += smapes.shape[0] * \
+                smapes.shape[1] * smapes.shape[2]
+        else:
+            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
 
         for k in self.test_lengths:
             self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
