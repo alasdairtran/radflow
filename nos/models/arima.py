@@ -34,8 +34,8 @@ def train_arima(series, forecast_len, k):
     else:
         preds_list = []
         summary_list = []
-        for k in range(series.shape[1]):
-            s = series[:, k]
+        for i in range(series.shape[1]):
+            s = series[:, i]
             s = s[s > -1]
             if len(s) == 0:
                 return [0] * forecast_len, ''
