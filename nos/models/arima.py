@@ -136,7 +136,7 @@ class ARIMA(BaseModel):
             preds_list.append(pred)
             summary_list.append(summary)
 
-        preds = np.vstack(preds_list)
+        preds = np.stack(preds_list)
         targets = series[:, -self.forecast_length:]
 
         # During evaluation, we compute one time step at a time
