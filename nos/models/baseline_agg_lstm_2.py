@@ -194,13 +194,13 @@ class BaselineAggLSTM2(BaseModel):
 
         return X
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len):
+    def _get_neighbour_embeds(self, X, keys, start, total_len, eval_step=None):
         if self.agg_type == 'none':
             return X
 
         parents = [-99] * len(keys)
         Xm, masks = self._construct_neighs(
-            X, keys, start, total_len, 1, parents)
+            X, keys, start, total_len, 1, parents, eval_step)
 
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
@@ -267,7 +267,7 @@ class BaselineAggLSTM2(BaseModel):
 
         return edge_counters
 
-    def _construct_neighs(self, X, keys, start, total_len, level, parents=None):
+    def _construct_neighs(self, X, keys, start, total_len, level, parents=None, eval_step=None):
         B, T, E = X.shape
 
         sorted_keys = sorted(set(keys))
@@ -405,9 +405,11 @@ class BaselineAggLSTM2(BaseModel):
 
         neighs = torch.log1p(neighs)
 
-        if self.base_model is not None:
-            preds = self.base_model['model'].predict_no_agg(neighs[:, :-1], 1)
-            neighs = torch.cat([neighs[:, :-1], preds], dim=1)
+        if self.base_model is not None and eval_step is not None:
+            offset = eval_step + 1
+            preds = self.base_model['model'].predict_no_agg(
+                neighs[:, :-offset], offset)
+            neighs = torch.cat([neighs[:, :-offset], preds], dim=1)
 
         Xn = self._forward_full(neighs)
         # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
@@ -428,7 +430,7 @@ class BaselineAggLSTM2(BaseModel):
 
             Xm_2, masks_2 = self._construct_neighs(
                 Xn[idx], sampled_keys, start, total_len,
-                level + 1, parents[idx])
+                level + 1, parents[idx], eval_step)
             if self.agg_type == 'mean':
                 Xm_2 = self._aggregate_mean(Xm_2, masks_2)
             elif self.agg_type == 'attention':
@@ -725,7 +727,7 @@ class BaselineAggLSTM2(BaseModel):
                 X = self._forward_full(series)
                 seq_len = self.total_length - self.forecast_length + i + 1
                 X_agg = self._get_neighbour_embeds(
-                    X, keys, start, seq_len)
+                    X, keys, start, seq_len, i)
                 X_agg = self.fc(X_agg)
                 pred = X_agg.squeeze(-1)[:, -1]
                 # delta.shape == [batch_size]
@@ -762,7 +764,10 @@ class BaselineAggLSTM2(BaseModel):
         return out_dict
 
     def predict_no_agg(self, series, n_steps):
-        preds = series.new_zeros(series.shape[0], n_steps)
+        if len(series.shape) == 3:
+            preds = series.new_zeros(series.shape[0], n_steps, series.shape[2])
+        else:
+            preds = series.new_zeros(series.shape[0], n_steps)
 
         for i in range(n_steps):
             X = self._forward_full(series)
