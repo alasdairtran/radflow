@@ -123,15 +123,17 @@ class NewNaive(BaseModel):
             np.maximum.accumulate(idx, axis=1, out=idx)
             series = series[np.arange(idx.shape[0])[:, None], idx]
 
+        series = torch.from_numpy(series)
+
         sources = series[:, :self.backcast_length]
         targets = series[:, -self.forecast_length:]
         B = sources.shape[0]
         if self.method == 'previous_day':
             preds = sources[:, -1:]
             if self.views_all:
-                preds = preds.expand(B, self.forecast_length, 2)
+                preds = preds.expand(-1, self.forecast_length, -1)
             else:
-                preds = preds.expand(B, self.forecast_length)
+                preds = preds.expand(-1, self.forecast_length)
         elif self.method == 'previous_week':
             preds = sources[:, -7:]
             if self.views_all:
