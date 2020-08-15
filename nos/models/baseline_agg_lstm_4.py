@@ -695,18 +695,22 @@ class BaselineAggLSTM4(BaseModel):
         # The indices 0...(BT - 1) will enumerate the central nodes
         # The indices BT...(BT + BNT - 1) will enumerate the neighbours
 
+        keep_masks = ~masks
+
+        sources = torch.arange(B * T, B * T + B * N * T).long()
+        sources = sources.reshape(B, N, T)
+        sources = sources[keep_masks]
+
+        central_nodes = torch.arange(B * T).long()
+        targets = central_nodes.reshape(B, 1, T)
+        targets = targets.expand_as(masks)
+        targets = targets[keep_masks]
+
         # Add self-loops to central nodes
-        sources = [i for i in range(B * T)]
-        targets = [i for i in range(B * T)]
+        sources = torch.cat([central_nodes, sources])
+        targets = torch.cat([central_nodes, targets])
+        edges = torch.stack([sources, targets]).to(X.device)
 
-        for b in range(B):
-            for t in range(T):
-                for n in range(N):
-                    if not masks[b, n, t]:
-                        sources.append(B * T + N * T * b + T * n + t)
-                        targets.append(T * b + t)
-
-        edges = torch.tensor([sources, targets]).to(X.device)
         nodes = torch.cat([X_in, Xn], dim=0)
         # nodes.shape == [BT + BNT, hidden_size]
 
