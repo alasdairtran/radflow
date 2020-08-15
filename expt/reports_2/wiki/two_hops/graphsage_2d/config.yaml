@@ -36,11 +36,12 @@ model:
       - - ^decoder.layers.*.layer.bias
         - zero
 data_loader:
-  batch_size: 64
+  batch_size: 40
   shuffle: false
   batches_per_epoch: 10000
 validation_data_loader:
   batch_size: 64
+  batches_per_epoch: 1
 trainer:
   type: apex_gradient_descent
   use_amp: false
