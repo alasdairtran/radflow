@@ -30,9 +30,7 @@ def get_means(paths):
     return metrics
 
 
-def plot_missing_views():
-    data = 'vevo'
-
+def plot_missing_expt(data):
     def get_paths(kind, data, n_hops):
         return [f'expt/missing/{kind}/{data}/{n_hops}/00/serialization/evaluate-metrics.json',
                 f'expt/missing/{kind}/{data}/{n_hops}/20/serialization/evaluate-metrics.json',
@@ -58,36 +56,9 @@ def plot_missing_views():
 
     ax = plt.subplot(1, 2, 2)
 
-    y1 = get_means(get_paths('views', 'wiki', 'no_hops'))
-    y2 = get_means(get_paths('views', 'wiki', 'one_hop'))
-    y3 = get_means(get_paths('views', 'wiki', 'two_hops'))
-
-    ax.errorbar(xs, y1, marker='x', linestyle=':')
-    ax.errorbar(xs, y2, marker='x', linestyle='--')
-    ax.errorbar(xs, y3, marker='x', linestyle='-')
-
-    ax.set_ylabel('SMAPE-28')
-    ax.set_xlabel('% of missing views')
-    ax.legend(['No hops', 'One hop', 'Two hops'])
-
-    fig.tight_layout()
-    fig.savefig('figures/missing_views.pdf')
-
-
-def plot_missing_edges():
-    def get_paths(kind, data, n_hops):
-        return [f'expt/missing/{kind}/{data}/{n_hops}/00/serialization/evaluate-metrics.json',
-                f'expt/missing/{kind}/{data}/{n_hops}/20/serialization/evaluate-metrics.json',
-                f'expt/missing/{kind}/{data}/{n_hops}/40/serialization/evaluate-metrics.json',
-                f'expt/missing/{kind}/{data}/{n_hops}/60/serialization/evaluate-metrics.json',
-                f'expt/missing/{kind}/{data}/{n_hops}/80/serialization/evaluate-metrics.json']
-
     y1 = get_means(get_paths('edges', 'vevo', 'no_hops'))
     y2 = get_means(get_paths('edges', 'vevo', 'one_hop'))
     y3 = get_means(get_paths('edges', 'vevo', 'two_hops'))
-
-    fig = plt.figure(figsize=(6, 3))
-    ax = plt.subplot(1, 2, 1)
 
     xs = [0, 20, 40, 60, 80]
     ax.errorbar(xs, y1, marker=None, linestyle=':')
@@ -98,23 +69,8 @@ def plot_missing_edges():
     ax.set_xlabel('% of missing edges')
     ax.legend(['No hops', 'One hop', 'Two hops'], bbox_to_anchor=(0.51, 0.9))
 
-    ax = plt.subplot(1, 2, 2)
-
-    y1 = get_means(get_paths('edges', 'wiki', 'no_hops'))
-    y2 = get_means(get_paths('edges', 'wiki', 'one_hop'))
-    y3 = get_means(get_paths('edges', 'wiki', 'two_hops'))
-
-    ax.errorbar(xs, y1, marker=None, linestyle=':')
-    ax.errorbar(xs, y2, marker='x', linestyle='--')
-    ax.errorbar(xs, y3, marker='x', linestyle='-')
-
-    ax.legend(['No hops', 'One hop', 'Two hops'], bbox_to_anchor=(0.51, 0.9))
-
-    ax.set_ylabel('SMAPE-28')
-    ax.set_xlabel('% of missing edges')
-
     fig.tight_layout()
-    fig.savefig('figures/missing_edges.pdf')
+    fig.savefig(f'figures/missing_{data}.pdf')
 
 
 def generate_word_cloud(seed):
@@ -495,8 +451,8 @@ def plot_attention_maps():
 
 
 def main():
-    plot_missing_views()
-    plot_missing_edges()
+    plot_missing_expt('vevo')
+    plot_missing_expt('wiki')
 
     generate_word_cloud('global_health')
     generate_word_cloud('programming_languages')
