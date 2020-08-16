@@ -341,6 +341,56 @@ def plot_edge_dist():
     fig.savefig('figures/edge_distribution.pdf')
 
 
+def plot_network_contribution():
+    f_vevo = h5py.File('data/vevo/vevo.hdf5', 'r')
+    path = 'expt/reports_2/vevo/two_hops/flow_lstm/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o8 = json.load(f)
+
+    views_list = []
+    ratios = []
+    for i, k_parts in enumerate(o8['f_parts']):
+        raw_views = f_vevo['views'][o8['keys'][i], -28:]
+        views_list.append(raw_views.mean())
+
+        k_parts = np.array(k_parts)
+        ratios.append(k_parts[-1].sum() / k_parts.sum() * 100)
+
+    fig = plt.figure(figsize=(6, 3))
+    ax = plt.subplot(1, 2, 1)
+    ax.scatter(np.array(views_list), ratios, s=1, alpha=0.1, edgecolors=None)
+    ax.set_ylim(21, 34)
+    # ax.set_xlim(10, 40000)
+    ax.set_xscale('log')
+    ax.set_xlabel('Average Daily Views')
+    ax.set_ylabel('Network Contribution (%)')
+    ax.set_title('VevoMusic')
+
+    f_wiki = h5py.File('data/wiki/wiki.hdf5', 'r')
+    path = 'expt/reports_2/wiki/two_hops/flow_lstm/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o8 = json.load(f)
+
+    views_list = []
+    ratios = []
+    for i, k_parts in enumerate(o8['f_parts']):
+        raw_views = f_wiki['views'][o8['keys'][i], -28:]
+        views_list.append(raw_views.mean())
+        k_parts = np.array(k_parts)
+        ratios.append(k_parts[-1].sum() / k_parts.sum() * 100)
+
+    ax = plt.subplot(1, 2, 2)
+    ax.scatter(np.array(views_list), ratios, s=1, alpha=0.1, edgecolors=None)
+    ax.set_ylim(21, 34)
+    ax.set_xlim(10, 40000)
+    ax.set_xscale('log')
+    ax.set_xlabel('Average Daily Views')
+    ax.set_title('WikiTraffic')
+
+    fig.tight_layout()
+    fig.savefig('figures/network_contribution.pdf')
+
+
 def main():
     plot_missing_views()
     plot_missing_edges()
@@ -354,6 +404,7 @@ def main():
     plot_layer_decompositions()
     plot_series_averages()
     plot_edge_dist()
+    plot_network_contribution()
 
 
 if __name__ == '__main__':
