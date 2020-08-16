@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.ticker import FormatStrFormatter
 from tqdm import tqdm
 from wordcloud import STOPWORDS, WordCloud
 
@@ -52,7 +53,9 @@ def plot_missing_expt(data):
 
     ax.set_ylabel('SMAPE-7')
     ax.set_xlabel('% of missing views')
-    ax.legend(['No hops', 'One hop', 'Two hops'])
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+    ax.legend(['No hops', 'One hop', 'Two hops'], frameon=False)
+    ax.set_title('Missing View Effect')
 
     ax = plt.subplot(1, 2, 2)
 
@@ -65,9 +68,10 @@ def plot_missing_expt(data):
     ax.errorbar(xs, y2, marker='x', linestyle='--')
     ax.errorbar(xs, y3, marker='x', linestyle='-')
 
-    ax.set_ylabel('SMAPE-7')
     ax.set_xlabel('% of missing edges')
-    ax.legend(['No hops', 'One hop', 'Two hops'], bbox_to_anchor=(0.51, 0.9))
+    ax.legend(['No hops', 'One hop', 'Two hops'],
+              bbox_to_anchor=(0.47, 0.75), frameon=False)
+    ax.set_title('Missing Edge Effect')
 
     fig.tight_layout()
     fig.savefig(f'figures/missing_{data}.pdf')
