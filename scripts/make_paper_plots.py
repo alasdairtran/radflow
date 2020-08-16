@@ -299,6 +299,16 @@ def plot_edge_dist():
 
 
 def plot_network_contribution():
+    sns.set_palette("muted")
+    current_palette = sns.color_palette()
+
+    node_ids = {}
+    cats = ['programming_languages', 'global_health', 'global_warming', 'star_wars']
+    for cat in cats:
+        path = f'data/wiki/node_ids/{cat}.pkl'
+        with open(path, 'rb') as f:
+            node_ids[cat] = pickle.load(f)
+
     f_vevo = h5py.File('data/vevo/vevo.hdf5', 'r')
     path = 'expt/reports_2/vevo/two_hops/flow_lstm/serialization/evaluate-metrics.json'
     with open(path) as f:
@@ -315,7 +325,7 @@ def plot_network_contribution():
 
     fig = plt.figure(figsize=(6, 3))
     ax = plt.subplot(1, 2, 1)
-    ax.scatter(np.array(views_list), ratios, s=1, alpha=0.1, edgecolors=None)
+    ax.scatter(np.array(views_list), ratios, s=1, alpha=0.05, edgecolors=None)
     ax.set_ylim(21, 34)
     # ax.set_xlim(10, 40000)
     ax.set_xscale('log')
@@ -337,15 +347,28 @@ def plot_network_contribution():
         ratios.append(k_parts[-1].sum() / k_parts.sum() * 100)
 
     ax = plt.subplot(1, 2, 2)
-    ax.scatter(np.array(views_list), ratios, s=1, alpha=0.1, edgecolors=None)
-    ax.set_ylim(21, 34)
+    views = np.array(views_list)
+    ratios = np.array(ratios)
+    names = ['programming', 'global health', 'global warming', 'star wars']
+    circles = []
+    for j, cat in enumerate(cats):
+        idx = [i for i, k in enumerate(o8['keys']) if k in node_ids[cat]]
+        ax.scatter(views[idx], ratios[idx], color=current_palette[j],
+                   s=1, alpha=0.2, edgecolors=None, label=names[j])
+
+        circles.append(plt.Line2D([0], [0], marker='o', color=current_palette[j], label=names[j],
+                       markersize=5, linestyle=''))
+
+    ax.legend(handles=circles, prop={'size': 8}, loc="lower left", scatterpoints=1, frameon=False)
+
+    ax.set_ylim(21, 26)
     ax.set_xlim(10, 40000)
     ax.set_xscale('log')
     ax.set_xlabel('Average Daily Views')
     ax.set_title('WikiTraffic')
 
     fig.tight_layout()
-    fig.savefig('figures/network_contribution.pdf')
+    fig.savefig('figures/network_contribution.png')
 
 
 def plot_attention_maps():
