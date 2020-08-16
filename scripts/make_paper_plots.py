@@ -284,19 +284,31 @@ def plot_edge_dist():
     ax = plt.subplot(1, 2, 1)
     xs = range(1, 64)
     ys = [counter[i] for i in range(1, 64)]
+
+    n_total = np.sum(ys)
+    n_short = np.sum([counter[i] for i in range(1, 5)])
+    print('One day Vevo links:', n_short / n_total)
+
     ax.plot(xs, ys)
     ax.set_xlabel('Number of Days')
     ax.set_ylabel('Number of Edges')
     ax.set_yscale('log')
+    ax.set_title('VevoMusic')
 
     ax = plt.subplot(1, 2, 2)
     xs = range(1, 1828)
     ys = [counter2[i] for i in range(1, 1828)]
+
+    n_total = np.sum(ys)
+    n_long = np.sum([counter2[i] for i in range(1827, 1828)])
+    print('Complete Wiki links:', n_long / n_total)
+
     ax.plot(xs, ys)
     ax.set_xlabel('Number of Days')
     ylabels = ['{:,.0f}'.format(x) + 'K' for x in ax.get_yticks()/1000]
     ax.set_yticklabels(ylabels)
     ax.set_yscale('log')
+    ax.set_title('WikiTraffic')
 
     fig.tight_layout()
     fig.savefig('figures/edge_distribution.pdf')
