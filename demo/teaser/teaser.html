@@ -166,8 +166,8 @@
         title: "Arc de Triomphe",
         kind: "neighbor",
         attn: 0.0354412004484662,
-        fx: 114,
-        fy: 492,
+        fx: 123,
+        fy: 456,
         series: [
           1814,
           1974,
@@ -316,8 +316,8 @@
         title: "Joker (2019 film)",
         kind: "neighbor",
         attn: 0.02799676757838045,
-        fx: 543,
-        fy: 137,
+        fx: 540,
+        fy: 194,
         series: [
           62587,
           52933,
@@ -466,8 +466,8 @@
         title: "Emmanuel Macron",
         kind: "neighbor",
         attn: 0.022770619552050318,
-        fx: 219,
-        fy: 136,
+        fx: 181,
+        fy: 194,
         series: [
           3570,
           3698,
@@ -616,8 +616,8 @@
         title: "Turning Point USA",
         kind: "neighbor",
         attn: 0.03140008707331227,
-        fx: 357,
-        fy: 492,
+        fx: 369,
+        fy: 456,
         series: [
           1715,
           1599,
@@ -767,7 +767,7 @@
         kind: "neighbor",
         attn: 0.016711919335648417,
         fx: 92,
-        fy: 323,
+        fy: 318,
         series: [
           599,
           600,
@@ -916,8 +916,8 @@
         title: "Neoliberalism",
         kind: "neighbor",
         attn: 0.04064391067783747,
-        fx: 214,
-        fy: 389,
+        fx: 224,
+        fy: 377,
         series: [
           4271,
           3790,
@@ -1066,8 +1066,8 @@
         title: "Michel Houellebecq",
         kind: "neighbor",
         attn: 0.021066951266090785,
-        fx: 398,
-        fy: 134,
+        fx: 384,
+        fy: 194,
         series: [
           529,
           518,
@@ -1216,8 +1216,8 @@
         title: "Black bloc",
         kind: "neighbor",
         attn: 0.03216394981635468,
-        fx: 518,
-        fy: 492,
+        fx: 516,
+        fy: 456,
         series: [
           256,
           278,
@@ -1366,8 +1366,8 @@
         title: "Yellow",
         kind: "neighbor",
         attn: 0.019883899749921902,
-        fx: 294,
-        fy: 259,
+        fx: 249,
+        fy: 278,
         series: [
           860,
           813,
@@ -1511,13 +1511,48 @@
           613,
         ],
       },
-      { id: "model", title: "Flow-LSTM", kind: "module", fx: 723, fy: 318 },
+      {
+        id: "model",
+        title: "Recurrent",
+        kind: "module",
+        fx: 743,
+        fy: 288,
+      },
+      {
+        id: "network",
+        title: "",
+        kind: "module",
+        fx: 752,
+        fy: 416,
+      },
+      {
+        id: "network",
+        title: "",
+        kind: "module",
+        fx: 749,
+        fy: 419,
+      },
+      {
+        id: "network",
+        title: "",
+        kind: "module",
+        fx: 746,
+        fy: 422,
+      },
+      {
+        id: "network",
+        title: "Flow Agg",
+        kind: "module",
+        fx: 743,
+        fy: 425,
+      },
+
       {
         id: "d0",
         kind: "decomposition",
         title: "Layer 1",
         fx: 900,
-        fy: 142,
+        fy: 185,
         series: [
           0.7893373966217041,
           0.7884981036186218,
@@ -1554,7 +1589,7 @@
         kind: "decomposition",
         title: "Layer 2",
         fx: 900,
-        fy: 192,
+        fy: 222,
         series: [
           1.0428210496902466,
           1.040109395980835,
@@ -1591,7 +1626,7 @@
         kind: "decomposition",
         title: "Layer 3",
         fx: 900,
-        fy: 242,
+        fy: 259,
         series: [
           0.8948934674263,
           0.8888518810272217,
@@ -1628,7 +1663,7 @@
         kind: "decomposition",
         title: "Layer 4",
         fx: 900,
-        fy: 292,
+        fy: 296,
         series: [
           0.5966182351112366,
           0.5907389521598816,
@@ -1665,7 +1700,7 @@
         kind: "decomposition",
         title: "Layer 5",
         fx: 900,
-        fy: 342,
+        fy: 333,
         series: [
           0.6585211753845215,
           0.6482893824577332,
@@ -1702,7 +1737,7 @@
         kind: "decomposition",
         title: "Layer 6",
         fx: 900,
-        fy: 392,
+        fy: 370,
         series: [
           0.4724836051464081,
           0.47420600056648254,
@@ -1739,7 +1774,7 @@
         kind: "decomposition",
         title: "Layer 7",
         fx: 900,
-        fy: 442,
+        fy: 407,
         series: [
           0.3854648172855377,
           0.35183271765708923,
@@ -1776,7 +1811,7 @@
         kind: "decomposition",
         title: "Layer 8",
         fx: 900,
-        fy: 492,
+        fy: 444,
         series: [
           0.7317419648170471,
           0.612244725227356,
@@ -1811,9 +1846,9 @@
       {
         id: "d8",
         kind: "decomposition",
-        title: "Aggregation Layer",
+        title: "Network Layer",
         fx: 900,
-        fy: 542,
+        fy: 481,
         series: [
           2.8478164672851562,
           2.9814326763153076,
@@ -1850,7 +1885,7 @@
         kind: "concat",
         title: "+",
         fx: 1035,
-        fy: 347,
+        fy: 333,
       },
       {
         id: "forecast",
@@ -1992,12 +2027,12 @@
       },
     ],
     edges: [
-      {
-        kind: "decompose",
-        source: 353191,
-        target: "model",
-        weight: 200,
-      },
+      // {
+      //   kind: "decompose",
+      //   source: 353191,
+      //   target: "model",
+      //   weight: 200,
+      // },
       {
         kind: "decompose",
         source: "model",
@@ -2048,7 +2083,7 @@
       },
       {
         kind: "decompose",
-        source: "model",
+        source: "network",
         target: "d8",
         weight: 200,
       },
@@ -2118,7 +2153,8 @@
   const attnColor = d3.scaleSequential(d3.interpolateBlues).domain([0, 0.05]);
   const edgeWidth = d3.scaleLinear().domain([0, 0.04]).range([0, 4.5]);
   const nodeWidth = 90;
-  const layerHeight = 40;
+  const nodeHeight = 60;
+  const layerHeight = 30;
 
   // set the dimensions and margins of the graph
   var margin = { top: 10, right: 30, bottom: 30, left: 30 },
@@ -2135,6 +2171,17 @@
   var g = svg
     .append("g")
     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  g.append("rect")
+    .attr("x", 733)
+    .attr("y", 170)
+    .attr("width", nodeWidth * 3.8)
+    .attr("height", nodeWidth * 3.95)
+    .attr("stroke", "#000")
+    .attr("stroke-width", 2)
+    .style("fill", "#ededed")
+    .attr("rx", 20)
+    .attr("ry", 20);
 
   svg
     .append("defs")
@@ -2182,7 +2229,7 @@
 
   // Initialize the nodes
   var node = g
-    .selectAll("rect")
+    .selectAll("rect2")
     .data(data.nodes)
     .enter()
     .append("rect")
@@ -2195,19 +2242,19 @@
     })
     .attr("height", (n) => {
       if (n.kind === "neighbor" || n.kind == "central") {
-        return nodeWidth;
+        return nodeHeight;
       } else if (n.kind === "decomposition") {
         return layerHeight;
       } else if (n.kind === "module") {
         return nodeWidth;
       } else if (n.kind === "forecast") {
-        return nodeWidth;
+        return nodeHeight;
       } else if (n.kind === "concat") {
         return 30;
       }
     })
     .attr("stroke", "#000")
-    .attr("stroke-width", (n) => (n.kind === "module" ? 2 : 1))
+    .attr("stroke-width", (n) => (n.kind === "module" ? 1 : 1))
     .style("fill", (n) => {
       if (n.kind === "module") {
         return "#d4d4d4";
@@ -2269,9 +2316,9 @@
     .append("path")
     .attr("fill", (n) => {
       if (n.kind == "neighbor") {
-        return "#6699cc";
+        return "#c6d9ec";
       } else if (n.kind == "central") {
-        return "orange";
+        return "#ffdb99";
       } else if (n.kind == "decomposition") {
         return "orange";
       } else if (n.kind == "forecast") {
@@ -2279,7 +2326,7 @@
       }
     })
     .attr("stroke", "black")
-    .attr("stroke-width", 0.5)
+    .attr("stroke-width", 0)
     .attr("stroke", "black");
 
   var path2 = g
@@ -2289,9 +2336,9 @@
     .append("path")
     .attr("fill", (n) => {
       if (n.kind == "neighbor") {
-        return "#c6d9ec";
+        return "#6699cc";
       } else if (n.kind == "central") {
-        return "#ffdb99";
+        return "orange";
       }
     })
     .attr("stroke", "black")
@@ -2324,10 +2371,10 @@
         return d.source.x + nodeWidth / 2;
       })
       .attr("y1", function (d) {
-        return d.source.y + nodeWidth / 2;
+        return d.source.y + nodeHeight / 2;
       })
       .attr("x2", function (d) {
-        let halfHeight = nodeWidth / 2;
+        let halfHeight = nodeHeight / 2;
         var inter = pointOnRect(
           d.source.x,
           d.source.y,
@@ -2339,7 +2386,7 @@
         return inter.x + nodeWidth / 2;
       })
       .attr("y2", function (d) {
-        let halfHeight = nodeWidth / 2;
+        let halfHeight = nodeHeight / 2;
         var inter = pointOnRect(
           d.source.x,
           d.source.y,
@@ -2370,7 +2417,7 @@
         } else if (d.source.kind == "concat") {
           return d.source.y + 15;
         }
-        return d.source.y + nodeWidth / 2;
+        return d.source.y + nodeHeight / 2;
       })
       .attr("x2", function (d) {
         if (d.target.kind == "decomposition") {
@@ -2385,7 +2432,7 @@
           return d.target.x + 15;
         }
 
-        let halfHeight = nodeWidth / 2;
+        let halfHeight = nodeHeight / 2;
         var inter = pointOnRect(
           d.source.x,
           d.source.y,
@@ -2406,10 +2453,10 @@
         }
 
         if (d.target.kind == "forecast") {
-          return d.target.y + nodeWidth / 2;
+          return d.target.y + nodeHeight / 2;
         }
 
-        let halfHeight = nodeWidth / 2;
+        let halfHeight = nodeHeight / 2;
         var inter = pointOnRect(
           d.source.x,
           d.source.y,
@@ -2432,7 +2479,7 @@
       let xDomain = [0, 140];
       let xRange = [n.x, n.x + nodeWidth];
       let yDomain = [0, d3.max(n.series) * 1.05];
-      let height = nodeWidth;
+      let height = nodeHeight;
       let yRange = [n.y + height, n.y];
       let series = n.series.slice(0, -28);
       if (n.kind === "decomposition") {
@@ -2445,7 +2492,7 @@
         xDomain = [0, 28];
         xRange = [n.x + nodeWidth - 28, n.x + nodeWidth];
         yDomain = [d3.min(n.series), d3.max(n.series) * 1.05];
-        height = nodeWidth;
+        height = nodeHeight;
         yRange = [n.y + height, n.y];
         series = n.series;
       }
@@ -2475,16 +2522,16 @@
       let xDomain = [0, 140];
       let xRange = [n.x, n.x + nodeWidth];
       let yDomain = [0, d3.max(n.series) * 1.05];
-      let height = nodeWidth;
+      let height = nodeHeight;
       let yRange = [n.y + height, n.y];
-      let series = n.series.slice(-28);
+      let series = n.series.slice(-29);
 
       var x = d3.scaleLinear().domain(xDomain).range(xRange);
       var y = d3.scaleLinear().domain(yDomain).range(yRange);
       return d3
         .area()
         .x(function (d, pos) {
-          return x(pos + 112);
+          return x(pos + 111);
         })
         .y1(function (d) {
           return y(d);
@@ -2514,56 +2561,114 @@
       });
   }
 
-  // Vertical dashed line
-  g.append("line")
-    .attr("x1", 700)
-    .attr("y1", 85)
-    .attr("x2", 700)
-    .attr("y2", 585)
-    .style("stroke", "#003A5D")
+  //returns path string d for <path d="This string">
+  //a curly brace between x1,y1 and x2,y2, w pixels wide
+  //and q factor, .5 is normal, higher q = more expressive bracket
+  //Copied from http://bl.ocks.org/alexhornbake/6005176
+  function makeCurlyBrace(x1, y1, x2, y2, w, q) {
+    //Calculate unit vector
+    var dx = x1 - x2;
+    var dy = y1 - y2;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    dx = dx / len;
+    dy = dy / len;
+
+    //Calculate Control Points of path,
+    var qx1 = x1 + q * w * dy;
+    var qy1 = y1 - q * w * dx;
+    var qx2 = x1 - 0.25 * len * dx + (1 - q) * w * dy;
+    var qy2 = y1 - 0.25 * len * dy - (1 - q) * w * dx;
+    var tx1 = x1 - 0.5 * len * dx + w * dy;
+    var ty1 = y1 - 0.5 * len * dy - w * dx;
+    var qx3 = x2 + q * w * dy;
+    var qy3 = y2 - q * w * dx;
+    var qx4 = x1 - 0.75 * len * dx + (1 - q) * w * dy;
+    var qy4 = y1 - 0.75 * len * dy - (1 - q) * w * dx;
+
+    return (
+      "M " +
+      x1 +
+      " " +
+      y1 +
+      " Q " +
+      qx1 +
+      " " +
+      qy1 +
+      " " +
+      qx2 +
+      " " +
+      qy2 +
+      " T " +
+      tx1 +
+      " " +
+      ty1 +
+      " M " +
+      x2 +
+      " " +
+      y2 +
+      " Q " +
+      qx3 +
+      " " +
+      qy3 +
+      " " +
+      qx4 +
+      " " +
+      qy4 +
+      " T " +
+      tx1 +
+      " " +
+      ty1
+    );
+  }
+
+  // Big curly brace
+  g.append("path")
+    .style("stroke", "#000000")
     .style("stroke-width", 1)
-    .style("stroke-dasharray", 5);
+    .style("fill", "none")
+    // .style("stroke-dasharray", 5)
+    .attr("d", makeCurlyBrace(680, 520, 680, 180, 50, 0.6));
 
-  g.append("line")
-    .attr("x1", 1080)
-    .attr("y1", 85)
-    .attr("x2", 1080)
-    .attr("y2", 585)
-    .style("stroke", "#003A5D")
-    .style("stroke-width", 1)
-    .style("stroke-dasharray", 5);
+  // g.append("line")
+  //   .attr("x1", 1080)
+  //   .attr("y1", 85)
+  //   .attr("x2", 1080)
+  //   .attr("y2", 585)
+  //   .style("stroke", "#003A5D")
+  //   .style("stroke-width", 1)
+  //   .style("stroke-dasharray", 5);
+
+  // g.append("text")
+  //   .text("(A)")
+  //   .style("fill", "#555")
+  //   .style("font-family", "Helvetica")
+  //   .style("font-size", 18)
+  //   .attr("dx", 400)
+  //   .attr("dy", 95);
+
+  // g.append("text")
+  //   .text("(B)")
+  //   .style("fill", "#555")
+  //   .style("font-family", "Helvetica")
+  //   .style("font-size", 18)
+  //   .attr("dx", 870)
+  //   .attr("dy", 95);
+
+  // g.append("text")
+  //   .text("(C)")
+  //   .style("fill", "#555")
+  //   .style("font-family", "Helvetica")
+  //   .style("font-size", 18)
+  //   .attr("dx", 1130)
+  //   .attr("dy", 95);
 
   g.append("text")
-    .text("(A)")
+    .text("RADflow")
     .style("fill", "#555")
     .style("font-family", "Helvetica")
     .style("font-size", 18)
-    .attr("dx", 400)
-    .attr("dy", 95);
-
-  g.append("text")
-    .text("(B)")
-    .style("fill", "#555")
-    .style("font-family", "Helvetica")
-    .style("font-size", 18)
-    .attr("dx", 870)
-    .attr("dy", 95);
-
-  g.append("text")
-    .text("(C)")
-    .style("fill", "#555")
-    .style("font-family", "Helvetica")
-    .style("font-size", 18)
-    .attr("dx", 1130)
-    .attr("dy", 95);
-
-  g.append("text")
-    .text("Decomposed Forecasts")
-    .style("fill", "#555")
-    .style("font-family", "Helvetica")
-    .style("font-size", 14)
-    .attr("dx", 870)
-    .attr("dy", 130);
+    .attr("dx", 760)
+    .attr("dy", 210);
 
   function dragstarted(d) {
     if (!d3.event.active) simulation.alphaTarget(0.3).restart();
