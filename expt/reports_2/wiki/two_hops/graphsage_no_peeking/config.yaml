@@ -14,10 +14,10 @@ model:
   key2pos_path: ./data/wiki/key2pos.pkl
   test_keys_path: ./data/wiki/node_ids/test_ids.pkl
   series_len: 1827
-  agg_type: gat
+  agg_type: sage
   peek: true
   num_layers: 8
-  hidden_size: 124
+  hidden_size: 120
   dropout: 0.1
   forecast_length: 28
   backcast_length: 112
@@ -28,6 +28,8 @@ model:
   n_hops: 2
   hop_scale: 1
   neigh_sample: true
+  base_model_config: expt/reports/wiki/no_hops/flow_lstm/config.yaml
+  base_model_weights: expt/reports/wiki/no_hops/flow_lstm/serialization/model_state_epoch_9.th
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*
