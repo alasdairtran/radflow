@@ -5,6 +5,7 @@ from collections import defaultdict
 
 import h5py
 import matplotlib as mpl
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -391,6 +392,108 @@ def plot_network_contribution():
     fig.savefig('figures/network_contribution.pdf')
 
 
+def plot_attention_maps():
+    path = 'expt/reports_2/wiki/one_hop/flow_lstm/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o5 = json.load(f)
+
+    path = 'data/wiki/title2graphid.pkl'
+    with open(path, 'rb') as f:
+        title2graphid = pickle.load(f)
+    id2title = {i: title for title, i in title2graphid.items()}
+
+    graph_f = h5py.File('data/wiki/wiki.hdf5', 'r')
+
+    test_pos = 1358
+    test_nodeid = o5['keys'][test_pos]
+
+    avg_attn = np.array(o5['all_scores'][test_pos]).mean(0)[:-2]
+    best_neighs = np.argsort(avg_attn)[::-1][:6]
+    best_keys = np.array(o5['neigh_keys'][test_pos])[best_neighs]
+    sort_idx = np.argsort(best_keys)
+    reverse_idx = np.argsort(sort_idx)
+
+    sorted_best_keys = best_keys[sort_idx]
+    best_series = graph_f['views'][sorted_best_keys, -28:]
+    best_series = best_series[reverse_idx]
+
+    o_series = graph_f['views'][test_nodeid, -28:]
+
+    fig = plt.figure(figsize=(6, 3.5))
+
+    order = [1, 3, 5]
+    axes = []
+    for i, o in enumerate(order):
+        if i == 2:
+            i = 3
+        neigh_idx = best_neighs[i]
+        ax = plt.subplot(3, 2, o)
+        s = best_series[i]
+        ax.plot(np.log(s), c='black')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(id2title[best_keys[i]])
+        axes.append(ax)
+
+        ax.set_xlim(0, 27)
+        for start in range(27):
+            attn = o5['all_scores'][test_pos][start][neigh_idx]
+            plt.axvspan(start, start+1,
+                        color=cm.Blues(attn/(0.12)), alpha=0.7, lw=0)
+
+    # contribs = np.array(o5['f_parts'][1358])
+    # net_contrib = contribs[-1]
+    # ser_contrib = contribs[:-1].sum(0)
+
+    ax = plt.subplot(3, 2, 4)
+    ax.plot(np.log(o_series), c='black')
+    axes.append(ax)
+
+    ax.set_title(id2title[test_nodeid])
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlim(0, 27)
+
+    ax0tr = axes[0].transData  # Axis 0 -> Display
+    ax1tr = axes[-1].transData  # Axis 1 -> Display
+    figtr = fig.transFigure.inverted()  # Display -> Figure
+    ptB = figtr.transform(ax0tr.transform((28, 0.5)))
+    ptE = figtr.transform(ax1tr.transform((6, 0.9)))
+    arrow = mpl.patches.FancyArrowPatch(
+        ptB, ptE, transform=fig.transFigure,  # Place arrow in figure coord system
+        fc="grey", connectionstyle="arc3,rad=-0.2", arrowstyle='simple', alpha=0.3,
+        mutation_scale=20.
+    )
+    fig.patches.append(arrow)
+
+    ax0tr = axes[0].transData  # Axis 0 -> Display
+    ax1tr = axes[-1].transData  # Axis 1 -> Display
+    figtr = fig.transFigure.inverted()  # Display -> Figure
+    ptB = figtr.transform(ax0tr.transform((28, -0.7)))
+    ptE = figtr.transform(ax1tr.transform((0.5, 0.5)))
+    arrow = mpl.patches.FancyArrowPatch(
+        ptB, ptE, transform=fig.transFigure,  # Place arrow in figure coord system
+        fc="grey", connectionstyle="arc3,rad=0", arrowstyle='simple', alpha=0.3,
+        mutation_scale=20.
+    )
+    fig.patches.append(arrow)
+
+    ax0tr = axes[0].transData  # Axis 0 -> Display
+    ax1tr = axes[-1].transData  # Axis 1 -> Display
+    figtr = fig.transFigure.inverted()  # Display -> Figure
+    ptB = figtr.transform(ax0tr.transform((28, -2)))
+    ptE = figtr.transform(ax1tr.transform((6, -0.1)))
+    arrow = mpl.patches.FancyArrowPatch(
+        ptB, ptE, transform=fig.transFigure,  # Place arrow in figure coord system
+        fc="grey", connectionstyle="arc3,rad=0.2", arrowstyle='simple', alpha=0.3,
+        mutation_scale=20, edgecolor=None,
+    )
+    fig.patches.append(arrow)
+
+    fig.tight_layout()
+    fig.savefig('figures/attention_map.pdf')
+
+
 def main():
     plot_missing_views()
     plot_missing_edges()
@@ -405,6 +508,7 @@ def main():
     plot_series_averages()
     plot_edge_dist()
     plot_network_contribution()
+    plot_attention_maps()
 
 
 if __name__ == '__main__':
