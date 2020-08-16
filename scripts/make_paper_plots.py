@@ -303,7 +303,8 @@ def plot_network_contribution():
     current_palette = sns.color_palette()
 
     node_ids = {}
-    cats = ['programming_languages', 'global_health', 'global_warming', 'star_wars']
+    cats = ['programming_languages', 'global_health',
+            'global_warming', 'star_wars']
     for cat in cats:
         path = f'data/wiki/node_ids/{cat}.pkl'
         with open(path, 'rb') as f:
@@ -357,9 +358,10 @@ def plot_network_contribution():
                    s=1, alpha=0.2, edgecolors=None, label=names[j])
 
         circles.append(plt.Line2D([0], [0], marker='o', color=current_palette[j], label=names[j],
-                       markersize=5, linestyle=''))
+                                  markersize=5, linestyle=''))
 
-    ax.legend(handles=circles, prop={'size': 8}, loc="lower left", scatterpoints=1, frameon=False)
+    ax.legend(handles=circles, prop={
+              'size': 8}, loc="lower left", scatterpoints=1, frameon=False)
 
     ax.set_ylim(21, 26)
     ax.set_xlim(10, 40000)
@@ -368,7 +370,7 @@ def plot_network_contribution():
     ax.set_title('WikiTraffic')
 
     fig.tight_layout()
-    fig.savefig('figures/network_contribution.png')
+    fig.savefig('figures/network_contribution.pdf')
 
 
 def plot_attention_maps():
