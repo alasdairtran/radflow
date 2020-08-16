@@ -225,7 +225,7 @@ def plot_series_averages():
     wiki_views = f['views'][...]
     wiki_views = wiki_views.mean(0)
 
-    fig = plt.figure(figsize=(6, 3.5))
+    fig = plt.figure(figsize=(6, 4))
     ax = plt.subplot(2, 1, 1)
     ax.plot(vevo_views)
     ax.set_xticks([0, 30, 62])
@@ -233,14 +233,17 @@ def plot_series_averages():
     ax.set_xlim([0, 62])
     ax.axvspan(56, 62, color='grey', alpha=0.3, lw=0)
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
+    ax.set_title('VevoMusic')
 
     ax = plt.subplot(2, 1, 2)
-    ax.plot(wiki_views[-182:, 0])
-    ax.plot(wiki_views[-182:, 1])
+    ax.plot(wiki_views[-182:,0], label='desktop')
+    ax.plot(wiki_views[-182:,1], label='non-desktop')
+    ax.legend(loc='upper left')
     ax.axvspan(154, 181, color='grey', alpha=0.3, lw=0)
     ax.set_xlim([0, 181])
     ax.set_xticks([0, 60, 121, 181])
     ax.set_xticklabels(['1 Jan 20', '1 Mar 20', '1 May 20', '30 Jun 20'])
+    ax.set_title('WikiTraffic')
     fig.tight_layout()
 
     fig.savefig('figures/series_averages.pdf')
