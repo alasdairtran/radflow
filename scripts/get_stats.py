@@ -50,12 +50,28 @@ def get_stats(G):
     for n, deg in G.in_degree(None, weight=None):
         if deg > 0:
             in_degrees.append(deg)
-    avg_in_degree = sum(in_degrees) / len(in_degrees)
+    in_degrees = np.array(in_degrees)
+    avg_in_degree = in_degrees.mean()
+    med_in_degree = np.median(in_degrees)
     print(f'Number of nodes with incoming edges', len(in_degrees))
-    print(f'Average in-degree of nodes with incoming edges:', avg_in_degree)
+    print(f'    Average in-degree:', avg_in_degree)
+    print(f'    Median in-degree:', med_in_degree)
+
+    out_degrees = []
+    for n, deg in G.out_degree(None, weight=None):
+        if deg > 0:
+            out_degrees.append(deg)
+    out_degrees = np.array(out_degrees)
+    avg_out_degree = out_degrees.mean()
+    med_out_degree = np.median(out_degrees)
+    print(f'Number of nodes with outgoing edges', len(out_degrees))
+    print(f'    Average in-degree:', avg_out_degree)
+    print(f'    Median in-degree:', med_out_degree)
 
     # e = eccentricity(G)
     # print(f'Diameter:', max(e.values()))
+
+    print()
 
 
 def plot_degree_dist(G, topic):
@@ -94,6 +110,7 @@ def get_vevo_stats():
 
     G1 = nx.read_gpickle(path)
 
+    print('Stats for Vevo graph')
     get_stats(G1)
 
 
@@ -112,6 +129,7 @@ def get_wiki_stats():
 
     G2 = nx.read_gpickle(path)
 
+    print('Stats for Wiki graph')
     get_stats(G2)
 
 
