@@ -43,7 +43,7 @@ def plot_missing_expt(data):
     y2 = get_means(get_paths('views', data, 'one_hop'))
     y3 = get_means(get_paths('views', data, 'two_hops'))
 
-    fig = plt.figure(figsize=(6, 3))
+    fig = plt.figure(figsize=(6, 2.5))
     ax = plt.subplot(1, 2, 1)
 
     xs = [0, 20, 40, 60, 80]
@@ -72,6 +72,7 @@ def plot_missing_expt(data):
     ax.legend(['No hops', 'One hop', 'Two hops'],
               bbox_to_anchor=(0.47, 0.75), frameon=False)
     ax.set_title('Missing Edge Effect')
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     fig.tight_layout()
     fig.savefig(f'figures/missing_{data}.pdf')
@@ -343,7 +344,7 @@ def plot_network_contribution():
         k_parts = np.array(k_parts)
         ratios.append(k_parts[-1].sum() / k_parts.sum() * 100)
 
-    fig = plt.figure(figsize=(6, 3))
+    fig = plt.figure(figsize=(6, 2.5))
     ax = plt.subplot(1, 2, 1)
     ax.scatter(np.array(views_list), ratios, s=1, alpha=0.05, edgecolors=None)
     ax.set_ylim(21, 34)
@@ -352,6 +353,7 @@ def plot_network_contribution():
     ax.set_xlabel('Average Daily Views')
     ax.set_ylabel('Network Contribution (%)')
     ax.set_title('VevoMusic')
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
 
     f_wiki = h5py.File('data/wiki/wiki.hdf5', 'r')
     path = 'expt/reports_2/wiki/two_hops/flow_lstm/serialization/evaluate-metrics.json'
