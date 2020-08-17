@@ -2202,7 +2202,7 @@
     .style("fill", "#aaa");
 
   var link = g
-    .selectAll("line")
+    .selectAll("line3")
     .data(data.links)
     .enter()
     .append("line")
@@ -2712,6 +2712,36 @@
     .attr("dx", 760)
     .attr("dy", 496);
 
+  g.append("rect")
+    .attr("x", 1090)
+    .attr("y", 440)
+    .attr("width", 110)
+    .attr("height", 80)
+    .attr("stroke", "#000")
+    .attr("stroke-width", 0.5)
+    .style("stroke-dasharray", "5,5")
+    .style("fill", "none");
+
+  svg
+    .append("line")
+    .style("stroke", "#aaa")
+    .attr("stroke-width", 1)
+    .attr("marker-end", "url(#end)")
+    .attr("x1", 1125)
+    .attr("y1", 460)
+    .attr("x2", 1150)
+    .attr("y2", 460);
+
+  svg
+    .append("line")
+    .style("stroke", "#aaa")
+    .attr("stroke-width", 3)
+    .attr("marker-end", "url(#end)")
+    .attr("x1", 1125)
+    .attr("y1", 477)
+    .attr("x2", 1150)
+    .attr("y2", 477);
+
   svg
     .append("circle")
     .attr("cx", 1130)
@@ -2737,6 +2767,26 @@
     .attr("cy", 520)
     .attr("r", 6)
     .style("fill", "orange");
+
+  svg
+    .append("text")
+    .attr("x", 1155)
+    .attr("y", 461)
+    .text("less attention")
+    .style("fill", "#555")
+    .style("font-size", 10)
+    .style("font-family", "Helvetica")
+    .attr("alignment-baseline", "middle");
+
+  svg
+    .append("text")
+    .attr("x", 1155)
+    .attr("y", 478)
+    .text("more attention")
+    .style("fill", "#555")
+    .style("font-size", 10)
+    .style("font-family", "Helvetica")
+    .attr("alignment-baseline", "middle");
 
   svg
     .append("text")
