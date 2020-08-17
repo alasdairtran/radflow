@@ -2671,12 +2671,20 @@
     .attr("dy", 210);
 
   g.append("text")
+    .text("(Sec. 4)")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 18)
+    .attr("dx", 760)
+    .attr("dy", 235);
+
+  g.append("text")
     .text("Flow")
     .style("fill", "#555")
     .style("font-family", "Helvetica")
     .style("font-size", 14)
-    .attr("dx", 770)
-    .attr("dy", 460);
+    .attr("dx", 772)
+    .attr("dy", 455);
 
   g.append("text")
     .text("Aggregation")
@@ -2684,7 +2692,23 @@
     .style("font-family", "Helvetica")
     .style("font-size", 14)
     .attr("dx", 750)
-    .attr("dy", 480);
+    .attr("dy", 475);
+
+  g.append("text")
+    .text("(Sec 4.1)")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 14)
+    .attr("dx", 758)
+    .attr("dy", 355);
+
+  g.append("text")
+    .text("(Sec 4.2)")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 14)
+    .attr("dx", 760)
+    .attr("dy", 496);
 
   svg
     .append("circle")
