@@ -1541,7 +1541,7 @@
       },
       {
         id: "network",
-        title: "Flow Agg",
+        title: "",
         kind: "module",
         fx: 743,
         fy: 425,
@@ -2669,6 +2669,67 @@
     .style("font-size", 18)
     .attr("dx", 760)
     .attr("dy", 210);
+
+  g.append("text")
+    .text("Flow")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 14)
+    .attr("dx", 770)
+    .attr("dy", 460);
+
+  g.append("text")
+    .text("Aggregation")
+    .style("fill", "#555")
+    .style("font-family", "Helvetica")
+    .style("font-size", 14)
+    .attr("dx", 750)
+    .attr("dy", 480);
+
+  svg
+    .append("circle")
+    .attr("cx", 1130)
+    .attr("cy", 500)
+    .attr("r", 6)
+    .style("fill", "#c6d9ec");
+  svg
+    .append("circle")
+    .attr("cx", 1145)
+    .attr("cy", 500)
+    .attr("r", 6)
+    .style("fill", "#ffdb99");
+
+  svg
+    .append("circle")
+    .attr("cx", 1130)
+    .attr("cy", 520)
+    .attr("r", 6)
+    .style("fill", "#6699cc");
+  svg
+    .append("circle")
+    .attr("cx", 1145)
+    .attr("cy", 520)
+    .attr("r", 6)
+    .style("fill", "orange");
+
+  svg
+    .append("text")
+    .attr("x", 1155)
+    .attr("y", 500)
+    .text("backcast period")
+    .style("fill", "#555")
+    .style("font-size", 10)
+    .style("font-family", "Helvetica")
+    .attr("alignment-baseline", "middle");
+  svg
+    .append("text")
+    .attr("x", 1155)
+    .attr("y", 520)
+    .text("forecast period")
+    .style("fill", "#555")
+    .style("font-size", 10)
+    .style("font-family", "Helvetica")
+    .attr("alignment-baseline", "middle");
 
   function dragstarted(d) {
     if (!d3.event.active) simulation.alphaTarget(0.3).restart();
