@@ -2256,8 +2256,10 @@
     .attr("stroke", "#000")
     .attr("stroke-width", (n) => (n.kind === "module" ? 1 : 1))
     .style("fill", (n) => {
-      if (n.kind === "module") {
-        return "#d4d4d4";
+      if (n.id === "network") {
+        return "#c6d9ec";
+      } else if (n.id === "model") {
+        return "#ffdb99";
       }
       if (n.kind === "concat") {
         return "#d4d4d4";
@@ -2549,7 +2551,7 @@
       })
       .attr("y", (d) => {
         if (d.kind == "module") {
-          return d.y + nodeWidth / 2;
+          return d.y + nodeWidth / 2 - 5;
         }
         if (d.kind == "concat") {
           return d.y + 26;
@@ -2700,7 +2702,7 @@
     .style("font-family", "Helvetica")
     .style("font-size", 14)
     .attr("dx", 758)
-    .attr("dy", 355);
+    .attr("dy", 350);
 
   g.append("text")
     .text("(Sec 4.2)")
