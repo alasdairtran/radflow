@@ -39,9 +39,9 @@ def plot_missing_expt(data):
                 f'expt/missing/{kind}/{data}/{n_hops}/60/serialization/evaluate-metrics.json',
                 f'expt/missing/{kind}/{data}/{n_hops}/80/serialization/evaluate-metrics.json']
 
-    y1 = get_means(get_paths('views', 'vevo', 'no_hops'))
-    y2 = get_means(get_paths('views', 'vevo', 'one_hop'))
-    y3 = get_means(get_paths('views', 'vevo', 'two_hops'))
+    y1 = get_means(get_paths('views', data, 'no_hops'))
+    y2 = get_means(get_paths('views', data, 'one_hop'))
+    y3 = get_means(get_paths('views', data, 'two_hops'))
 
     fig = plt.figure(figsize=(6, 3))
     ax = plt.subplot(1, 2, 1)
@@ -59,9 +59,9 @@ def plot_missing_expt(data):
 
     ax = plt.subplot(1, 2, 2)
 
-    y1 = get_means(get_paths('edges', 'vevo', 'no_hops'))
-    y2 = get_means(get_paths('edges', 'vevo', 'one_hop'))
-    y3 = get_means(get_paths('edges', 'vevo', 'two_hops'))
+    y1 = get_means(get_paths('edges', data, 'no_hops'))
+    y2 = get_means(get_paths('edges', data, 'one_hop'))
+    y3 = get_means(get_paths('edges', data, 'two_hops'))
 
     xs = [0, 20, 40, 60, 80]
     ax.errorbar(xs, y1, marker=None, linestyle=':')
@@ -236,8 +236,8 @@ def plot_series_averages():
     ax.set_title('VevoMusic')
 
     ax = plt.subplot(2, 1, 2)
-    ax.plot(wiki_views[-182:,0], label='desktop')
-    ax.plot(wiki_views[-182:,1], label='non-desktop')
+    ax.plot(wiki_views[-182:, 0], label='desktop')
+    ax.plot(wiki_views[-182:, 1], label='non-desktop')
     ax.legend(loc='upper left')
     ax.axvspan(154, 181, color='grey', alpha=0.3, lw=0)
     ax.set_xlim([0, 181])
