@@ -1,3 +1,5 @@
+# Switch to Pytorch's native AMP support when this is fixed
+# https://github.com/pytorch/pytorch/pull/42385
 import datetime
 import logging
 import math
