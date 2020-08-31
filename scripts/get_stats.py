@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 
@@ -133,7 +134,33 @@ def get_wiki_stats():
     get_stats(G2)
 
 
+def get_wiki_bivariate_nbeats_stats():
+    path = 'expt/pure_time_series/wiki_bivariate/07_nbeats_desktop/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o3 = json.load(f)
+
+    path = 'expt/pure_time_series/wiki_bivariate/07_nbeats_mobile/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o8 = json.load(f)
+
+    out_dir = 'expt/pure_time_series/wiki_bivariate/07_nbeats/serialization/'
+    os.makedirs(out_dir, exist_ok=True)
+    path = f'{out_dir}/evaluate-metrics.json'
+
+    s1 = np.array(o3['smapes'])
+    s2 = np.array(o8['smapes'])
+    s = np.stack([s1, s2], axis=-1)
+
+    o = {'smapes': s.tolist()}
+
+    with open(path, 'w') as f:
+        json.dump(o, f)
+
+    print('Wiki Bivariate NBEATS SMAPE-7 Mean:', s.mean())
+
+
 def main():
+    get_wiki_bivariate_nbeats_stats()
     get_vevo_stats()
     get_wiki_stats()
 
