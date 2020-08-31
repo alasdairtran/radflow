@@ -33,11 +33,11 @@ def get_means(paths):
 
 def plot_missing_expt(data):
     def get_paths(kind, data, n_hops):
-        return [f'expt/missing/{kind}/{data}/{n_hops}/00/serialization/evaluate-metrics.json',
-                f'expt/missing/{kind}/{data}/{n_hops}/20/serialization/evaluate-metrics.json',
-                f'expt/missing/{kind}/{data}/{n_hops}/40/serialization/evaluate-metrics.json',
-                f'expt/missing/{kind}/{data}/{n_hops}/60/serialization/evaluate-metrics.json',
-                f'expt/missing/{kind}/{data}/{n_hops}/80/serialization/evaluate-metrics.json']
+        return [f'expt/missing_information/{kind}/{data}/{n_hops}/00/serialization/evaluate-metrics.json',
+                f'expt/missing_information/{kind}/{data}/{n_hops}/20/serialization/evaluate-metrics.json',
+                f'expt/missing_information/{kind}/{data}/{n_hops}/40/serialization/evaluate-metrics.json',
+                f'expt/missing_information/{kind}/{data}/{n_hops}/60/serialization/evaluate-metrics.json',
+                f'expt/missing_information/{kind}/{data}/{n_hops}/80/serialization/evaluate-metrics.json']
 
     y1 = get_means(get_paths('views', data, 'no_hops'))
     y2 = get_means(get_paths('views', data, 'one_hop'))
@@ -101,11 +101,11 @@ def generate_word_cloud(seed):
 
 
 def plot_wiki_smape_boxplots():
-    path = 'expt/reports/wiki/no_hops/flow_lstm/serialization/evaluate-metrics.json'
+    path = 'expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/evaluate-metrics.json'
     with open(path) as f:
         o3 = json.load(f)
 
-    path = 'expt/reports/wiki/two_hops/flow_lstm/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/two_hops/14_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o8 = json.load(f)
 
@@ -186,7 +186,7 @@ def plot_wiki_smape_boxplots():
 
 
 def plot_layer_decompositions():
-    path = 'expt/reports/wiki/no_hops/flow_lstm/serialization/evaluate-metrics.json'
+    path = 'expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/evaluate-metrics.json'
     with open(path) as f:
         o3 = json.load(f)
 
@@ -331,7 +331,7 @@ def plot_network_contribution():
             node_ids[cat] = pickle.load(f)
 
     f_vevo = h5py.File('data/vevo/vevo.hdf5', 'r')
-    path = 'expt/reports_2/vevo/two_hops/flow_lstm/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/vevo_dynamic/imputation/two_hops/14_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o8 = json.load(f)
 
@@ -356,7 +356,7 @@ def plot_network_contribution():
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
 
     f_wiki = h5py.File('data/wiki/wiki.hdf5', 'r')
-    path = 'expt/reports_2/wiki/two_hops/flow_lstm/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/two_hops/14_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o8 = json.load(f)
 
@@ -395,7 +395,7 @@ def plot_network_contribution():
 
 
 def plot_attention_maps():
-    path = 'expt/reports_2/wiki/one_hop/flow_lstm/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hops/14_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o5 = json.load(f)
 
