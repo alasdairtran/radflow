@@ -133,7 +133,7 @@ def build_inputs(mongo_host):
             start_dates = ';'.join(start_dates)
             end_dates = ';'.join(end_dates)
             page_link_list = [str(from_id), start_dates,
-                              end_dates, str(pageID)]
+                              end_dates, str(graphID)]
             page_link_f.write(','.join(page_link_list) + '\n')
 
     for title, i in category_map.items():
