@@ -64,11 +64,30 @@ def build_inputs(mongo_host):
             title = f'"{title}"'
 
         series = db.series.find_one({'_id': graphID})
-        desktop = ';'.join([str(o) for o in series['d']['series']])
-        app = ';'.join([str(o) for o in series['a']['series']])
-        mobile = ';'.join([str(o) for o in series['m']['series']])
         assert series['d']['first_date'] == series['a']['first_date'] == series['m']['first_date']
+
+        d = series['d']['series']
+        a = series['a']['series']
+        m = series['m']['series']
         first_date = series['d']['first_date'].strftime("%Y-%m-%d")
+
+        n_empty = (series['d']['first_date'] - datetime(2015, 7, 1)).days
+        if n_empty > 0:
+            assert sum(d[:n_empty]) == -1 * n_empty
+            assert sum(a[:n_empty]) == -1 * n_empty
+            assert sum(m[:n_empty]) == -1 * n_empty
+
+            d = d[n_empty:]
+            a = a[n_empty:]
+            m = m[n_empty:]
+
+            assert d[0] != -1
+            assert a[0] != -1
+            assert m[0] != -1
+
+        desktop = ';'.join([str(o) for o in d])
+        app = ';'.join([str(o) for o in a])
+        mobile = ';'.join([str(o) for o in m])
 
         test = 'true' if graphID in test_ids else 'false'
 
