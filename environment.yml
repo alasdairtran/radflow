@@ -1,57 +1,39 @@
-name: nos
+name: radflow
 channels:
   - pytorch
-  - dglteam
   - defaults
   - conda-forge
 dependencies:
-  - autopep8=1.5.3
+  - autopep8=1.5.4
   - cudatoolkit=10.2.89
   - cython=0.29.21
-  - dgl-cuda10.2=0.4.3post2
   - ipykernel=5.3.4
-  - matplotlib=3.2.2
+  - matplotlib=3.3.1
   - mypy=0.782
   - numpy=1.19.1
-  - opencv=3.4.2
-  - pandas=1.0.5
-  - pip=20.1.1
+  - pandas=1.1.1
+  - pip=20.2.2
   - pytorch=1.6.0
-  - python=3.7.7
+  - python=3.8.5
   - pyyaml=5.3.1
   - redis-py=3.5.3
-  - tiledb-py=0.6.0
   - torchvision=0.7.0
   - pip:
-      - allennlp==1.1.0rc2
-      - pmdarima==1.7.0
+      - allennlp==1.1.0rc4
+      - pmdarima===1.7.0
       - bz2file==0.98
-      - beautifulsoup4==4.8.2
+      - beautifulsoup4==4.9.1
       - docopt==0.6.2
       - jina==0.5.0
-      - langdetect==1.0.7
-      - nltk==3.4.5
       - overrides==3.1.0
-      - Pillow==7.0.0
       - ptvsd==4.3.2
       - pudb==2019.2
-      - git+git://github.com/salaniz/pycocoevalcap.git@a6b79b0fbd0f4f293634831e4e09405de2abc955
-      - git+https://github.com/RedisGraph/redisgraph-bulk-loader.git@master
-      - pyarrow==0.17.1
-      - pymongo==3.10.1
-      - python-igraph==0.8.2
-      - pyzmq==19.0.0
+      - pyarrow==1.0.1
+      - pymongo==3.11.0
       - redisgraph==2.1.4
-      - schema==0.7.1
+      - schema==0.7.2
       - seaborn==0.10.1
-      - snap-stanford==5.0.0
-      - spacy==2.1.9
-      - stop-words==2018.7.23
       - tensorboard==2.3.0
-      - textstat==0.6.0
-      - termcolor==1.1.0
-      - tqdm==4.48.1
-      - transformers==3.0.2
-      - lxml==4.5.0
+      - tqdm==4.48.2
       - wget==3.2
-      - wordcloud==1.7.0
+      - wordcloud==1.8.0
