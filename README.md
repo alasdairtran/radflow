@@ -11,8 +11,8 @@ python -m ipykernel install --user --name nos --display-name "nos"
 python setup.py develop
 
 # Install apex
+git submodule init lib/apex && git submodule update --init lib/apex
 cd lib/apex
-git submodule init && git submodule update .
 pip install -v --no-cache-dir --global-option="--pyprof" --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 cd ../..
 
