@@ -38,3 +38,8 @@ __pycache__
 *.pdf
 /data
 /expt/**/serialization
+
+/wdsm2021
+/demo
+/docs
+/lib
