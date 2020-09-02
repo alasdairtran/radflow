@@ -20,7 +20,7 @@ from .train import yaml_to_params
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='', device=0):
+def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='', with_dropout=False, device=0):
     if archive_path.endswith('gz'):
         archive = load_archive(archive_path, device, overrides)
         config = archive.config
@@ -59,7 +59,9 @@ def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='',
     data_loader = DataLoader.from_params(
         dataset=instances, params=data_loader_params)
 
-    model.eval().to(device)
+    if not with_dropout:
+        model = model.eval()
+    model = model.to(device)
     model.evaluate_mode = True
 
     metrics = evaluate(model, data_loader,
@@ -98,8 +100,6 @@ def evaluate(model: Model,
     check_for_gpu(cuda_device)
 
     with torch.no_grad():
-        model.eval()
-
         iterator = iter(data_loader)
         logger.info("Iterating over dataset")
         generator_tqdm = Tqdm.tqdm(iterator)

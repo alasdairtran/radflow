@@ -27,6 +27,7 @@ Options:
     -s --eval-suffix S  Evaluation generation file name [default: ]
     PARAM_PATH          Path to file describing the model parameters.
     -m --model-path PATH Path the the best model.
+    -d --with-dropout   Evaluate with dropout on.
 
 Examples:
     nos train -r -g expt/lstm/config.yaml
@@ -95,7 +96,8 @@ def main():
 
     elif args['evaluate']:
         evaluate_from_file(args['param_path'], args['model_path'],
-                           args['overrides'], args['eval_suffix'])
+                           args['overrides'], args['eval_suffix'],
+                           args['with_dropout'])
 
 
 if __name__ == '__main__':
