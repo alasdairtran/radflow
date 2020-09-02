@@ -1005,7 +1005,8 @@ class LSTMLayer(nn.Module):
         self.variant = variant
 
         self.layer = nn.LSTM(hidden_size, hidden_size, 1,
-                             batch_first=True, dropout=dropout)
+                             batch_first=True)
+        self.drop = nn.Dropout(dropout)
 
         self.proj_f = GehringLinear(hidden_size, hidden_size)
         self.proj_b = GehringLinear(hidden_size, hidden_size)
@@ -1017,6 +1018,7 @@ class LSTMLayer(nn.Module):
         # yn.shape == [batch_size, n_neighs, seq_len]
 
         X, _ = self.layer(X)
+        X = self.drop(X)
         # X.shape == [batch_size, seq_len, hidden_size]
 
         b = self.out_b(F.gelu(self.proj_b(X)))
