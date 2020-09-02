@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.2-base-ubuntu18.04
+FROM nvidia/cuda:10.2-base-ubuntu18.04 AS radflow-base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -16,6 +16,7 @@ RUN apt-get update \
     fonts-liberation \
     run-one \
     build-essential \
+    git \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
@@ -59,14 +60,62 @@ RUN conda install --quiet --yes 'tini=0.18.0' && \
     conda list tini | grep tini | tr -s ' ' | cut -d ' ' -f 1,2 >> $CONDA_DIR/conda-meta/pinned && \
     conda clean --all -f -y
 
-COPY . /radflow
-RUN conda env update -f /radflow/environment.yml && \
-    conda activate radflow && \
-    cd /radflow && python setup.py install \
-    pip install -U torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html \
-    pip install -U torch-sparse==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html \
-    pip install -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html \
-    pip install -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html \
+COPY environment.yml /radflow/environment.yml
+RUN conda env create -f /radflow/environment.yml
+
+# Make RUN commands use the new environment:
+SHELL ["conda", "run", "-n", "radflow", "/bin/bash", "-c"]
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Apex needs nvcc to compile. We build it in a spearate build to reduce size. #
+# Set Docker memory limit to 12GB. An 8GB limit got the apex build killed.    #
+# Compute capability: Volta 7.0, Turing 7.5, Ampere 8.0.                      #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+FROM radflow-base as apex
+
+ENV NCCL_VERSION 2.5.6
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      cuda-libraries-$CUDA_PKG_VERSION \
+      cuda-nvtx-$CUDA_PKG_VERSION \
+      libcublas10=10.2.2.89-1 \
+      libnccl2=$NCCL_VERSION-1+cuda10.2 \
+      cuda-nvml-dev-$CUDA_PKG_VERSION \
+      cuda-command-line-tools-$CUDA_PKG_VERSION \
+      cuda-libraries-dev-$CUDA_PKG_VERSION \
+      cuda-minimal-build-$CUDA_PKG_VERSION \
+      libnccl-dev=$NCCL_VERSION-1+cuda10.2 \
+      libcublas-dev=10.2.2.89-1 && \
+      libcudnn7=$CUDNN_VERSION-1+cuda10.2 \
+    apt-mark hold libnccl2 && \
+    apt-mark hold libcudnn7 && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/nvidia/apex \
+ && cd apex && git checkout 4ef930c1c884f \
+ && TORCH_CUDA_ARCH_LIST="7.0;7.5" pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Adding apex to our main image                                               #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+FROM radflow-base
+
+COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/apex /opt/conda/envs/radflow/lib/python3.8/site-packages/apex
+COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/apex-0.1-py3.8.egg-info /opt/conda/envs/radflow/lib/python3.8/site-packages/apex-0.1-py3.8.egg-info
+COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/mlp_cuda.cpython-38-x86_64-linux-gnu.so /opt/conda/envs/radflow/lib/python3.8/site-packages/mlp_cuda.cpython-38-x86_64-linux-gnu.so
+COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/syncbn.cpython-38-x86_64-linux-gnu.so /opt/conda/envs/radflow/lib/python3.8/site-packages/syncbn.cpython-38-x86_64-linux-gnu.so
+COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/fused_layer_norm_cuda.cpython-38-x86_64-linux-gnu.so /opt/conda/envs/radflow/lib/python3.8/site-packages/fused_layer_norm_cuda.cpython-38-x86_64-linux-gnu.so
+COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/amp_C.cpython-38-x86_64-linux-gnu.so /opt/conda/envs/radflow/lib/python3.8/site-packages/amp_C.cpython-38-x86_64-linux-gnu.so
+COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/apex_C.cpython-38-x86_64-linux-gnu.so /opt/conda/envs/radflow/lib/python3.8/site-packages/apex_C.cpython-38-x86_64-linux-gnu.so
+
+RUN pip install -U torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
+    pip install -U torch-sparse==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
+    pip install -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
+    pip install -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
     pip install -U torch-geometric
 
+COPY . /radflow
+RUN cd /radflow && python setup.py install
+
 WORKDIR /radflow
+
+ENTRYPOINT ["conda", "run", "-n", "radflow"]
