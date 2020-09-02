@@ -72,6 +72,9 @@ python scripts/get_traffic.py -m dijkstra -b 2 -t 3 # braun
 
 # Store wiki graph in hdf5
 python scripts/extract_wiki_subgraph.py
+
+docker build -t alasdairtran/radflow .
+docker push alasdairtran/radflow
 ```
 
 ## Training
