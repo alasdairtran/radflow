@@ -3,7 +3,7 @@ from setuptools import setup
 setup(name='nos',
       version='0.1',
       description='Network of sequences',
-      url='https://github.com/alasdairtran/nos',
+      url='https://github.com/alasdairtran/radflow',
       author='Alasdair Tran',
       author_email='alasdair.tran@anu.edu.au',
       license='MIT',

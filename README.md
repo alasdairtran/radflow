@@ -6,8 +6,8 @@ Network of sequences
 
 ```sh
 conda env create -f conda.yaml
-conda activate nos
-python -m ipykernel install --user --name nos --display-name "nos"
+conda activate radflow
+python -m ipykernel install --user --name radflow --display-name "radflow"
 python setup.py develop
 
 # Install apex
