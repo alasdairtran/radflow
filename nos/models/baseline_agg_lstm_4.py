@@ -1017,8 +1017,11 @@ class LSTMLayer(nn.Module):
         # X.shape == [batch_size, seq_len]
         # yn.shape == [batch_size, n_neighs, seq_len]
 
-        X, _ = self.layer(X)
+        # It's recommended to apply dropout on the input to the LSTM cell
+        # See https://ieeexplore.ieee.org/document/7333848
         X = self.drop(X)
+
+        X, _ = self.layer(X)
         # X.shape == [batch_size, seq_len, hidden_size]
 
         b = self.out_b(F.gelu(self.proj_b(X)))
