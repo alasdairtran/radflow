@@ -107,11 +107,13 @@ COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/fused_layer
 COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/amp_C.cpython-38-x86_64-linux-gnu.so /opt/conda/envs/radflow/lib/python3.8/site-packages/amp_C.cpython-38-x86_64-linux-gnu.so
 COPY --from=apex /opt/conda/envs/radflow/lib/python3.8/site-packages/apex_C.cpython-38-x86_64-linux-gnu.so /opt/conda/envs/radflow/lib/python3.8/site-packages/apex_C.cpython-38-x86_64-linux-gnu.so
 
-RUN pip install -U torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
-    pip install -U torch-sparse==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
-    pip install -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
-    pip install -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
-    pip install -U torch-geometric
+# jina requires docker
+RUN pip install --no-cache-dir -U torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
+    pip install --no-cache-dir -U torch-sparse==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
+    pip install --no-cache-dir -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
+    pip install --no-cache-dir -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html && \
+    pip install --no-cache-dir -U torch-geometric && \
+    pip install --no-cache-dir -U docker
 
 COPY . /radflow
 RUN cd /radflow && python setup.py install
