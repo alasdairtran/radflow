@@ -75,6 +75,13 @@ python scripts/extract_wiki_subgraph.py
 
 docker build -t alasdairtran/radflow .
 docker push alasdairtran/radflow
+
+# On the server with GPU
+docker build -t alasdairtran/radflow .
+docker run -p 4321:44321 alasdairtran/radflow --port-expose 44321
+
+# On the client, find internal IP address
+hostname -I
 ```
 
 ## Training
