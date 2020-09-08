@@ -120,4 +120,8 @@ RUN cd /radflow && python setup.py install
 
 WORKDIR /radflow
 
-ENTRYPOINT ["conda", "run", "-n", "radflow"]
+# conda run, although more correct, buffers stdout and nothing is shown
+ENV PATH /opt/conda/envs/radflow/bin:$PATH
+# ENTRYPOINT ["conda", "run", "-n", "radflow"]
+
+ENTRYPOINT ["jina", "pod", "--uses", "jina/pods/forecaster.yaml"]
