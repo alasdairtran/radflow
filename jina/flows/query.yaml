@@ -1,0 +1,8 @@
+!Flow
+with:
+  logserver: true
+pods:
+  gateway:
+    port_expose: 44321
+  encoder:
+    uses: jina/pods/forecaster.yaml

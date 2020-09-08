@@ -1,0 +1,7 @@
+!RadflowForecaster
+with:
+  greetings: radflow-forecaster
+metas:
+  name: forecaster
+  py_modules: ../../nos/executors/forecaster.py
+  workspace: ./

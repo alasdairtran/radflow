@@ -1,7 +1,7 @@
 """Train and run semantic diff models.
 
 Usage:
-    nos (train|generate|evaluate) [options] PARAM_PATH
+    nos (train|generate|evaluate|serve) [options] PARAM_PATH
     nos (-h | --help)
     nos (-v | --version)
 
@@ -26,7 +26,8 @@ Options:
     -q --quiet          Print less info
     -s --eval-suffix S  Evaluation generation file name [default: ]
     PARAM_PATH          Path to file describing the model parameters.
-    -m --model-path PATH Path the the best model.
+    -m --model-path PATH Path to the best model.
+    -w --flow-path PATH Path to the Jina flow config.
     -d --with-dropout   Evaluate with dropout on.
 
 Examples:
@@ -42,6 +43,7 @@ from docopt import docopt
 from schema import And, Or, Schema, Use
 
 from nos.commands.evaluate import evaluate_from_file
+from nos.commands.server import serve_from_file
 from nos.commands.train import train_model_from_file
 from nos.utils import setup_logger
 
@@ -98,6 +100,10 @@ def main():
         evaluate_from_file(args['param_path'], args['model_path'],
                            args['overrides'], args['eval_suffix'],
                            args['with_dropout'])
+
+    elif args['serve']:
+        serve_from_file(args['param_path'], args['model_path'],
+                        args['flow_path'], args['overrides'])
 
 
 if __name__ == '__main__':
