@@ -43,7 +43,7 @@ def serve_from_file(archive_path, model_path, flow_path, overrides=None, device=
     # model = model.eval()
 
     print('init flow')
-    flow = Flow()
+    flow = Flow(port_expose=44192)
     flow.add(name='radflow_forecaster', uses=flow_path)
 
     print('start loop')

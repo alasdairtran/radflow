@@ -78,7 +78,7 @@ docker push alasdairtran/radflow
 
 # On the server with GPU
 docker build -t alasdairtran/radflow .
-docker run -p 4321:44321 alasdairtran/radflow --port-expose 44321
+docker run -p 44192:44192 --ipc=host -v $HOME/projects/phd/radflow:/radflow alasdairtran/radflow
 
 # On the client, find internal IP address
 hostname -I

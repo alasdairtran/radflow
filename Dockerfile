@@ -124,4 +124,8 @@ WORKDIR /radflow
 ENV PATH /opt/conda/envs/radflow/bin:$PATH
 # ENTRYPOINT ["conda", "run", "-n", "radflow"]
 
-ENTRYPOINT ["jina", "pod", "--uses", "jina/pods/forecaster.yaml"]
+# Remove when this is merged: https://github.com/jina-ai/jina/issues/924
+RUN sed -i 's/args.uses/args.yaml_path/g' /opt/conda/envs/radflow/lib/python3.8/site-packages/jina/main/api.py
+RUN sed -i '84d' /opt/conda/envs/radflow/lib/python3.8/site-packages/jina/main/api.py
+
+ENTRYPOINT ["jina", "flow", "--yaml-path", "jina/flows/query.yaml"]
