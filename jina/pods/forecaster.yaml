@@ -7,5 +7,5 @@ with:
   device: 0
 metas:
   name: forecaster
-  py_modules: ../../nos/executors/forecaster.py
+  py_modules: ../executors/forecaster.py
   workspace: ./

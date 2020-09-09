@@ -121,7 +121,7 @@ ENV PATH /opt/conda/envs/radflow/bin:$PATH
 
 COPY . /radflow
 WORKDIR /radflow
-RUN cd /radflow && python setup.py install
+RUN cd /radflow && python setup.py develop
 
 # Remove when this is merged: https://github.com/jina-ai/jina/issues/924
 RUN sed -i 's/args.uses/args.yaml_path/g' /opt/conda/envs/radflow/lib/python3.8/site-packages/jina/main/api.py
