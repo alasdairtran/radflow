@@ -56,10 +56,12 @@ class NewNaive(BaseModel):
         self.method = method
         self.end_offset = end_offset
 
-        self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views'][...]
+        if os.path.exists(data_path):
+            self.data = h5py.File(data_path, 'r')
+            self.series = self.data['views'][...]
+
         self.views_all = None
-        if multi_views_path:
+        if multi_views_path and os.path.exists(multi_views_path):
             self.views_all = h5py.File(multi_views_path, 'r')['views']
 
         assert method in ['previous_day', 'previous_week']
@@ -242,7 +244,7 @@ class BaselineAggLSTM4(BaseModel):
         self.n_layers = num_layers
 
         self.test_keys = set()
-        if test_keys_path:
+        if test_keys_path and os.path.exists(test_keys_path):
             with open(test_keys_path, 'rb') as f:
                 self.test_keys = pickle.load(f)
 
@@ -253,14 +255,17 @@ class BaselineAggLSTM4(BaseModel):
         self.view_randomize_p = view_randomize_p
         self.forward_fill = forward_fill
 
-        self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views'][...]
-        self.edges = self.data['edges']
-        self.masks = self.data['masks']
-        self.probs = self.data['probs']
-        self.flows = self.data['flows']
-        with open(key2pos_path, 'rb') as f:
-            self.key2pos = pickle.load(f)
+        if os.path.exists(data_path):
+            self.data = h5py.File(data_path, 'r')
+            self.series = self.data['views'][...]
+            self.edges = self.data['edges']
+            self.masks = self.data['masks']
+            self.probs = self.data['probs']
+            self.flows = self.data['flows']
+
+        if os.path.exists(key2pos_path):
+            with open(key2pos_path, 'rb') as f:
+                self.key2pos = pickle.load(f)
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
         self.agg_type = agg_type
@@ -299,7 +304,7 @@ class BaselineAggLSTM4(BaseModel):
         initializer(self)
 
         self.base_model = None
-        if base_model_config:
+        if base_model_config and os.path.exists(base_model_weights):
             config = yaml_to_params(base_model_config)
             vocab = Vocabulary.from_params(config.pop('vocabulary'))
             model = Model.from_params(vocab=vocab, params=config.pop('model'))
