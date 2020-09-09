@@ -115,14 +115,13 @@ RUN pip install --no-cache-dir -U torch-scatter==latest+cu102 -f https://pytorch
     pip install --no-cache-dir -U torch-geometric && \
     pip install --no-cache-dir -U docker
 
-COPY . /radflow
-RUN cd /radflow && python setup.py install
-
-WORKDIR /radflow
-
 # conda run, although more correct, buffers stdout and nothing is shown
 ENV PATH /opt/conda/envs/radflow/bin:$PATH
 # ENTRYPOINT ["conda", "run", "-n", "radflow"]
+
+COPY . /radflow
+WORKDIR /radflow
+RUN cd /radflow && python setup.py install
 
 # Remove when this is merged: https://github.com/jina-ai/jina/issues/924
 RUN sed -i 's/args.uses/args.yaml_path/g' /opt/conda/envs/radflow/lib/python3.8/site-packages/jina/main/api.py
