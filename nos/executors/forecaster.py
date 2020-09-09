@@ -18,6 +18,7 @@ class RadflowForecaster(BaseNumericEncoder):
     def __init__(self, greetings: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._greetings = greetings
+        self.logger.info('%s Initializing forecaster' % (self._greetings))
         config = yaml_to_params(kwargs['config_path'], kwargs['overrides'])
         prepare_environment(config)
         config_dir = os.path.dirname(kwargs['config_path'])
@@ -32,6 +33,8 @@ class RadflowForecaster(BaseNumericEncoder):
         else:
             device = torch.device('cpu')
 
+        self.logger.info(f"Loading best model weights from "
+                         f"{kwargs['model_path']}")
         best_model_state = torch.load(kwargs['model_path'], device)
         model.load_state_dict(best_model_state)
 
@@ -46,6 +49,7 @@ class RadflowForecaster(BaseNumericEncoder):
         p = next(self.model.parameters())
 
         series = pickle.loads(data)
+        self.logger.info(f"Received data: {series[:4].tolist()}...")
         # series.shape == [seq_len]
 
         series = torch.from_numpy(series).to(p.device)
@@ -64,5 +68,7 @@ class RadflowForecaster(BaseNumericEncoder):
 
         preds = torch.exp(preds)
         preds = preds.cpu().numpy()
+
+        self.logger.info(f"Returning forecasts: {preds[:4]}...")
 
         return preds
