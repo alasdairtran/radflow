@@ -43,3 +43,6 @@ __pycache__
 /demo
 /docs
 /lib
+
+# Include relevant model files
+!/expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/model_state_epoch_9.th

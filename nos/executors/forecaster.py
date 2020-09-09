@@ -1,20 +1,68 @@
+import os
 import pickle
 from typing import Any
 
 import numpy as np
-from jina.executors.encoders import BaseEncoder
+import torch
+from allennlp.common.util import prepare_environment
+from allennlp.data.vocabulary import Vocabulary
+from allennlp.models import Model
+from allennlp.models.archival import load_archive
+from jina.executors.encoders import BaseNumericEncoder
+
+from nos.commands.train import yaml_to_params
 
 
-class RadflowForecaster(BaseEncoder):
+class RadflowForecaster(BaseNumericEncoder):
 
     def __init__(self, greetings: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._greetings = greetings
-        # self.model = kwargs['model']
-        print('init', greetings)
+        config = yaml_to_params(kwargs['config_path'], kwargs['overrides'])
+        prepare_environment(config)
+        config_dir = os.path.dirname(kwargs['config_path'])
+        serialization_dir = os.path.join(config_dir, 'serialization')
+
+        os.makedirs(serialization_dir, exist_ok=True)
+        vocab = Vocabulary.from_params(config.pop('vocabulary'))
+
+        model = Model.from_params(vocab=vocab, params=config.pop('model'))
+        if torch.cuda.is_available():
+            device = torch.device(f"cuda:{kwargs['device']}")
+        else:
+            device = torch.device('cpu')
+
+        best_model_state = torch.load(kwargs['model_path'], device)
+        model.load_state_dict(best_model_state)
+
+        # We want to keep the dropout to generate confidence intervals
+        # model = model.eval()
+
+        self.model = model
+        self.forecast_len = 28
 
     def encode(self, data: Any, *args, **kwargs):
-        print('encode', data)
 
-        self.logger.info('%s %s' % (self._greetings, data))
-        return np.random.random([data.shape[0], 3])
+        p = next(self.model.parameters())
+
+        series = pickle.loads(data)
+        # series.shape == [seq_len]
+
+        series = torch.from_numpy(series).to(p.device)
+        series = series.unsqueeze(0)
+        series = torch.log1p(series)
+        # series.shape == [1, seq_len]
+
+        # Predict 28 days
+        preds = p.new_zeros(1, self.forecast_len)
+
+        for i in range(self.forecast_len):
+            _, pred, _ = self.model._forward_full(series)
+            pred = pred[:, -1]
+            preds[:, i] = pred[:, -1]
+            series = torch.cat([series, pred.unsqueeze(1)], dim=1)
+
+        preds = torch.exp(preds)
+        preds = preds.cpu().numpy()
+
+        return preds

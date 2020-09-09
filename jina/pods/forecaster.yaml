@@ -1,6 +1,10 @@
 !RadflowForecaster
 with:
   greetings: radflow-forecaster
+  config_path: expt/pure_time_series/wiki_univariate/08_radflow_no_network/config.yaml
+  model_path: expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/model_state_epoch_9.th
+  overrides: ""
+  device: 0
 metas:
   name: forecaster
   py_modules: ../../nos/executors/forecaster.py
