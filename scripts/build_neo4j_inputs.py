@@ -130,7 +130,7 @@ def build_inputs(mongo_host):
             if link['n'] not in title2graphid:
                 continue
 
-            from_id = title2graphid[link['n']]
+            to_id = title2graphid[link['n']]
             start_dates = []
             end_dates = []
             for t in link['t']:
@@ -151,8 +151,8 @@ def build_inputs(mongo_host):
 
             start_dates = ';'.join(start_dates)
             end_dates = ';'.join(end_dates)
-            page_link_list = [str(from_id), start_dates,
-                              end_dates, str(graphID)]
+            page_link_list = [str(graphID), start_dates,
+                              end_dates, str(to_id)]
             page_link_f.write(','.join(page_link_list) + '\n')
 
     for title, i in category_map.items():
