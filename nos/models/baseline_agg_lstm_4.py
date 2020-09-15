@@ -201,7 +201,7 @@ class BaselineAggLSTM4(BaseModel):
                  hop_scale: int = 1,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
-                 variant: str = 'full',
+                 variant: str = 'combined',
                  static_graph: bool = False,
                  end_offset: int = 0,
                  view_missing_p: float = 0,
@@ -268,30 +268,31 @@ class BaselineAggLSTM4(BaseModel):
                 self.key2pos = pickle.load(f)
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
+        node_size = hidden_size if variant == 'separate' else 2 * hidden_size
         self.agg_type = agg_type
         if agg_type in ['mean', 'attention', 'sage', 'gat']:
-            self.fc = GehringLinear(2 * self.hidden_size, input_size)
+            self.fc = GehringLinear(node_size, input_size)
 
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
-                hidden_size * 2, 4, dropout=0.1, bias=True,
+                node_size, 4, dropout=0.1, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
         elif agg_type == 'sage':
-            self.conv = SAGEConv(hidden_size * 2, hidden_size * 2)
+            self.conv = SAGEConv(node_size, node_size)
         elif agg_type == 'gat':
-            self.conv = GATConv(hidden_size * 2, hidden_size * 2 // 4,
+            self.conv = GATConv(node_size, node_size // 4,
                                 heads=4, dropout=0.1)
 
         if n_hops == 2:
             self.hop_rs = np.random.RandomState(4321)
             if agg_type == 'attention':
                 self.attn2 = nn.MultiheadAttention(
-                    hidden_size * 2, 4, dropout=0.1, bias=True,
+                    node_size, 4, dropout=0.1, bias=True,
                     add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
             elif agg_type == 'sage':
-                self.conv2 = SAGEConv(hidden_size * 2, hidden_size * 2)
+                self.conv2 = SAGEConv(node_size, node_size)
             elif agg_type == 'gat':
-                self.conv2 = GATConv(hidden_size * 2, hidden_size * 2 // 4,
+                self.conv2 = GATConv(node_size, node_size // 4,
                                      heads=4, dropout=0.1)
 
         self.series_len = series_len
@@ -954,6 +955,7 @@ class BaselineAggLSTM4(BaseModel):
 class LSTMDecoder(nn.Module):
     def __init__(self, hidden_size, n_layers, dropout, variant, input_size):
         super().__init__()
+        assert variant in ['combined', 'separate']
         self.variant = variant
         self.input_size = input_size
         self.in_proj = GehringLinear(input_size, hidden_size)
@@ -975,13 +977,19 @@ class LSTMDecoder(nn.Module):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         forecast = X.new_zeros(*X.shape)
-        hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
+        if self.variant == 'combined':
+            hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
+        elif self.variant == 'separate':
+            hidden = X.new_zeros(*X.shape)
         f_parts = []
 
         for layer in self.layers:
             h, b, f = layer(X)
             X = X - b
-            hidden = hidden + torch.cat([h, b], dim=-1)
+            if self.variant == 'combined':
+                hidden = hidden + torch.cat([h, b], dim=-1)
+            elif self.variant == 'separate':
+                hidden = hidden + h
             forecast = forecast + f
 
             if not self.training:
@@ -1007,6 +1015,7 @@ class LSTMDecoder(nn.Module):
 class LSTMLayer(nn.Module):
     def __init__(self, hidden_size, dropout, variant):
         super().__init__()
+        assert variant in ['combined', 'separate']
         self.variant = variant
 
         self.layer = nn.LSTM(hidden_size, hidden_size, 1,
@@ -1017,6 +1026,10 @@ class LSTMLayer(nn.Module):
         self.proj_b = GehringLinear(hidden_size, hidden_size)
         self.out_f = GehringLinear(hidden_size, hidden_size)
         self.out_b = GehringLinear(hidden_size, hidden_size)
+
+        if variant == 'separate':
+            self.proj_h = GehringLinear(hidden_size, hidden_size)
+            self.out_h = GehringLinear(hidden_size, hidden_size)
 
     def forward(self, X):
         # X.shape == [batch_size, seq_len]
@@ -1032,5 +1045,8 @@ class LSTMLayer(nn.Module):
         b = self.out_b(F.gelu(self.proj_b(X)))
         f = self.out_f(F.gelu(self.proj_f(X)))
         # b.shape == f.shape == [batch_size, seq_len, hidden_size]
+
+        if self.variant == 'separate':
+            X = self.out_h(F.gelu(self.proj_h(X)))
 
         return X, b, f
