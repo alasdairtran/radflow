@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(name='nos',
       version='0.1',
@@ -7,7 +7,7 @@ setup(name='nos',
       author='Alasdair Tran',
       author_email='alasdair.tran@anu.edu.au',
       license='MIT',
-      packages=['nos'],
+      packages=find_packages(),
       install_requires=[],
       scripts=['bin/nos'],
       zip_safe=False)
