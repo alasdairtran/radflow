@@ -28,8 +28,6 @@ def relabel_networks():
     network_path = os.path.join(data_dir, 'persistent_network.csv')
     network_df = pd.read_csv(network_path)
     target_ids = set(network_df['Target'])
-    source_ids = set(network_df['Source'])
-    # node_ids = sorted(target_ids | source_ids)
 
     # Map original ID to new ID
     # node_map = {int(k): int(i) for i, k in enumerate(node_ids)}
@@ -134,8 +132,6 @@ def relabel_networks():
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, 'in_degrees.pkl'), 'wb') as f:
         pickle.dump(new_in_degrees, f)
-    with open(os.path.join(output_dir, 'out_degrees.pkl'), 'wb') as f:
-        pickle.dump({}, f)
     with open(os.path.join(output_dir, 'series.pkl'), 'wb') as f:
         pickle.dump(series, f)
     with open(os.path.join(output_dir, 'neighs.pkl'), 'wb') as f:
@@ -186,8 +182,6 @@ def relabel_networks():
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, 'in_degrees.pkl'), 'wb') as f:
         pickle.dump(static_in_degrees, f)
-    with open(os.path.join(output_dir, 'out_degrees.pkl'), 'wb') as f:
-        pickle.dump({}, f)
     with open(os.path.join(output_dir, 'series.pkl'), 'wb') as f:
         pickle.dump(series, f)
     with open(os.path.join(output_dir, 'neighs.pkl'), 'wb') as f:
@@ -459,7 +453,7 @@ def main():
 
     # We leave this here, but TileDB random read speed is still slower
     # than mongo.
-    populate_tiledb()
+    # populate_tiledb()
 
     # Reading series from hdf5 is 20% than from mongo.
     populate_hdf5('graph', 'vevo')
@@ -467,10 +461,10 @@ def main():
 
     # Reading graph from redis is much faster than mongo. Pickle is twice
     # as fast as JSON.
-    populate_redis()
+    # populate_redis()
 
     # In-memory solution is still twice as fast as than redis + pickle.
-    pickle_graph()
+    # pickle_graph()
 
 
 if __name__ == '__main__':
