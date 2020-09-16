@@ -159,10 +159,111 @@ def get_wiki_bivariate_nbeats_stats():
     print('Wiki Bivariate NBEATS SMAPE-7 Mean:', s.mean())
 
 
+def get_bowtie_stats(G, views):
+    lscc = None
+    lscc_size = 0
+    for comp in nx.strongly_connected_components(G):
+        if len(comp) > lscc_size:
+            lscc_size = len(comp)
+            lscc = comp
+
+    in_set = set()
+    for source, dest in G.in_edges(lscc):
+        if source not in lscc:
+            in_set.add(source)
+
+    out_set = set()
+    for source, dest in G.out_edges(lscc):
+        if dest not in lscc:
+            out_set.add(dest)
+
+    tendrils = set()
+    for source, dest in G.out_edges(in_set):
+        if dest not in in_set and dest not in lscc and dest not in out_set:
+            tendrils.add(dest)
+
+    for source, dest in G.in_edges(out_set):
+        if source not in in_set and source not in lscc and source not in out_set:
+            tendrils.add(dest)
+
+    dis_set = set()
+    connected_set = in_set | out_set | tendrils | lscc
+    for n in G.nodes:
+        if n not in connected_set:
+            dis_set.add(n)
+
+    total_views = views.sum()
+
+    def print_stats(nodes, G, views):
+        count_pct = len(nodes) / len(G)
+        node_views = views[np.array(sorted(nodes))].sum()
+        views_pct = node_views / total_views
+
+        return f'{count_pct:.1%} & {views_pct:.1%}'.replace('%', r'\%')
+
+    print(f"LSCC: {print_stats(lscc, G, views)}")
+    print(f"IN: {print_stats(in_set, G, views)}")
+    print(f"OUT: {print_stats(out_set, G, views)}")
+    print(f"Tendrils: {print_stats(tendrils, G, views)}")
+    print(f"Disconnected: {print_stats(dis_set, G, views)}")
+
+
+def get_vevo_bowtie_stats():
+    path = "data/vevo/static_graph_2018_10_01.gpickle"
+    f = h5py.File('data/vevo/vevo.hdf5', 'r')
+
+    # Day 30 is 1 oct 2018
+    day = 30
+    if not os.path.exists(path):
+        edges = f['edges']
+        G = nx.DiGraph()
+        for target_id, neighs in tqdm(enumerate(edges)):
+            if len(neighs[day]) == 0:
+                G.add_node(target_id)
+            for n in neighs[day]:
+                if n != -1:
+                    G.add_edge(n, target_id)
+        nx.write_gpickle(G, path)
+
+    G = nx.read_gpickle(path)
+    views = f['views'][:, day]
+
+    print('Stats for Vevo graph')
+    get_bowtie_stats(G, views)
+
+
+def get_wiki_bowtie_stats():
+    path = "data/wiki/static_graph_2018_10_01.gpickle"
+    f = h5py.File('data/wiki/wiki.hdf5', 'r')
+
+    # Day 1,188 is 1 oct 2018
+    day = 1188
+
+    if not os.path.exists(path):
+        edges = f['edges']
+        G = nx.DiGraph()
+        for target_id, neighs in tqdm(enumerate(edges)):
+            if len(neighs[day]) == 0:
+                G.add_node(target_id)
+            for n in neighs[day]:
+                if n != -1:
+                    G.add_edge(n, target_id)
+        nx.write_gpickle(G, path)
+
+    G = nx.read_gpickle(path)
+    views = f['views'][:, day]
+
+    print('Stats for Wiki graph')
+    get_bowtie_stats(G, views)
+
+
 def main():
-    get_wiki_bivariate_nbeats_stats()
-    get_vevo_stats()
-    get_wiki_stats()
+    # get_wiki_bivariate_nbeats_stats()
+    # get_vevo_stats()
+    # get_wiki_stats()
+
+    get_vevo_bowtie_stats()
+    get_wiki_bowtie_stats()
 
 
 if __name__ == '__main__':
