@@ -1,14 +1,14 @@
 """Extract wiki subgraphs
 
 Usage:
-    extract_wiki_subgraphs.py [options] SEED
+    extract_wiki_subgraphs.py [options]
 
 Options:
     -p --ptvsd PORT     Enable debug mode with ptvsd on PORT, e.g. 5678.
     -m --mongo HOST     MongoDB host [default: localhost].
     -d --depth INT      Depth of the category [default: 5]
     -e --end DATE       End date [default: 2020013100]
-    SEED                Seed word.
+    -s --seed SEED      Seed word.
 """
 
 import os
@@ -328,12 +328,6 @@ def get_traffic_for_page(o_title, i, db, end):
     return series
 
 
-def extract_all(mongo_host, seed, depth, end):
-    key = seed.lower().replace(' ', '_')
-    matrix_path = "data/wiki/static_edge_list_2015.npz"
-    grow_from_cats(key, seed, mongo_host, depth, end, matrix_path)
-
-
 def clean_wiki(mongo_host):
     client = MongoClient(host=mongo_host, port=27017)
     db = client.wiki2
@@ -449,7 +443,6 @@ def generate_hdf5():
 
     float16_dt = h5py.vlen_dtype(np.dtype('float16'))
     probs = data_f.create_dataset('probs', (len(old2new), 1827), float16_dt)
-    flows = data_f.create_dataset('flows', (len(old2new), 1827), int32_dt)
 
     # If there's enough memory, load all masks into memory
     mask_f = h5py.File('data/wiki/masks.hdf5', 'r', driver='core')
@@ -477,7 +470,6 @@ def generate_hdf5():
 
         edges_list = []
         probs_list = []
-        flows_list = []
         max_count = 0
         kept_neigh_set = set()
         for day in range(1827):
@@ -491,7 +483,6 @@ def generate_hdf5():
 
             if not sorted_neighs:
                 probs_list.append(np.array([], dtype=np.float16))
-                flows_list.append(np.array([], dtype=np.int32))
                 continue
 
             counts = np.array([normalised_views[n, day]
@@ -502,26 +493,21 @@ def generate_hdf5():
             total = counts.sum()
             if total < 1e-6:
                 probs_list.append(np.array([], dtype=np.float16))
-                flows_list.append(np.array([], dtype=np.int32))
                 continue
 
             prob = counts / total
             probs_list.append(np.array(prob.cumsum(), np.float16))
-            flows_list.append(np.round(counts).astype(np.int32))
 
         # Pad arrays
         edges_array = np.full((1827, max_count), -1, dtype=np.int32)
         probs_array = np.ones((1827, max_count), dtype=np.float16)
-        flows_array = np.zeros((1827, max_count), dtype=np.int32)
 
         for day in range(1827):
             edges_array[day, :len(edges_list[day])] = edges_list[day]
             probs_array[day, :len(probs_list[day])] = probs_list[day]
-            flows_array[day, :len(flows_list[day])] = flows_list[day]
 
         probs[int(key)] = np.ascontiguousarray(probs_array)
         edges[int(key)] = np.ascontiguousarray(edges_array)
-        flows[int(key)] = np.ascontiguousarray(flows_array)
 
         kept_neigh_ids = sorted(kept_neigh_set)
         mask = np.ones((len(kept_neigh_ids), 1827), dtype=np.bool_)
@@ -603,7 +589,7 @@ def validate(args):
     schema = Schema({
         'ptvsd': Or(None, And(Use(int), lambda port: 1 <= port <= 65535)),
         'mongo': Or(None, str),
-        'seed': str,
+        'seed': Or(None, str),
         'depth': Use(int),
         'end': str,
     })
@@ -620,10 +606,9 @@ def main():
         ptvsd.enable_attach(address)
         ptvsd.wait_for_attach()
 
-    # extract_all(args['mongo'], args['seed'], args['depth'], args['end'])
-    clean_wiki(args['mongo'])
-    generate_train_test_split()
-    create_masks(args['mongo'])
+    # clean_wiki(args['mongo'])
+    # generate_train_test_split()
+    # create_masks(args['mongo'])
     generate_hdf5()
 
 

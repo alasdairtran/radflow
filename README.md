@@ -26,6 +26,9 @@ pip install -U torch-geometric
 # Start an empty mongodb database
 mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
 
+# Process vevo data
+python scripts/prepare_vevo_network.py
+
 # Download wiki dump. This takes about three days.
 python scripts/download_wikidump.py
 

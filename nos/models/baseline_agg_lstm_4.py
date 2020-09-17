@@ -261,7 +261,6 @@ class BaselineAggLSTM4(BaseModel):
             self.edges = self.data['edges']
             self.masks = self.data['masks']
             self.probs = self.data['probs']
-            self.flows = self.data['flows']
 
         if os.path.exists(key2pos_path):
             with open(key2pos_path, 'rb') as f:

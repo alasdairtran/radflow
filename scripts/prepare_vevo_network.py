@@ -10,14 +10,12 @@ import h5py
 import numpy as np
 import pandas as pd
 import pymongo
-import redis
-import tiledb
 from pymongo import MongoClient
 from tqdm import tqdm
 
-from nos.utils import keystoint
+from nos.utils import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger()
 
 
 def relabel_networks():
@@ -27,32 +25,20 @@ def relabel_networks():
     logger.info('Loading persistent network.')
     network_path = os.path.join(data_dir, 'persistent_network.csv')
     network_df = pd.read_csv(network_path)
-    target_ids = set(network_df['Target'])
-
-    # Map original ID to new ID
-    # node_map = {int(k): int(i) for i, k in enumerate(node_ids)}
 
     # Get the edges
-    network_df['source'] = network_df['Source']  # .replace(node_map)
-    network_df['target'] = network_df['Target']  # .replace(node_map)
+    network_df['source'] = network_df['Source']
+    network_df['target'] = network_df['Target']
 
-    logger.info('Remapping node IDs.')
-    sources: Dict[int, List[int]] = defaultdict(list)
+    logger.info('Constructing in-degree dict of persistent network.')
+    persistent_indegrees: Dict[int, List[int]] = defaultdict(list)
     for _, row in tqdm(network_df.iterrows()):
         target = int(row['target'])
         source = int(row['source'])
-        sources[target].append(source)
-
-    out_network_path = os.path.join(data_dir, 'persistent_network_2.csv')
-    network_df[['source', 'target']].to_csv(out_network_path, index=False)
-
-    out_adj_list_path = os.path.join(data_dir, 'adjacency_list.json')
-    with open(out_adj_list_path, 'w') as f:
-        json.dump(sources, f)
+        persistent_indegrees[target].append(source)
 
     logger.info('Loading time series.')
     full_series: Dict[int, List[int]] = {}
-    series: Dict[int, List[int]] = {}
     path = os.path.join(data_dir, 'vevo_forecast_data_60k.tsv')
     embed_dict = {}
     with open(path) as f:
@@ -61,163 +47,86 @@ def relabel_networks():
             key = int(embed)
             embed_dict[embed_name] = key
             full_series[key] = [int(x) for x in ts_view.split(',')]
-            if int(embed) in target_ids:
-                key = int(embed)
-                series[key] = [int(x) for x in ts_view.split(',')]
-    assert len(series) == 13710
-
-    out_series_path = os.path.join(data_dir, 'vevo_series.json')
-    with open(out_series_path, 'w') as f:
-        json.dump(series, f)
-
-    out_full_series_path = os.path.join(data_dir, 'vevo_full_series.json')
-    with open(out_full_series_path, 'w') as f:
-        json.dump(full_series, f)
 
     snapshots = defaultdict(dict)
 
-    # TODO: COMMENTED OUT FOR FASTER LOADING. UNCOMMENT THIS WHEN CODE IS PUBLISHED
     # Daily snapshots
-    # start = datetime(2018, 9, 1)
-    # for i in tqdm(range(63)):
-    #     d = start + timedelta(days=i)
-    #     filename = f'network_{d.year}-{d.month:02}-{d.day:02}.p'
-    #     path = os.path.join(data_dir, 'network_pickle', filename)
-    #     with open(path, 'rb') as f:
-    #         obj = pickle.load(f)
+    logger.info('Computing snapshots.')
+    start = datetime(2018, 9, 1)
+    for i in tqdm(range(63)):
+        d = start + timedelta(days=i)
+        filename = f'network_{d.year}-{d.month:02}-{d.day:02}.p'
+        path = os.path.join(data_dir, 'network_pickle', filename)
+        with open(path, 'rb') as f:
+            obj = pickle.load(f)
 
-    #     for key, values in obj.items():
-    #         values = sorted(values, key=lambda x: x[2], reverse=True)
-    #         s = [v[0] for v in values]
-    #         snapshots[i][key] = s
+        for key, values in obj.items():
+            s = [v[0] for v in values]
+            snapshots[i][key] = s
 
-    # snapshot_path = os.path.join(data_dir, 'snapshots.json')
-    # with open(snapshot_path, 'w') as f:
-    #     json.dump(snapshots, f)
-
-    new_in_degrees = {}
-    for key in sources.keys():
-        new_in_degrees[key] = {}
-
+    # We store neighbours, each with a time mask
+    masked_neighs = {}
     n_days = len(snapshots.keys())
 
+    logger.info('Computing masked neigh dict')
     for day, snapshot in tqdm(snapshots.items()):
         for key, neighs in snapshot.items():
-            if key not in new_in_degrees:
-                continue
+            if key not in masked_neighs:
+                masked_neighs[key] = {}
             for neigh in neighs:
-                if neigh not in new_in_degrees[key]:
-                    new_in_degrees[key][neigh] = {
+                if neigh not in masked_neighs[key]:
+                    masked_neighs[key][neigh] = {
                         'id': neigh,
                         'mask': [True] * n_days,
                     }
-                new_in_degrees[key][neigh]['mask'][day] = False
+                masked_neighs[key][neigh]['mask'][day] = False
 
-    for k, v in new_in_degrees.items():
-        new_in_degrees[k] = sorted(v.values(), key=lambda x: sum(
-            series[x['id']][:7]), reverse=True)
+    for k, v in masked_neighs.items():
+        masked_neighs[k] = list(v.values())
 
-    neighs = {k: {} for k in new_in_degrees.keys()}
-    max_days = len(next(iter(series.values())))
-    for t in tqdm(range(max_days)):
-        for k, v in new_in_degrees.items():
+    # Reshape so that we now store neighbours separately for each day
+    logger.info('Reshaping masked neigh dict')
+    neighs = {k: {} for k in masked_neighs}
+    for t in tqdm(range(n_days)):
+        for k, v in masked_neighs.items():
             k_neighs = [n['id'] for n in v if n['mask'][t] == 0]
-            k_views = [series[n['id']][t]
-                       for n in v if n['mask'][t] == 0]
-            k_neighs = [x for _, x in sorted(
-                zip(k_views, k_neighs), reverse=True)]
             neighs[k][t] = k_neighs
 
-    output_dir = 'data/wiki/subgraphs/vevo'
+    output_dir = 'data/vevo/processed/dynamic'
     os.makedirs(output_dir, exist_ok=True)
+    logger.info('Saving processed dynamic network data')
     with open(os.path.join(output_dir, 'in_degrees.pkl'), 'wb') as f:
-        pickle.dump(new_in_degrees, f)
+        pickle.dump(masked_neighs, f)
     with open(os.path.join(output_dir, 'series.pkl'), 'wb') as f:
-        pickle.dump(series, f)
+        pickle.dump(full_series, f)
     with open(os.path.join(output_dir, 'neighs.pkl'), 'wb') as f:
         pickle.dump(neighs, f)
 
-    tags = ['acoustic', 'alternative', 'audio', 'blue', 'classical', 'country',
-            'cover', 'dance', 'electronic', 'gospel', 'guitar', 'hd', 'hip hop',
-            'holiday', 'indie', 'instrumental', 'jazz', 'karaoke', 'live',
-            'lyrics', 'metal', 'musical', 'official', 'piano', 'pop', 'r&b',
-            'rap', 'remix', 'rock', 'single']
-
-    path = 'data/vevo_en_videos_60k.json'
-    vevo_tags = {}
-    with open(path) as f:
-        for line in tqdm(f):
-            o = json.loads(line)
-            key = embed_dict[o['id']]
-            cleaned_tags = set()
-            if 'tags' in o['snippet']:
-                v_tags = o['snippet']['tags']
-                for t in v_tags:
-                    t = t.lower().replace('-', ' ')
-                    for tag in tags:
-                        if tag in t:
-                            cleaned_tags.add(tag)
-            cleaned_tags = sorted(cleaned_tags)
-            vevo_tags[key] = cleaned_tags
-
-    vevo_tag_path = os.path.join(data_dir, 'vevo_tags.json')
-    with open(vevo_tag_path, 'w') as f:
-        json.dump(vevo_tags, f)
-
     # We also save static graph
-    static_in_degrees = {k: [] for k in sources.keys()}
-    for k in static_in_degrees:
-        for n in sources[k]:
+    static_in_degrees = {k: [] for k in persistent_indegrees.keys()}
+    for k in persistent_indegrees:
+        for n in persistent_indegrees[k]:
             mask = [0] * n_days
             static_in_degrees[k].append({'id': n, 'mask': mask})
 
-    neighs = {k: {} for k in sources.keys()}
+    neighs = {k: {} for k in persistent_indegrees.keys()}
     for t in tqdm(range(n_days)):
-        for k, v in sources.items():
-            k_views = [series[n][t] for n in v]
-            v = [x for _, x in sorted(zip(k_views, v), reverse=True)]
+        for k, v in persistent_indegrees.items():
             neighs[k][t] = v
 
-    output_dir = 'data/wiki/subgraphs/vevo_static'
+    output_dir = 'data/vevo/processed/static'
     os.makedirs(output_dir, exist_ok=True)
+    logger.info('Saving processed static network data')
     with open(os.path.join(output_dir, 'in_degrees.pkl'), 'wb') as f:
         pickle.dump(static_in_degrees, f)
     with open(os.path.join(output_dir, 'series.pkl'), 'wb') as f:
-        pickle.dump(series, f)
+        pickle.dump(full_series, f)
     with open(os.path.join(output_dir, 'neighs.pkl'), 'wb') as f:
         pickle.dump(neighs, f)
 
 
-def create_traffic_tile(traffic_path, n_nodes, train_length, start, end):
-    if os.path.exists(traffic_path):
-        return
-
-    os.makedirs(traffic_path, exist_ok=True)
-
-    logger.info(f'Creating traffic tile at {traffic_path}')
-    n_steps = (end - start).days + 1
-    logger.info(f'No of days: {n_steps}')
-
-    dom = tiledb.Domain(tiledb.Dim(name='i',
-                                   domain=(0, n_nodes - 1),
-                                   tile=1,
-                                   dtype=np.uint32),
-                        tiledb.Dim(name="t",
-                                   domain=(0, n_steps - 1),
-                                   tile=train_length,
-                                   dtype=np.uint32))
-
-    # The array will be dense with a single attribute "v" so each (i,j) cell can store an integer.
-    schema = tiledb.ArraySchema(domain=dom, sparse=False,
-                                attrs=[tiledb.Attr(name="v", dtype=np.uint32)])
-
-    # Create the (empty) array on disk.
-    # Empty cells are represented by 4294967295 for uint32 (largest number  2^32 − 1)
-    tiledb.DenseArray.create(traffic_path, schema)
-
-
 def populate_database(seed_word, collection):
-    data_dir = 'data/wiki/subgraphs'
+    data_dir = 'data/vevo/processed'
     series_path = f'{data_dir}/{seed_word}/series.pkl'
     with open(series_path, 'rb') as f:
         series = pickle.load(f)
@@ -232,6 +141,7 @@ def populate_database(seed_word, collection):
 
     docs = []
 
+    logger.info('Constructing database entries')
     for k, s in tqdm(series.items()):
         n_days = len(s)
         neighs_list = []
@@ -262,7 +172,7 @@ def populate_database(seed_word, collection):
     ])
 
     logger.info('Inserting graph into database.')
-    result = db[collection].insert_many(docs)
+    _ = db[collection].insert_many(docs)
 
     # Add metadata
     with open('data/vevo/raw/vevo_en_embeds_60k.txt') as f:
@@ -346,7 +256,6 @@ def populate_hdf5(collection, name):
 
     float16_dt = h5py.vlen_dtype(np.dtype('float16'))
     probs = data_f.create_dataset('probs', (60740, 63), float16_dt)
-    flows = data_f.create_dataset('flows', (60740, 63), int32_dt)
     edges = data_f['edges'][...]
 
     for k, edge in tqdm(enumerate(edges)):
@@ -354,31 +263,35 @@ def populate_hdf5(collection, name):
             continue
 
         key_probs = np.ones((63, len(edge[0])), dtype=np.float16)
-        key_flows = np.zeros((63, len(edge[0])), dtype=np.int32)
         for d, ns in enumerate(edge):
             if len(ns) == 0 or ns[0] == -1:
                 continue
             counts = np.array([normalised_views[n, d] for n in ns[ns != -1]])
 
-            # counts = np.log1p(counts)
             total = counts.sum()
             if total < 1e-6:
                 continue
 
             prob = counts / total
             key_probs[d, :len(prob)] = np.array(prob.cumsum(), np.float16)
-            key_flows[d, :len(counts)] = np.round(counts).astype(np.int32)
         probs[k] = np.ascontiguousarray(key_probs)
-        flows[k] = np.ascontiguousarray(key_flows)
 
 
 def main():
+    logger.info('Relabeling networks')
     relabel_networks()
-    populate_database('vevo', 'graph')
-    populate_database('vevo_static', 'static')
 
-    # Reading series from hdf5 is 20% than from mongo.
+    logger.info('Populating dynamic database')
+    populate_database('dynamic', 'graph')
+
+    logger.info('Populating static database')
+    populate_database('static', 'static')
+
+    # Reading series from hdf5 is 20% faster than from mongo.
+    logger.info('Populating dynamic HDF5')
     populate_hdf5('graph', 'vevo')
+
+    logger.info('Populating static HDF5')
     populate_hdf5('static', 'vevo_static')
 
 

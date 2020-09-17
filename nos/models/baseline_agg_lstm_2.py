@@ -110,7 +110,6 @@ class BaselineAggLSTM2(BaseModel):
         self.edges = self.data['edges']
         self.masks = self.data['masks']
         self.probs = self.data['probs']
-        self.flows = self.data['flows']
 
         self.views_all = None
         if multi_views_path:
