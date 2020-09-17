@@ -15,7 +15,7 @@ model:
   key2pos_path: ./data/vevo/vevo_static.key2pos.pkl
   peek: true
   num_layers: 8
-  hidden_size: 112
+  hidden_size: 116
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42
