@@ -217,12 +217,15 @@ def get_vevo_bowtie_stats():
     if not os.path.exists(path):
         edges = f['edges']
         G = nx.DiGraph()
+        added_ids = set()
         for target_id, neighs in tqdm(enumerate(edges)):
-            if len(neighs[day]) == 0:
+            if target_id not in added_ids:
                 G.add_node(target_id)
+                added_ids.add(target_id)
             for n in neighs[day]:
                 if n != -1:
                     G.add_edge(n, target_id)
+                    added_ids.add(n)
         nx.write_gpickle(G, path)
 
     G = nx.read_gpickle(path)
@@ -248,18 +251,20 @@ def get_wiki_bowtie_stats():
     blacklist = cat_ids | list_ids
 
     # This takes 45 minutes
+    added_ids = set()
     if not os.path.exists(path):
         edges = f['edges']
         G = nx.DiGraph()
         for target_id, neighs in tqdm(enumerate(edges)):
             if target_id in blacklist:
                 continue
-            ns = neighs[day][neighs[day] != -1]
-            if len(ns) == 0:
+            if target_id not in added_ids:
                 G.add_node(target_id)
-            for n in ns:
+                added_ids.add(target_id)
+            for n in neighs[day]:
                 if n != -1 and n not in blacklist:
                     G.add_edge(n, target_id)
+                    added_ids.add(n)
         nx.write_gpickle(G, path)
 
     G = nx.read_gpickle(path)
@@ -274,7 +279,7 @@ def main():
     # get_vevo_stats()
     # get_wiki_stats()
 
-    # get_vevo_bowtie_stats()
+    get_vevo_bowtie_stats()
     get_wiki_bowtie_stats()
 
 
