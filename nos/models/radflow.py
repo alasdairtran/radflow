@@ -1,5 +1,4 @@
 import logging
-import math
 import os
 import pickle
 from collections import Counter, defaultdict
@@ -9,7 +8,6 @@ from typing import Any, Dict, List
 import h5py
 import numpy as np
 import pandas as pd
-import redis
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -25,16 +23,16 @@ from tqdm import tqdm
 
 from nos.commands.train import yaml_to_params
 from nos.modules.linear import GehringLinear
+from nos.modules.metrics import get_smape
 from nos.utils import keystoint
 
 from .base import BaseModel
-from .metrics import get_smape
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register('baseline_agg_lstm_2')
-class BaselineAggLSTM2(BaseModel):
+@Model.register('radflow')
+class RADflow(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  agg_type: str,
@@ -60,7 +58,7 @@ class BaselineAggLSTM2(BaseModel):
                  hop_scale: int = 1,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
-                 static_graph: bool = False,
+                 variant: str = 'separate',
                  end_offset: int = 0,
                  view_missing_p: float = 0,
                  edge_missing_p: float = 0,
@@ -69,6 +67,13 @@ class BaselineAggLSTM2(BaseModel):
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
+        self.views_all = None
+        if multi_views_path:
+            self.views_all = h5py.File(multi_views_path, 'r')['views']
+        input_size = 2 if self.views_all else 1
+        self.input_size = input_size
+        self.decoder = LSTMDecoder(
+            hidden_size, num_layers, dropout, variant, input_size)
         self.mse = nn.MSELoss()
         self.hidden_size = hidden_size
         self.peek = peek
@@ -82,13 +87,19 @@ class BaselineAggLSTM2(BaseModel):
         self.test_lengths = test_lengths
         self.t_total = t_total
         self.current_t = 0
-        self.static_graph = static_graph
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
         self.edge_selection_method = edge_selection_method
 
+        self.evaluate_mode = False
+        self.view_missing_p = view_missing_p
+        self.edge_missing_p = edge_missing_p
+        self.n_hops = n_hops
+        self.hop_scale = hop_scale
+        self.n_layers = num_layers
+
         self.test_keys = set()
-        if test_keys_path:
+        if test_keys_path and os.path.exists(test_keys_path):
             with open(test_keys_path, 'rb') as f:
                 self.test_keys = pickle.load(f)
 
@@ -99,60 +110,43 @@ class BaselineAggLSTM2(BaseModel):
         self.view_randomize_p = view_randomize_p
         self.forward_fill = forward_fill
 
-        self.evaluate_mode = False
-        self.view_missing_p = view_missing_p
-        self.edge_missing_p = edge_missing_p
-        self.n_hops = n_hops
-        self.hop_scale = hop_scale
+        if os.path.exists(data_path):
+            self.data = h5py.File(data_path, 'r')
+            self.series = self.data['views'][...]
+            self.edges = self.data['edges']
+            self.masks = self.data['masks']
+            self.probs = self.data['probs']
 
-        self.data = h5py.File(data_path, 'r')
-        self.series = self.data['views'][...]
-        self.edges = self.data['edges']
-        self.masks = self.data['masks']
-        self.probs = self.data['probs']
-
-        self.views_all = None
-        if multi_views_path:
-            self.views_all = h5py.File(multi_views_path, 'r')['views']
-
-        with open(key2pos_path, 'rb') as f:
-            self.key2pos = pickle.load(f)
-
-        input_size = 2 if self.views_all else 1
-        self.input_size = input_size
-        self.decoder = nn.LSTM(input_size, hidden_size, num_layers,
-                               bias=True, batch_first=True, dropout=dropout)
+        if os.path.exists(key2pos_path):
+            with open(key2pos_path, 'rb') as f:
+                self.key2pos = pickle.load(f)
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
+        node_size = hidden_size if variant == 'separate' else 2 * hidden_size
         self.agg_type = agg_type
-        self.fc = GehringLinear(self.hidden_size, input_size)
-
         if agg_type in ['mean', 'attention', 'sage', 'gat']:
-            self.out_proj = GehringLinear(
-                self.hidden_size * 2, self.hidden_size)
+            self.fc = GehringLinear(node_size, input_size)
 
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
-                self.hidden_size, 4, dropout=0.1, bias=True,
+                node_size, 4, dropout=0.1, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
         elif agg_type == 'sage':
-            self.conv = SAGEConv(hidden_size * 3, hidden_size * 3)
+            self.conv = SAGEConv(node_size, node_size)
         elif agg_type == 'gat':
-            self.conv = GATConv(hidden_size * 3, hidden_size * 3 // 4,
+            self.conv = GATConv(node_size, node_size // 4,
                                 heads=4, dropout=0.1)
 
         if n_hops == 2:
-            self.out_proj_2 = GehringLinear(
-                2 * self.hidden_size, self.hidden_size)
             self.hop_rs = np.random.RandomState(4321)
             if agg_type == 'attention':
                 self.attn2 = nn.MultiheadAttention(
-                    hidden_size * 2, 4, dropout=0.1, bias=True,
+                    node_size, 4, dropout=0.1, bias=True,
                     add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
             elif agg_type == 'sage':
-                self.conv2 = SAGEConv(hidden_size * 3, hidden_size * 3)
+                self.conv2 = SAGEConv(node_size, node_size)
             elif agg_type == 'gat':
-                self.conv2 = GATConv(hidden_size * 3, hidden_size * 3 // 4,
+                self.conv2 = GATConv(node_size, node_size // 4,
                                      heads=4, dropout=0.1)
 
         self.series_len = series_len
@@ -165,7 +159,7 @@ class BaselineAggLSTM2(BaseModel):
         initializer(self)
 
         self.base_model = None
-        if base_model_config:
+        if base_model_config and os.path.exists(base_model_weights):
             config = yaml_to_params(base_model_config)
             vocab = Vocabulary.from_params(config.pop('vocabulary'))
             model = Model.from_params(vocab=vocab, params=config.pop('model'))
@@ -181,35 +175,31 @@ class BaselineAggLSTM2(BaseModel):
     def _forward_full(self, series):
         # series.shape == [batch_size, seq_len]
 
-        inputs = series
+        X = series
+        # X.shape == [batch_size, seq_len]
 
-        if len(inputs.shape) == 2:
-            X = inputs.unsqueeze(-1)
-        else:
-            X = inputs
-        # X.shape == [batch_size, seq_len, 1]
+        X, forecast, f_parts = self.decoder(X)
 
-        X, _ = self.decoder(X)
-
-        return X
+        return X, forecast, f_parts
 
     def _get_neighbour_embeds(self, X, keys, start, total_len, eval_step=None):
         if self.agg_type == 'none':
             return X
 
         parents = [-99] * len(keys)
-        Xm, masks = self._construct_neighs(
+        Xm, masks, neigh_keys = self._construct_neighs(
             X, keys, start, total_len, 1, parents, eval_step)
 
+        scores = None
         if self.agg_type == 'mean':
             Xm = self._aggregate_mean(Xm, masks)
         elif self.agg_type == 'attention':
-            Xm = self._aggregate_attn(X, Xm, masks, 1)
+            Xm, scores = self._aggregate_attn(X, Xm, masks, 1)
         elif self.agg_type in ['gat', 'sage']:
             Xm = self._aggregate_gat(X, Xm, masks, 1)
 
-        X_out = self._pool(X, Xm, 1)
-        return X_out
+        X_out = self._pool(X, Xm)
+        return X_out, scores, neigh_keys
 
     def _get_edges_by_probs(self, keys, sorted_keys, key_map, start, total_len, parents):
         sorted_edges = self.edges[sorted_keys, start:start+total_len]
@@ -290,8 +280,12 @@ class BaselineAggLSTM2(BaseModel):
 
             if self.neigh_sample and not self.evaluate_mode:
                 pairs = counter.items()
-                candidates = np.array([p[0] for p in pairs])
-                probs = np.array([p[1] for p in pairs])
+                candidates = np.array([p[0] for p in pairs
+                                       if p[0] not in self.test_keys])
+                if len(candidates) == 0:
+                    continue
+                probs = np.array([p[1] for p in pairs
+                                  if p[0] not in self.test_keys])
                 probs = probs / probs.sum()
                 kn = self.sample_rs.choice(
                     candidates,
@@ -319,6 +313,7 @@ class BaselineAggLSTM2(BaseModel):
         neigh_list = sorted(neigh_set)
         end = start + self.total_length
         neigh_map = {k: i for i, k in enumerate(neigh_list)}
+
         if self.views_all:
             neigh_series = self.views_all[neigh_list, start:end]
         else:
@@ -381,6 +376,7 @@ class BaselineAggLSTM2(BaseModel):
                     n_masks[i, j] = True
                     neigh_keys[i, j] = n
 
+        out_neigh_keys = neigh_keys.cpu().numpy()
         neighs = torch.from_numpy(neighs).to(X.device)
         if self.views_all:
             neighs = neighs.reshape(
@@ -410,8 +406,8 @@ class BaselineAggLSTM2(BaseModel):
                 neighs[:, :-offset], offset)
             neighs = torch.cat([neighs[:, :-offset], preds], dim=1)
 
-        Xn = self._forward_full(neighs)
-        # Xn.shape == [batch_size * max_n_neighs, seq_len, hidden_size]
+        Xn, _, _ = self._forward_full(neighs)
+        # Xn.shape == [neigh_batch_size, seq_len, hidden_size]
 
         if self.peek:
             Xn = Xn[:, 1:]
@@ -427,18 +423,17 @@ class BaselineAggLSTM2(BaseModel):
 
             sampled_keys = neigh_keys[idx].cpu().tolist()
 
-            Xm_2, masks_2 = self._construct_neighs(
+            Xm_2, masks_2, _ = self._construct_neighs(
                 Xn[idx], sampled_keys, start, total_len,
                 level + 1, parents[idx], eval_step)
             if self.agg_type == 'mean':
                 Xm_2 = self._aggregate_mean(Xm_2, masks_2)
             elif self.agg_type == 'attention':
-                Xm_2 = self._aggregate_attn(Xn[idx], Xm_2, masks_2, level + 1)
+                Xm_2, _ = self._aggregate_attn(
+                    Xn[idx], Xm_2, masks_2, level + 1)
             elif self.agg_type in ['gat', 'sage']:
                 Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2, level + 1)
-            X_out = self._pool(Xn[idx], Xm_2, level + 1)
-            Xn = Xn.clone()
-            Xn[idx] = X_out
+            Xn[idx] = self._pool(Xn[idx], Xm_2).type_as(Xn)
 
         _, S, E = Xn.shape
 
@@ -458,6 +453,8 @@ class BaselineAggLSTM2(BaseModel):
                 seeds = [key, self.epoch, int(self.history['_n_samples']),
                          level, 124241]
                 edge_rs = np.random.RandomState(seeds)
+                D, N = n_mask.shape
+                n_mask = n_mask.reshape(-1)
                 edge_idx = (~n_mask).nonzero()[0]
                 size = int(round(len(edge_idx) * self.edge_missing_p))
                 if size > 0:
@@ -465,6 +462,7 @@ class BaselineAggLSTM2(BaseModel):
                                                 replace=False,
                                                 size=size)
                     n_mask[delete_idx] = True
+                n_mask = n_mask.reshape(D, N)
             for i, k in enumerate(key_neighs[key]):
                 mask = n_mask[:, self.key2pos[key][k]]
                 if self.peek:
@@ -475,20 +473,10 @@ class BaselineAggLSTM2(BaseModel):
 
         masks = torch.from_numpy(masks).to(X.device)
 
-        return Xm, masks
+        return Xm, masks, out_neigh_keys
 
-    def _pool(self, X, Xn, level):
-        X_out = torch.cat([X, Xn], dim=-1)
-        # Xn.shape == [batch_size, seq_len, 2 * hidden_size]
-
-        if level == 1:
-            X_out = F.relu(self.out_proj(X_out))
-        elif level == 2:
-            X_out = F.relu(self.out_proj_2(X_out))
-        else:
-            raise NotImplementedError()
-        # Xn.shape == [batch_size, seq_len, hidden_size]
-
+    def _pool(self, X, Xn):
+        X_out = X + Xn
         return X_out
 
     def _aggregate_mean(self, Xn, masks):
@@ -514,7 +502,7 @@ class BaselineAggLSTM2(BaseModel):
 
         return Xn
 
-    def _aggregate_attn(self, Xn, X, masks, level):
+    def _aggregate_attn(self, X, Xn, masks, level):
         # X.shape == [batch_size, seq_len, hidden_size]
         # Xn.shape == [batch_size, n_neighs, seq_len, hidden_size]
         # masks.shape == [batch_size, n_neighs, seq_len]
@@ -527,20 +515,29 @@ class BaselineAggLSTM2(BaseModel):
         Xn = Xn.transpose(0, 1).reshape(N, B * T, E)
         # Xn.shape == [n_neighs, batch_size * seq_len, hidden_size]
 
-        key_padding_mask = masks.transpose(0, 1).reshape(N, B * T)
+        key_padding_mask = masks.transpose(1, 2).reshape(B * T, N)
         # key_padding_mask.shape == [n_neighs, batch_size  * seq_len]
 
+        return_weights = self.evaluate_mode
+
         if level == 1:
-            X_attn, _ = self.attn(X, Xn, Xn, key_padding_mask, False)
+            X_attn, scores = self.attn(
+                X, Xn, Xn, key_padding_mask, return_weights)
         elif level == 2:
-            X_attn, _ = self.attn2(X, Xn, Xn, key_padding_mask, False)
+            X_attn, scores = self.attn2(
+                X, Xn, Xn, key_padding_mask, return_weights)
+
         # X_attn.shape == [1, batch_size * seq_len, hidden_size]
 
         X_out = X_attn.reshape(B, T, E)
 
         X_out = F.gelu(X_out).type_as(X)
 
-        return X_out
+        if scores is not None:
+            scores = scores.reshape(B, T, -1)
+            scores = scores.cpu().numpy()
+
+        return X_out, scores
 
     def _aggregate_gat(self, X, Xn, masks, level):
         # X.shape == [batch_size, seq_len, hidden_size]
@@ -558,18 +555,22 @@ class BaselineAggLSTM2(BaseModel):
         # The indices 0...(BT - 1) will enumerate the central nodes
         # The indices BT...(BT + BNT - 1) will enumerate the neighbours
 
+        keep_masks = ~masks
+
+        sources = torch.arange(B * T, B * T + B * N * T).long()
+        sources = sources.reshape(B, N, T)
+        sources = sources[keep_masks]
+
+        central_nodes = torch.arange(B * T).long()
+        targets = central_nodes.reshape(B, 1, T)
+        targets = targets.expand_as(masks)
+        targets = targets[keep_masks]
+
         # Add self-loops to central nodes
-        sources = [i for i in range(B * T)]
-        targets = [i for i in range(B * T)]
+        sources = torch.cat([central_nodes, sources])
+        targets = torch.cat([central_nodes, targets])
+        edges = torch.stack([sources, targets]).to(X.device)
 
-        for b in range(B):
-            for t in range(T):
-                for n in range(N):
-                    if not masks[b, n, t]:
-                        sources.append(B * T + N * T * b + T * n + t)
-                        targets.append(T * b + t)
-
-        edges = torch.tensor([sources, targets]).to(X.device)
         nodes = torch.cat([X_in, Xn], dim=0)
         # nodes.shape == [BT + BNT, hidden_size]
 
@@ -686,21 +687,25 @@ class BaselineAggLSTM2(BaseModel):
 
         series = torch.log1p(raw_series)
 
-        X_full = self._forward_full(series)
+        X_full, preds_full, _ = self._forward_full(series)
         X = X_full[:, :-1]
+        preds = preds_full[:, :-1]
         # X.shape == [batch_size, seq_len, hidden_size]
 
-        X_agg = self._get_neighbour_embeds(X, keys, start, self.total_length)
-        # X_agg.shape == [batch_size, seq_len, out_hidden_size]
+        if self.agg_type != 'none':
+            X_agg, _, _ = self._get_neighbour_embeds(
+                X, keys, start, self.total_length)
+            # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
-        X_agg = self.fc(X_agg)
-        # X_agg.shape == [batch_size, seq_len, 1]
+            X_agg = self.fc(X_agg)
+            # X_agg.shape == [batch_size, seq_len, 1]
 
-        preds = X_agg.squeeze(-1)
+            preds = preds + X_agg.squeeze(-1)
+            # preds.shape == [batch_size, seq_len]
+
         preds = torch.exp(preds)
-        # preds.shape == [batch_size, seq_len]
-
         targets = raw_series[:, 1:]
+
         preds = torch.masked_select(preds, non_missing_idx)
         targets = torch.masked_select(targets, non_missing_idx)
 
@@ -722,21 +727,40 @@ class BaselineAggLSTM2(BaseModel):
 
             series = log_raw_series[:, :-self.forecast_length]
             current_views = series[:, -1]
+            all_f_parts = [[[] for _ in range(self.n_layers + 1)]
+                           for _ in keys]
+            all_scores = [[] for _ in keys]
             for i in range(self.forecast_length):
-                X = self._forward_full(series)
-                seq_len = self.total_length - self.forecast_length + i + 1
-                X_agg = self._get_neighbour_embeds(
-                    X, keys, start, seq_len, i)
-                X_agg = self.fc(X_agg)
-                pred = X_agg.squeeze(-1)[:, -1]
-                # delta.shape == [batch_size]
+                X, pred, f_parts = self._forward_full(series)
+                pred = pred[:, -1]
+                for b in range(len(keys)):
+                    for l, f_part in enumerate(f_parts):
+                        all_f_parts[b][l].append(f_part[b])
+                if self.agg_type != 'none':
+                    seq_len = self.total_length - self.forecast_length + i + 1
+                    X_agg, scores, neigh_keys = self._get_neighbour_embeds(
+                        X, keys, start, seq_len, i)
+                    X_agg = self.fc(X_agg)
+                    X_agg = X_agg.squeeze(-1)[:, -1]
+                    if scores is not None:
+                        scores = scores[:, -1].tolist()
+                    pred = pred + X_agg
+                    # delta.shape == [batch_size]
+
+                    for b, f in enumerate(X_agg.cpu().tolist()):
+                        all_f_parts[b][-1].append(f)
+                        if scores is not None:
+                            all_scores[b].append(scores[b])
+                else:
+                    neigh_keys = np.array([])
 
                 current_views = pred
                 preds[:, i] = current_views
-                series = torch.cat(
-                    [series, current_views.unsqueeze(1)], dim=1)
+                current_views = current_views.unsqueeze(1)
+                series = torch.cat([series, current_views], dim=1)
 
             preds = torch.exp(preds)
+
             smapes, daily_errors = get_smape(targets, preds)
             # if self.views_all:
             #     n_cats = smapes.shape[-1]
@@ -749,6 +773,9 @@ class BaselineAggLSTM2(BaseModel):
             out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
             out_dict['preds'] = preds.cpu().numpy().tolist()
+            out_dict['f_parts'] = all_f_parts
+            out_dict['neigh_keys'] = neigh_keys.tolist()
+            out_dict['all_scores'] = all_scores
             if self.views_all:
                 self.history['_n_steps'] += smapes.shape[0] * \
                     smapes.shape[1] * smapes.shape[2]
@@ -769,134 +796,111 @@ class BaselineAggLSTM2(BaseModel):
             preds = series.new_zeros(series.shape[0], n_steps)
 
         for i in range(n_steps):
-            X = self._forward_full(series)
-            X_agg = self.fc(X_agg)
-            pred = X_agg.squeeze(-1)[:, -1]
+            X, pred, f_parts = self._forward_full(series)
+            pred = pred[:, -1]
             current_views = pred
             preds[:, i] = current_views
             current_views = current_views.unsqueeze(1)
-            series = torch.cat([series, current_views.unsqueeze(1)], dim=1)
+            series = torch.cat([series, current_views], dim=1)
 
         return preds
 
 
-class TransformerDecoder(nn.Module):
-    def __init__(self, hidden_size, n_layers, dropout, total_len):
+class LSTMDecoder(nn.Module):
+    def __init__(self, hidden_size, n_layers, dropout, variant, input_size):
         super().__init__()
-        self.in_proj = GehringLinear(1, hidden_size)
-        self.dropout = nn.Dropout(dropout)
+        assert variant in ['combined', 'separate']
+        self.variant = variant
+        self.input_size = input_size
+        self.in_proj = GehringLinear(input_size, hidden_size)
         self.layers = nn.ModuleList([])
-        for _ in range(n_layers):
-            self.layers.append(TBEATLayer(hidden_size, dropout, 4))
+        for i in range(n_layers):
+            self.layers.append(LSTMLayer(hidden_size, dropout, variant))
 
-        pos_weights = self._get_embedding(256, hidden_size)
-        self.register_buffer('pos_weights', pos_weights)
-
-    @staticmethod
-    def _get_embedding(n_embeds, embed_dim, padding_idx=0):
-        """Build sinusoidal embeddings.
-
-        This matches the implementation in tensor2tensor, but differs slightly
-        from the description in Section 3.5 of "Attention Is All You Need".
-        """
-        max_ts = 256
-        min_ts = 1
-        n_timescales = embed_dim // 2
-        increment = math.log(max_ts / min_ts) / (n_timescales - 1)
-        # Example increment: 9 / 384 = 0.024
-
-        timescales = torch.arange(n_timescales, dtype=torch.float)
-
-        # inv_timescales ranges from 1 to 1/10000 with log spacing
-        inv_timescales = min_ts * torch.exp(timescales * -increment)
-        # inv_timescales.shape == [embed_size // 2]
-
-        positions = torch.arange(n_embeds, dtype=torch.float).unsqueeze(1)
-        # positions.shape ==  [n_embeds, 1]
-
-        inv_timescales = inv_timescales.unsqueeze(0)
-        # inv_timescales.shape == [1, embed_size // 2]
-
-        scaled_time = positions * inv_timescales
-        # scaled_time.shape == [n_embeds, embed_size // 2]
-
-        sin_signal = torch.sin(scaled_time)
-        cos_signal = torch.cos(scaled_time)
-        signal = torch.cat([sin_signal, cos_signal], dim=1)
-        # signal.shape == [n_embeds, embed_dim]
-
-        # Ensure that embed_dim is even
-        if embed_dim % 2 == 1:
-            signal = torch.cat([signal, torch.zeros(n_embeds, 1)], dim=1)
-
-        if padding_idx is not None:
-            signal[padding_idx, :] = 0
-
-        return signal
+        self.out_f = GehringLinear(hidden_size, input_size)
 
     def forward(self, X):
-        B, T, _ = X.shape
+        # X.shape == [batch_size, seq_len]
+        # yn.shape == [batch_size, n_neighs, seq_len]
+
+        if len(X.shape) == 2:
+            X = X.unsqueeze(-1)
         # X.shape == [batch_size, seq_len, 1]
 
         X = self.in_proj(X)
         # X.shape == [batch_size, seq_len, hidden_size]
 
-        X = X.transpose(0, 1)
-        # X.shape == [seq_len, batch_size, hidden_size]
-
-        pos = torch.arange(1, T + 1, device=X.device).unsqueeze(-1)
-        pos = pos.expand(-1, B)
-        # pos.shape = [seq_len, batch_size]
-
-        pos_embeds = self.pos_weights.index_select(0, pos.reshape(-1))
-        pos_embeds = pos_embeds.reshape(T, B, -1)
+        forecast = X.new_zeros(*X.shape)
+        if self.variant == 'combined':
+            hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
+        elif self.variant == 'separate':
+            hidden = X.new_zeros(*X.shape)
+        f_parts = []
 
         for layer in self.layers:
-            X = layer(X, pos_embeds)
+            h, b, f = layer(X)
+            X = X - b
+            if self.variant == 'combined':
+                hidden = hidden + torch.cat([h, b], dim=-1)
+            elif self.variant == 'separate':
+                hidden = hidden + h
+            forecast = forecast + f
 
-        X = X.transpose(0, 1)
+            if not self.training:
+                f_part = self.out_f(f[:, -1]).squeeze(-1)
+                f_parts.append(f_part.cpu().tolist())
+
+        hidden = hidden / len(self.layers)
+
+        # h = torch.cat(h_list, dim=-1)
+        # h.shape == [batch_size, seq_len, n_layers * hidden_size]
+
+        # h = self.out_proj(h)
+        # h.shape == [batch_size, seq_len, hidden_size]
+
+        f = self.out_f(forecast)
+
+        if self.input_size == 1:
+            f = f.squeeze(-1)
+
+        return hidden, f, f_parts
+
+
+class LSTMLayer(nn.Module):
+    def __init__(self, hidden_size, dropout, variant):
+        super().__init__()
+        assert variant in ['combined', 'separate']
+        self.variant = variant
+
+        self.layer = nn.LSTM(hidden_size, hidden_size, 1,
+                             batch_first=True)
+        self.drop = nn.Dropout(dropout)
+
+        self.proj_f = GehringLinear(hidden_size, hidden_size)
+        self.proj_b = GehringLinear(hidden_size, hidden_size)
+        self.out_f = GehringLinear(hidden_size, hidden_size)
+        self.out_b = GehringLinear(hidden_size, hidden_size)
+
+        if variant == 'separate':
+            self.proj_h = GehringLinear(hidden_size, hidden_size)
+            self.out_h = GehringLinear(hidden_size, hidden_size)
+
+    def forward(self, X):
+        # X.shape == [batch_size, seq_len]
+        # yn.shape == [batch_size, n_neighs, seq_len]
+
+        # It's recommended to apply dropout on the input to the LSTM cell
+        # See https://ieeexplore.ieee.org/document/7333848
+        X = self.drop(X)
+
+        X, _ = self.layer(X)
         # X.shape == [batch_size, seq_len, hidden_size]
 
-        return X, None
+        b = self.out_b(F.gelu(self.proj_b(X)))
+        f = self.out_f(F.gelu(self.proj_f(X)))
+        # b.shape == f.shape == [batch_size, seq_len, hidden_size]
 
+        if self.variant == 'separate':
+            X = self.out_h(F.gelu(self.proj_h(X)))
 
-class TBEATLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, n_heads):
-        super().__init__()
-        self.attn = nn.MultiheadAttention(hidden_size, n_heads, dropout)
-
-        self.dropout_1 = nn.Dropout(dropout)
-        self.dropout_2 = nn.Dropout(dropout)
-        self.dropout_3 = nn.Dropout(dropout)
-
-        self.norm_1 = nn.LayerNorm(hidden_size)
-        self.norm_2 = nn.LayerNorm(hidden_size)
-
-        self.linear_1 = GehringLinear(hidden_size, hidden_size * 2)
-        self.linear_2 = GehringLinear(hidden_size * 2, hidden_size)
-
-        self.activation = F.gelu
-
-    def forward(self, X, pos_embeds):
-        # We can't attend positions which are True
-        T, B, E = X.shape
-        attn_mask = X.new_ones(T, T)
-        # Zero out the diagonal and everything below
-        # We can attend to ourselves and the past
-        attn_mask = torch.triu(attn_mask, diagonal=1)
-        # attn_mask.shape == [T, T]
-
-        X = X + pos_embeds
-
-        X_1, _ = self.attn(X, X, X, need_weights=False, attn_mask=attn_mask)
-        # X.shape == [seq_len, batch_size, hidden_size]
-
-        X = X + self.dropout_1(X_1)
-        X = self.norm_1(X)
-
-        X_2 = self.linear_2(self.dropout_2(self.activation(self.linear_1(X))))
-        X = X + self.dropout_3(X_2)
-        X = self.norm_2(X)
-        # X.shape == [seq_len, batch_size, hidden_size]
-
-        return X
+        return X, b, f

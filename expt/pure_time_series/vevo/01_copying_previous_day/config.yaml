@@ -1,6 +1,6 @@
 # Number of trainable parameters:
 dataset_reader:
-  type: subwiki_network
+  type: network
   train_path: data/vevo/vevo_connected_nodes.pkl
   test_path: data/vevo/vevo_connected_nodes.pkl
 train_data_path: train
@@ -9,7 +9,7 @@ test_data_path: test
 vocabulary:
   type: empty
 model:
-  type: new_naive
+  type: naive
   method: previous_day
   forecast_length: 7
   backcast_length: 42

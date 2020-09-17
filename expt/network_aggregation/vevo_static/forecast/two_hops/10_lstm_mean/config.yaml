@@ -1,6 +1,6 @@
 # Number of trainable parameters:
 dataset_reader:
-  type: subwiki_network
+  type: network
   train_path: data/vevo/vevo_connected_nodes.pkl
   test_path: data/vevo/vevo_connected_nodes.pkl
 train_data_path: train
@@ -9,7 +9,7 @@ test_data_path: test
 vocabulary:
   type: empty
 model:
-  type: baseline_agg_lstm_2
+  type: baseline_lstm
   agg_type: mean
   data_path: ./data/vevo/vevo_static.hdf5
   key2pos_path: ./data/vevo/vevo_static.key2pos.pkl

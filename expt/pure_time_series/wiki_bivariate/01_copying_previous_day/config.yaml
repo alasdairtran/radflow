@@ -1,6 +1,6 @@
 # Number of trainable parameters:
 dataset_reader:
-  type: subwiki_network
+  type: network
   train_path: data/wiki/node_ids/train_ids.pkl
   test_path: data/wiki/node_ids/test_ids.pkl
 train_data_path: train
@@ -9,7 +9,7 @@ test_data_path: test
 vocabulary:
   type: empty
 model:
-  type: new_naive
+  type: naive
   method: previous_day
   data_path: ./data/wiki/wiki.hdf5
   multi_views_path: ./data/wiki/views_split.hdf5

@@ -19,8 +19,8 @@ from nos.utils import keystoint
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DatasetReader.register('subwiki_network')
-class SubWikivNetworkReader(DatasetReader):
+@DatasetReader.register('network')
+class NetworkReader(DatasetReader):
     def __init__(self,
                  train_path: str = 'data/vevo_all_nodes.pkl',
                  test_path: str = 'data/vevo_connected_nodes.pkl',

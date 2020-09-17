@@ -1,1 +1,1 @@
-from .subwiki_network import SubWikivNetworkReader
+from .network import NetworkReader

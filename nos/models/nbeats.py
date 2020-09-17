@@ -1,40 +1,25 @@
 import json
 import logging
-import os
-import pickle
-from collections import defaultdict
-from copy import deepcopy
 from typing import Any, Dict, List
 
 import h5py
 import numpy as np
-import pandas as pd
-import redis
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from allennlp.common.params import Params
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
-from overrides import overrides
-from pymongo import MongoClient
-from torch_geometric.data import Data
-from torch_geometric.nn import SAGEConv
-from tqdm import tqdm
 
-from nos.modules.linear import GehringLinear
-from nos.utils import keystoint
+from nos.modules.metrics import get_smape
+from nos.modules.nbeats import NBeatsNet
 
 from .base import BaseModel
-from .metrics import get_smape
-from .nbeats_base import NBeatsNet
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register('nbeats_wiki')
-class NBEATSWiki(BaseModel):
+@Model.register('nbeats')
+class NBEATS(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  data_path: str = './data/vevo/vevo.hdf5',

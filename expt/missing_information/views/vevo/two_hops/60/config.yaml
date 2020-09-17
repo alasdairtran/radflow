@@ -1,6 +1,6 @@
 # Number of trainable parameters:
 dataset_reader:
-  type: subwiki_network
+  type: network
   train_path: data/vevo/vevo_connected_nodes.pkl
   test_path: data/vevo/vevo_connected_nodes.pkl
 train_data_path: train
@@ -9,11 +9,11 @@ test_data_path: test
 vocabulary:
   type: empty
 model:
-  type: baseline_agg_lstm_4
+  type: radflow
   agg_type: attention
   peek: true
   num_layers: 8
-  hidden_size: 112
+  hidden_size: 116
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42

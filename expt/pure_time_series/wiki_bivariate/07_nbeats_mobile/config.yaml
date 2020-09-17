@@ -1,6 +1,6 @@
 # Number of trainable parameters:
 dataset_reader:
-  type: subwiki_network
+  type: network
   train_path: data/wiki/node_ids/train_ids.pkl
   test_path: data/wiki/node_ids/test_ids.pkl
 train_data_path: train
@@ -9,7 +9,7 @@ test_data_path: test
 vocabulary:
   type: empty
 model:
-  type: nbeats_wiki
+  type: nbeats
   data_path: ./data/wiki/views_split.hdf5
   slice_idx: 1
   series_len: 1827

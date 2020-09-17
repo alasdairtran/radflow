@@ -11,8 +11,9 @@ from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from joblib import Parallel, delayed
 
+from nos.modules.metrics import get_smape
+
 from .base import BaseModel
-from .metrics import get_smape
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

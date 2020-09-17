@@ -1,6 +1,6 @@
 # Number of trainable parameters:
 dataset_reader:
-  type: subwiki_network
+  type: network
   train_path: data/vevo/vevo_connected_nodes.pkl
   test_path: data/vevo/vevo_connected_nodes.pkl
 train_data_path: train
