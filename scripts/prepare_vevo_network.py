@@ -277,26 +277,6 @@ def populate_database(seed_word, collection):
             db.graph.update_one(query, update)
 
 
-def populate_tiledb():
-    traffic_path = 'data/series/vevo'
-    start = datetime(2018, 9, 1)
-    end = datetime(2018, 11, 2)  # includes endpoint
-    create_traffic_tile(traffic_path, 60740, 63, start, end)
-
-    views = np.full((60740, 63), np.iinfo(np.uint32).max, dtype=np.uint32)
-
-    logger.info('Populating series in memory')
-    client = MongoClient(host='localhost', port=27017)
-    for p in tqdm(client.vevo.graph.find({}, projection=['s'])):
-        s = np.array(p['s'])
-        s[s == -1] = np.iinfo(np.uint32).max
-        views[p['_id']] = s
-
-    logger.info(f'Writing series matrix to {traffic_path}')
-    with tiledb.DenseArray(traffic_path, mode='w') as A:
-        A[:] = views
-
-
 def populate_hdf5(collection, name):
     data_path = f'data/vevo/{name}.hdf5'
     data_f = h5py.File(data_path, 'a')
@@ -450,10 +430,6 @@ def main():
     relabel_networks()
     populate_database('vevo', 'graph')
     populate_database('vevo_static', 'static')
-
-    # We leave this here, but TileDB random read speed is still slower
-    # than mongo.
-    # populate_tiledb()
 
     # Reading series from hdf5 is 20% than from mongo.
     populate_hdf5('graph', 'vevo')
