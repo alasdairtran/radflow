@@ -62,6 +62,10 @@ docker run -p 44192:44192 --ipc=host -v $HOME/projects/phd/radflow:/radflow alas
 
 # On the client, find internal IP address
 hostname -I
+
+# Back up databases
+mongodump --db wiki2 --host=localhost --port=27017 --gzip --archive=data/mongobackups/wiki-2020-09-17.gz
+mongodump --db vevo --host=localhost --port=27017 --gzip --archive=data/mongobackups/vevo-2020-09-17.gz
 ```
 
 ## Training
