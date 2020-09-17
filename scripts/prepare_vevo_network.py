@@ -372,33 +372,6 @@ def populate_hdf5(collection, name):
         flows[k] = np.ascontiguousarray(key_flows)
 
 
-def populate_redis():
-    r = redis.Redis(host='localhost', port=6379, db=0)
-    client = MongoClient(host='localhost', port=27017)
-
-    # r.flushall()
-
-    logger.info('Populating dynamic graph to redis')
-    cursor = client.vevo.graph.find({}, {'s': False})
-    for p in tqdm(cursor):
-        i = p['_id']
-        load = pickle.dumps({
-            'e': [np.array(ns, dtype=np.uint32) for ns in p['e']],
-            'm': {int(k): np.array(v) for k, v in p['m'].items()},
-        })
-        r.set(f'vevo:{i}', load)
-
-    logger.info('Populating static graph to redis')
-    cursor = client.vevo.static.find({}, {'s': False})
-    for p in tqdm(cursor):
-        i = p['_id']
-        load = pickle.dumps({
-            'e': [np.array(ns, dtype=np.uint32) for ns in p['e']],
-            'm': {int(k): np.array(v) for k, v in p['m'].items()},
-        })
-        r.set(f'vevo.static:{i}', load)
-
-
 def pickle_graph():
     client = MongoClient(host='localhost', port=27017)
     os.makedirs('data/graphs', exist_ok=True)
@@ -434,10 +407,6 @@ def main():
     # Reading series from hdf5 is 20% than from mongo.
     populate_hdf5('graph', 'vevo')
     populate_hdf5('static', 'vevo_static')
-
-    # Reading graph from redis is much faster than mongo. Pickle is twice
-    # as fast as JSON.
-    # populate_redis()
 
     # In-memory solution is still twice as fast as than redis + pickle.
     # pickle_graph()
