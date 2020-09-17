@@ -201,7 +201,7 @@ class BaselineAggLSTM4(BaseModel):
                  hop_scale: int = 1,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
-                 variant: str = 'combined',
+                 variant: str = 'separate',
                  static_graph: bool = False,
                  end_offset: int = 0,
                  view_missing_p: float = 0,
