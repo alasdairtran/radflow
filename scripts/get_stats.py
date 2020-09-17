@@ -234,19 +234,31 @@ def get_vevo_bowtie_stats():
 
 def get_wiki_bowtie_stats():
     path = "data/wiki/static_graph_2018_10_01.gpickle"
-    f = h5py.File('data/wiki/wiki.hdf5', 'r')
+    f = h5py.File('data/wiki/wiki.hdf5.delete', 'r')
 
     # Day 1,188 is 1 oct 2018
     day = 1188
 
+    t2i_path = "data/wiki/title2graphid.pkl"
+    with open(t2i_path, 'rb') as f_t2i:
+        t2i = pickle.load(f_t2i)
+
+    cat_ids = set([i for t, i in t2i.items() if t.startswith('Category:')])
+    list_ids = set([i for t, i in t2i.items() if t.startswith('List of')])
+    blacklist = cat_ids | list_ids
+
+    # This takes 45 minutes
     if not os.path.exists(path):
         edges = f['edges']
         G = nx.DiGraph()
         for target_id, neighs in tqdm(enumerate(edges)):
-            if len(neighs[day]) == 0:
+            if target_id in blacklist:
+                continue
+            ns = neighs[day][neighs[day] != -1]
+            if len(ns) == 0:
                 G.add_node(target_id)
-            for n in neighs[day]:
-                if n != -1:
+            for n in ns:
+                if n != -1 and n not in blacklist:
                     G.add_edge(n, target_id)
         nx.write_gpickle(G, path)
 
@@ -262,7 +274,7 @@ def main():
     # get_vevo_stats()
     # get_wiki_stats()
 
-    get_vevo_bowtie_stats()
+    # get_vevo_bowtie_stats()
     get_wiki_bowtie_stats()
 
 
