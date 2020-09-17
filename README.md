@@ -23,31 +23,8 @@ pip install -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/
 pip install -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
 pip install -U torch-geometric
 
-# Install redis from source
-cd lib
-wget http://download.redis.io/releases/redis-6.0.6.tar.gz
-tar xvzf redis-6.0.6.tar.gz
-rm -rf redis-6.0.6.tar.gz
-cd redis-6.0.6
-make
-make test
-cd ../..
-
-# Install RedisGraph
-cd lib/RedisGraph && git submodule update --init --recursive .
-git clone --recurse-submodules -j8 https://github.com/RedisGraph/RedisGraph.git
-sudo apt install build-essential cmake m4 automake peg libtool autoconf
-make
-cd ../..
-
 # Start an empty mongodb database
 mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
-
-# Start redis server
-lib/redis-6.0.6/src/redis-server \
-    --protected-mode no \
-    --loadmodule lib/RedisGraph/src/redisgraph.so \
-    --overcommit-memory 1
 
 # Download wiki dump. This takes about three days.
 python scripts/download_wikidump.py
