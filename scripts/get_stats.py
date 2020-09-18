@@ -274,6 +274,19 @@ def get_wiki_bowtie_stats():
     get_bowtie_stats(G, views)
 
 
+def find_triangle_motifs(G):
+    # Let's find all triangle motifs
+    loops = set()
+    triangles = set()
+
+    for u, v in tqdm(G.edges):
+        for w in G.successors(v):
+            if G.has_edge(w, u):
+                loops.add((u, v, w))
+            if G.has_edge(u, w):
+                triangles.add((u, v, w))
+
+
 def main():
     # get_wiki_bivariate_nbeats_stats()
     # get_vevo_stats()
