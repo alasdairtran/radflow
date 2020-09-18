@@ -396,7 +396,7 @@ class RADflow(BaseModel):
         if neighs.shape[0] == 0:
             masks = X.new_ones(B, 1, T).bool()
             Xm = X.new_zeros(B, 1, T, E)
-            return Xm, masks
+            return Xm, masks, out_neigh_keys
 
         neighs = torch.log1p(neighs)
 
