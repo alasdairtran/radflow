@@ -2,7 +2,7 @@
 dataset_reader:
   type: network
   train_path: data/vevo/vevo_all_nodes.pkl
-  test_path: data/vevo/vevo_connected_nodes.pkl
+  test_path: data/vevo/vevo_static_connected_nodes.pkl
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
