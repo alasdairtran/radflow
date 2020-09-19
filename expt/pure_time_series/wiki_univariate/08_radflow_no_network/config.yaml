@@ -23,6 +23,7 @@ model:
   test_lengths: [7, 14, 21, 28]
   peek: false
   max_neighbours: 4
+  variant: none
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*

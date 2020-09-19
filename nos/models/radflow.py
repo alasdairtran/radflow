@@ -688,11 +688,11 @@ class RADflow(BaseModel):
         series = torch.log1p(raw_series)
 
         X_full, preds_full, _ = self._forward_full(series)
-        X = X_full[:, :-1]
         preds = preds_full[:, :-1]
         # X.shape == [batch_size, seq_len, hidden_size]
 
         if self.agg_type != 'none':
+            X = X_full[:, :-1]
             X_agg, _, _ = self._get_neighbour_embeds(
                 X, keys, start, self.total_length)
             # X_agg.shape == [batch_size, seq_len, out_hidden_size]
@@ -809,7 +809,7 @@ class RADflow(BaseModel):
 class LSTMDecoder(nn.Module):
     def __init__(self, hidden_size, n_layers, dropout, variant, input_size):
         super().__init__()
-        assert variant in ['combined', 'separate']
+        assert variant in ['none', 'combined', 'separate']
         self.variant = variant
         self.input_size = input_size
         self.in_proj = GehringLinear(input_size, hidden_size)
@@ -835,6 +835,8 @@ class LSTMDecoder(nn.Module):
             hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
         elif self.variant == 'separate':
             hidden = X.new_zeros(*X.shape)
+        else:
+            hidden = None
         f_parts = []
 
         for layer in self.layers:
@@ -850,7 +852,8 @@ class LSTMDecoder(nn.Module):
                 f_part = self.out_f(f[:, -1]).squeeze(-1)
                 f_parts.append(f_part.cpu().tolist())
 
-        hidden = hidden / len(self.layers)
+        if self.variant != 'none':
+            hidden = hidden / len(self.layers)
 
         # h = torch.cat(h_list, dim=-1)
         # h.shape == [batch_size, seq_len, n_layers * hidden_size]
@@ -869,7 +872,7 @@ class LSTMDecoder(nn.Module):
 class LSTMLayer(nn.Module):
     def __init__(self, hidden_size, dropout, variant):
         super().__init__()
-        assert variant in ['combined', 'separate']
+        assert variant in ['none', 'combined', 'separate']
         self.variant = variant
 
         self.layer = nn.LSTM(hidden_size, hidden_size, 1,
