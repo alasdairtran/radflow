@@ -28,8 +28,8 @@ model:
   n_hops: 2
   hop_scale: 1
   neigh_sample: true
-  base_model_config: expt/reports/wiki/no_hops/flow_lstm/config.yaml
-  base_model_weights: expt/reports/wiki/no_hops/flow_lstm/serialization/model_state_epoch_9.th
+  base_model_config: expt/pure_time_series/wiki_univariate/08_radflow_no_network/config.yaml
+  base_model_weights: expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/model_state_epoch_9.th
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*
