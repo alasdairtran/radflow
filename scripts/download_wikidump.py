@@ -1,13 +1,25 @@
+"""Download Wiki dump.
+
+Usage:
+    download_wikidump.py [options]
+
+Options:
+    -p --ptvsd PORT     Enable debug mode with ptvsd on PORT, e.g. 5678.
+    -d --dump DUMP      Dump dir.
+
+"""
+
 import calendar
 import os
 import urllib
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
-from bs4 import BeautifulSoup
-from tqdm import tqdm
-
 import wget
+from bs4 import BeautifulSoup
+from docopt import docopt
+from schema import And, Or, Schema, Use
+from tqdm import tqdm
 
 
 def add_months(sourcedate, months):
@@ -19,7 +31,7 @@ def add_months(sourcedate, months):
     return datetime(year, month, day)
 
 
-def download_wiki():
+def download_wiki(data_dir):
     # This takes a few days
     main_url = 'https://dumps.wikimedia.org/enwiki/20200701/'
     page = requests.get(main_url)
@@ -37,7 +49,6 @@ def download_wiki():
             file_url = f'https://dumps.wikimedia.org/{suffix}'
             file_urls.append(file_url)
 
-    data_dir = '/data4/u4921817/nos/data/wikidump'
     os.makedirs(data_dir, exist_ok=True)
 
     for url in tqdm(file_urls):
@@ -80,8 +91,28 @@ def download_pagecounts():
         t = add_months(t, 1)
 
 
+def validate(args):
+    """Validate command line arguments."""
+    args = {k.lstrip('-').lower().replace('-', '_'): v
+            for k, v in args.items()}
+    schema = Schema({
+        'ptvsd': Or(None, And(Use(int), lambda port: 1 <= port <= 65535)),
+        'dump': str,
+    })
+    args = schema.validate(args)
+    return args
+
+
 def main():
-    download_wiki()
+    args = docopt(__doc__, version='0.0.1')
+    args = validate(args)
+
+    if args['ptvsd']:
+        address = ('0.0.0.0', args['ptvsd'])
+        ptvsd.enable_attach(address)
+        ptvsd.wait_for_attach()
+
+    download_wiki(args['dump'])
     # download_pagecounts()
 
 
