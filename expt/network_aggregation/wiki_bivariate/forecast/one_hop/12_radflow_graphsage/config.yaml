@@ -15,7 +15,7 @@ model:
   test_keys_path: ./data/wiki/node_ids/test_ids.pkl
   multi_views_path: ./data/wiki/views_split.hdf5
   series_len: 1827
-  agg_type: gat
+  agg_type: sage
   peek: true
   num_layers: 8
   hidden_size: 118

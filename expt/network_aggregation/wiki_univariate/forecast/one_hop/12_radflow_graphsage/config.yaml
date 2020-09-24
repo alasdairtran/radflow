@@ -14,7 +14,7 @@ model:
   key2pos_path: ./data/wiki/key2pos.pkl
   test_keys_path: ./data/wiki/node_ids/test_ids.pkl
   series_len: 1827
-  agg_type: gat
+  agg_type: sage
   peek: true
   num_layers: 8
   hidden_size: 118
