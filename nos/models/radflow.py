@@ -56,6 +56,7 @@ class RADflow(BaseModel):
                  edge_selection_method: str = 'prob',
                  cut_off_edge_prob: float = 0.9,
                  hop_scale: int = 1,
+                 n_heads: int = 4,
                  neigh_sample: bool = False,
                  t_total: int = 163840,
                  variant: str = 'separate',
@@ -115,9 +116,9 @@ class RADflow(BaseModel):
             self.series = self.data['views'][...]
             self.edges = self.data['edges']
             self.masks = self.data['masks']
-            self.probs = self.data['probs']
+            self.probs = self.data['probs'] if 'probs' in self.data else None
 
-        if os.path.exists(key2pos_path):
+        if key2pos_path and os.path.exists(key2pos_path):
             with open(key2pos_path, 'rb') as f:
                 self.key2pos = pickle.load(f)
 
@@ -129,7 +130,7 @@ class RADflow(BaseModel):
 
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
-                node_size, 4, dropout=0.1, bias=True,
+                node_size, n_heads, dropout=0.1, bias=True,
                 add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
         elif agg_type == 'sage':
             self.conv = SAGEConv(node_size, node_size)
@@ -141,7 +142,7 @@ class RADflow(BaseModel):
             self.hop_rs = np.random.RandomState(4321)
             if agg_type == 'attention':
                 self.attn2 = nn.MultiheadAttention(
-                    node_size, 4, dropout=0.1, bias=True,
+                    node_size, n_heads, dropout=0.1, bias=True,
                     add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
             elif agg_type == 'sage':
                 self.conv2 = SAGEConv(node_size, node_size)
@@ -444,6 +445,11 @@ class RADflow(BaseModel):
 
         masks = np.ones((B, max_n_neighs, S), dtype=bool)
         sorted_masks = self.masks[sorted_keys, start:start+total_len]
+
+        if not hasattr(self, 'key2pos'):
+            masks = np.zeros((B, max_n_neighs, S), dtype=bool)
+            masks = torch.from_numpy(masks).to(X.device)
+            return Xm, masks, out_neigh_keys
 
         for b, key in enumerate(keys):
             if key not in key_neighs:

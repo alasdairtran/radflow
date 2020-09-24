@@ -1,0 +1,85 @@
+# Number of trainable parameters:
+dataset_reader:
+  type: network
+  n_nodes: 207
+train_data_path: train
+validation_data_path: valid
+test_data_path: test
+vocabulary:
+  type: empty
+model:
+  type: radflow
+  data_path: data/taxi/los.h5
+  key2pos_path: null
+  series_len: 2016
+  agg_type: attention
+  peek: true
+  num_layers: 2
+  hidden_size: 39 # 50,665 parameters
+  n_heads: 1
+  dropout: 0.1
+  forecast_length: 4
+  backcast_length: 12
+  test_lengths: [4]
+  edge_selection_method: top
+  max_neighbours: 128
+  max_agg_neighbours: 128
+  neigh_sample: false
+  initializer:
+    regexes:
+      - - ^decoder.layers.*.layer.weight*
+        - orthogonal
+      - - ^decoder.layers.*.layer.bias
+        - zero
+data_loader:
+  batch_size: 64
+  shuffle: false
+  batches_per_epoch: 10000
+validation_data_loader:
+  batch_size: 64
+trainer:
+  type: apex_gradient_descent
+  use_amp: false
+  apex_opt_level: O1
+  keep_batchnorm_fp32: None
+  optimizer:
+    type: adamw
+    lr: 0.0001
+    weight_decay: 0.0001
+    parameter_groups:
+      - - - ^decoder.in_proj
+        - {}
+      - - - ^decoder.layers.0
+        - {}
+      - - - ^decoder.layers.1
+        - {}
+      - - - ^decoder.layers.2
+        - {}
+      - - - ^decoder.layers.3
+        - {}
+      - - - ^decoder.layers.4
+        - {}
+      - - - ^decoder.layers.5
+        - {}
+      - - - ^decoder.layers.6
+        - {}
+      - - - ^decoder.layers.7
+        - {}
+      - - - ^decoder.out_f
+        - {}
+      - - - ^attn
+        - {}
+      - - - ^fc
+        - {}
+  learning_rate_scheduler:
+    type: linear_with_warmup
+    warmup_steps: 5000
+    last_epoch: -1
+  num_epochs: 10
+  cuda_device: 0
+  grad_norm: 0.1
+  patience: 10
+  validation_metric: "-smape_4"
+  tensorboard_writer:
+    summary_interval: 100
+    should_log_parameter_statistics: false

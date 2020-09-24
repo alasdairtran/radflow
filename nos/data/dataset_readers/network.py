@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 @DatasetReader.register('network')
 class NetworkReader(DatasetReader):
     def __init__(self,
+                 n_nodes: int = None,
                  train_path: str = 'data/vevo_all_nodes.pkl',
                  test_path: str = 'data/vevo_connected_nodes.pkl',
                  lazy: bool = True) -> None:
@@ -29,11 +30,16 @@ class NetworkReader(DatasetReader):
         random.seed(1234)
         self.rs = np.random.RandomState(1234)
 
-        with open(train_path, 'rb') as f:
-            self.train_ids = sorted(pickle.load(f))
+        if n_nodes is not None:
+            self.train_ids = list(range(n_nodes))
+            self.test_ids = list(range(n_nodes))
 
-        with open(test_path, 'rb') as f:
-            self.test_ids = sorted(pickle.load(f))
+        else:
+            with open(train_path, 'rb') as f:
+                self.train_ids = sorted(pickle.load(f))
+
+            with open(test_path, 'rb') as f:
+                self.test_ids = sorted(pickle.load(f))
 
     @overrides
     def _read(self, split: str):

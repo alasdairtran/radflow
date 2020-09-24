@@ -13,6 +13,8 @@ from allennlp.nn.initializers import InitializerApplicator
 from scipy.sparse.csgraph import laplacian
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
+from nos.modules.metrics import get_smape
+
 from .base import BaseModel
 
 
@@ -88,6 +90,10 @@ class TGCN(BaseModel):
         self.batch_history['acc'] += 1 - F_norm
         self.batch_history['r2'] += r2
         self.batch_history['var'] += var
+
+        smapes, _ = get_smape(targets, forecasts)
+        self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+        self.step_history['smape'] += np.sum(smapes)
 
         out_dict = {
             'loss': loss,
