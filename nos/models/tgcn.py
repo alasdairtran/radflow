@@ -44,7 +44,7 @@ class TGCN(BaseModel):
         if initializer:
             initializer(self)
 
-    def forward(self, x, y, scale) -> Dict[str, Any]:
+    def forward(self, x, y, scale, keys, splits) -> Dict[str, Any]:
         # Enable anomaly detection to find the operation that failed to compute
         # its gradient.
         # torch.autograd.set_detect_anomaly(True)
@@ -78,10 +78,10 @@ class TGCN(BaseModel):
         forecasts = forecasts.detach().cpu().numpy()
         rmse = math.sqrt(mean_squared_error(targets, forecasts)) * scale[0]
         mae = mean_absolute_error(targets, forecasts) * scale[0]
-        F_norm = la.norm(targets-forecasts, 'fro')/la.norm(targets, 'fro')
-        r2 = 1-((targets-forecasts)**2).sum() / \
-            ((targets-targets.mean())**2).sum()
-        var = 1-(np.var(targets-forecasts))/np.var(targets)
+        F_norm = la.norm(targets - forecasts, 'fro') / la.norm(targets, 'fro')
+        r2 = 1 - ((targets - forecasts)**2).sum() / \
+            ((targets - targets.mean())**2).sum()
+        var = 1 - (np.var(targets - forecasts)) / np.var(targets)
 
         self.history['_n_batches'] += 1
         self.history['_n_samples'] += B

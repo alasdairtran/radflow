@@ -12,7 +12,7 @@ vocabulary:
 model:
   type: tgcn
   adj_path: data/taxi/sz_adj.csv # 156 roads
-  hidden_size: 128 # 50,436 parameters
+  hidden_size: 128
   forecast_len: 4
   initializer:
     regexes:

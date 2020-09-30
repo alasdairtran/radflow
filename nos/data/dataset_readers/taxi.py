@@ -1,10 +1,6 @@
 import json
 import logging
-import os
-import pickle
 import random
-from collections import Counter
-from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -12,9 +8,6 @@ from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import ArrayField, MetadataField
 from allennlp.data.instance import Instance
 from overrides import overrides
-from pymongo import MongoClient
-
-from nos.utils import keystoint
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -68,18 +61,22 @@ class TaxiReader(DatasetReader):
             raise ValueError(f'Unknown split: {split}')
 
         if split == 'train':
-            for i in range(len(self.x_train)):
-                yield self.series_to_instance(self.x_train[i], self.y_train[i])
+            ids = list(range(len(self.x_train)))
+            self.rs.shuffle(ids)
+            for i in ids:
+                yield self.series_to_instance(self.x_train[i], self.y_train[i], i, split)
 
         elif split in ['valid', 'test']:
             for i in range(len(self.x_test)):
-                yield self.series_to_instance(self.x_test[i], self.y_test[i])
+                yield self.series_to_instance(self.x_test[i], self.y_test[i], i, split)
 
-    def series_to_instance(self, x, y) -> Instance:
+    def series_to_instance(self, x, y, key, split) -> Instance:
         fields = {
             'x': ArrayField(x),
             'y': ArrayField(y),
             'scale': MetadataField(self.scale),
+            'keys': MetadataField(key),
+            'splits': MetadataField(split),
         }
 
         return Instance(fields)

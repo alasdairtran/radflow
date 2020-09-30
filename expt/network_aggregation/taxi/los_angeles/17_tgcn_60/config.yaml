@@ -11,13 +11,19 @@ test_data_path: test
 vocabulary:
   type: empty
 model:
-  type: radflow_taxi
+  type: tgcn
   adj_path: data/taxi/los_adj.csv # 207 roads
-  hidden_size: 32 # 50,436 parameters
+  hidden_size: 128 # 50,436 parameters
   forecast_len: 12
-  n_layers: 4
-  dropout: 0.2
-  variant: none
+  initializer:
+    regexes:
+      - - ^W_out.weight
+        - type: normal
+          mean: 1
+      - - ^b_out
+        - normal
+      - - ^tgcn.*weight
+        - xavier_uniform
 data_loader:
   batch_size: 64
   shuffle: false
@@ -31,12 +37,8 @@ trainer:
   keep_batchnorm_fp32: None
   optimizer:
     type: adamw
-    lr: 0.0001
-    weight_decay: 0.0001
-  learning_rate_scheduler:
-    type: linear_with_warmup
-    warmup_steps: 5000
-    last_epoch: -1
+    lr: 0.001
+    weight_decay: 0.0015
   num_epochs: 10
   cuda_device: 0
   grad_norm: 0.1

@@ -23,7 +23,7 @@ model:
   test_lengths: [4]
   edge_selection_method: top
   max_neighbours: 128
-  max_agg_neighbours: 128
+  max_agg_neighbours: 256
   neigh_sample: false
   initializer:
     regexes:
