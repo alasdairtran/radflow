@@ -71,7 +71,7 @@ def evaluate_from_file(archive_path, model_path, overrides=None, eval_suffix='',
     logger.info("Metrics:")
     for key, metric in metrics.items():
         if isinstance(metric, list):
-            if key not in ['smapes']:
+            if key not in ['smapes'] or len(metric) == 0:
                 continue
             metric_array = np.array(metric)
             logger.info(f"{key}_min: {np.amin(metric_array)}")
@@ -126,9 +126,14 @@ def evaluate(model: Model,
             batch = nn_util.move_to_device(batch, cuda_device)
             output_dict = model(**batch)
             loss = output_dict.get("loss")
-            smape += output_dict['smapes']
-            daily_errors += output_dict['daily_errors']
+            if 'smapes' in output_dict:
+                smape += output_dict['smapes']
+
+            if 'daily_errors' in output_dict:
+                daily_errors += output_dict['daily_errors']
+
             keys += output_dict['keys']
+
             if 'preds' in output_dict:
                 preds += output_dict['preds']
 
