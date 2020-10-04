@@ -65,6 +65,10 @@ class RADflow(BaseModel):
                  edge_missing_p: float = 0,
                  view_randomize_p: bool = True,
                  forward_fill: bool = True,
+                 add_zero_attn: bool = False,
+                 add_bias_kv: bool = True,  # having bias term seems important
+                 attn_out_proj: bool = True,
+                 share_attn_out: bool = True,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -91,6 +95,7 @@ class RADflow(BaseModel):
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
         self.edge_selection_method = edge_selection_method
+        self.attn_out_proj = attn_out_proj
 
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
@@ -131,7 +136,9 @@ class RADflow(BaseModel):
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
                 node_size, n_heads, dropout=0.1, bias=True,
-                add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+                add_bias_kv=add_bias_kv, add_zero_attn=add_zero_attn, kdim=None, vdim=None)
+            self.proj_alter = GehringLinear(node_size, node_size)
+            self.proj_ego = GehringLinear(node_size, node_size)
         elif agg_type == 'sage':
             self.conv = SAGEConv(node_size, node_size)
         elif agg_type == 'gat':
@@ -143,7 +150,13 @@ class RADflow(BaseModel):
             if agg_type == 'attention':
                 self.attn2 = nn.MultiheadAttention(
                     node_size, n_heads, dropout=0.1, bias=True,
-                    add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+                    add_bias_kv=add_bias_kv, add_zero_attn=add_zero_attn, kdim=None, vdim=None)
+                if share_attn_out:
+                    self.proj_alter2 = self.proj_alter
+                    self.proj_ego2 = self.proj_ego
+                else:
+                    self.proj_alter2 = GehringLinear(node_size, node_size)
+                    self.proj_ego2 = GehringLinear(node_size, node_size)
             elif agg_type == 'sage':
                 self.conv2 = SAGEConv(node_size, node_size)
             elif agg_type == 'gat':
@@ -199,7 +212,7 @@ class RADflow(BaseModel):
         elif self.agg_type in ['gat', 'sage']:
             Xm = self._aggregate_gat(X, Xm, masks, 1)
 
-        X_out = self._pool(X, Xm)
+        X_out = self._pool(X, Xm, 1)
         return X_out, scores, neigh_keys
 
     def _get_edges_by_probs(self, keys, sorted_keys, key_map, start, total_len, parents):
@@ -434,7 +447,7 @@ class RADflow(BaseModel):
                     Xn[idx], Xm_2, masks_2, level + 1)
             elif self.agg_type in ['gat', 'sage']:
                 Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2, level + 1)
-            Xn[idx] = self._pool(Xn[idx], Xm_2).type_as(Xn)
+            Xn[idx] = self._pool(Xn[idx], Xm_2, level + 1).type_as(Xn)
 
         _, S, E = Xn.shape
 
@@ -481,8 +494,21 @@ class RADflow(BaseModel):
 
         return Xm, masks, out_neigh_keys
 
-    def _pool(self, X, Xn):
-        X_out = X + Xn
+    def _pool(self, X, Xn, level):
+        if self.agg_type == 'mean':
+            X_out = X + Xn
+        elif self.agg_type == 'attention' and not self.attn_out_proj:
+            X_out = X + Xn
+            X_out = F.gelu(X_out).type_as(X)
+        elif self.agg_type == 'attention' and self.attn_out_proj:
+            if level == 1:
+                X_out = self.proj_ego(X) + self.proj_alter(Xn)
+            elif level == 2:
+                X_out = self.proj_ego2(X) + self.proj_alter2(Xn)
+            X_out = F.gelu(X_out).type_as(X)
+        elif self.agg_type in ['gat', 'sage']:
+            X_out = Xn
+
         return X_out
 
     def _aggregate_mean(self, Xn, masks):
@@ -536,8 +562,6 @@ class RADflow(BaseModel):
         # X_attn.shape == [1, batch_size * seq_len, hidden_size]
 
         X_out = X_attn.reshape(B, T, E)
-
-        X_out = F.gelu(X_out).type_as(X)
 
         if scores is not None:
             scores = scores.reshape(B, T, -1)
