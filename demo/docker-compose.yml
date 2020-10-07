@@ -1,0 +1,58 @@
+# Docker compose YAML file
+# Documentation: https://docs.docker.com/compose/compose-file/
+
+version: "3.8"
+
+services:
+  zero:
+    image: dgraph/dgraph:v20.07.1
+    volumes:
+      - ./dgraph/data:/dgraph
+      - ./dgraph/backups:/backups
+    ports:
+      - 5280:5080
+      - 6280:6080
+      # - 8201:8000 # bulk loader pprof
+    restart: on-failure
+    command: dgraph zero --my=zero:5080
+
+  alpha:
+    image: dgraph/dgraph:v20.07.1
+    volumes:
+      - ./dgraph/data:/dgraph
+    ports:
+      - 8280:8080
+      - 9280:9080
+    restart: on-failure
+    command: dgraph alpha --my=alpha:7080 --zero=zero:5080 --whitelist 172.21.0.1
+
+  ratel:
+    image: dgraph/dgraph:v20.07.1
+    volumes:
+      - ./dgraph/backups:/backups
+    ports:
+      - 8200:8000
+    command: dgraph-ratel
+
+  backend:
+    build: ./backend
+    command: uvicorn server:app --port 8000 --reload
+    volumes:
+      - ./backend:/backend
+    ports:
+      - 8205:8000 # host:container
+    depends_on:
+      - zero
+      - alpha
+
+  frontend:
+    build: ./frontend
+    command: ["yarn", "start"]
+    environment:
+      - HOST=0.0.0.0
+    volumes:
+      - ./frontend:/usr/src/app
+    ports:
+      - 3200:3000 # host:container
+    depends_on:
+      - backend
