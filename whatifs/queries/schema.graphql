@@ -1,0 +1,15 @@
+# Define Directives and index
+graph_id: int @index(int) .
+title: string @index(exact) .
+first_date: dateTime @index(day) .
+views: [int] .
+links_to: [uid] @reverse .
+
+# Define Types
+type Page {
+    graph_id
+    title
+    first_date
+    views
+    links_to
+}
