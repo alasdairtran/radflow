@@ -48,6 +48,7 @@ services:
   frontend:
     build: ./frontend
     command: ["yarn", "start"]
+    stdin_open: true # https://stackoverflow.com/a/60902143
     environment:
       - HOST=0.0.0.0
     volumes:
