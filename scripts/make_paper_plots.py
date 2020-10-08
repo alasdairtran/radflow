@@ -395,7 +395,7 @@ def plot_network_contribution():
 
 
 def plot_attention_maps():
-    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hops/14_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/14_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o5 = json.load(f)
 
@@ -441,7 +441,7 @@ def plot_attention_maps():
         for start in range(27):
             attn = o5['all_scores'][test_pos][start][neigh_idx]
             plt.axvspan(start, start+1,
-                        color=cm.Blues(attn/(0.12)), alpha=0.7, lw=0)
+                        color=cm.Blues(attn/(0.16)), alpha=0.7, lw=0)
 
     # contribs = np.array(o5['f_parts'][1358])
     # net_contrib = contribs[-1]
@@ -472,7 +472,7 @@ def plot_attention_maps():
     ax1tr = axes[-1].transData  # Axis 1 -> Display
     figtr = fig.transFigure.inverted()  # Display -> Figure
     ptB = figtr.transform(ax0tr.transform((28, -0.7)))
-    ptE = figtr.transform(ax1tr.transform((0.5, 0.5)))
+    ptE = figtr.transform(ax1tr.transform((-1, 0.5)))
     arrow = mpl.patches.FancyArrowPatch(
         ptB, ptE, transform=fig.transFigure,  # Place arrow in figure coord system
         fc="grey", connectionstyle="arc3,rad=0", arrowstyle='simple', alpha=0.3,
