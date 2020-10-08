@@ -1,5 +1,6 @@
 from ariadne import ObjectType, QueryType, gql, make_executable_schema
 from ariadne.asgi import GraphQL
+from starlette.middleware.cors import CORSMiddleware
 
 # Define types using Schema Definition Language (https://graphql.org/learn/schema/)
 # Wrapping string in gql function provides validation and better error traceback
@@ -43,4 +44,6 @@ def resolve_person_fullname(person, *_):
 schema = make_executable_schema(type_defs, query, person)
 
 # Create an ASGI app using the schema, running in debug mode
-app = GraphQL(schema, debug=True)
+# app = GraphQL(schema, debug=True)
+app = CORSMiddleware(GraphQL(schema, debug=True), allow_origins=[
+                     'http://localhost:3200'], allow_methods=['POST'])
