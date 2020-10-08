@@ -97,40 +97,84 @@ def plot_degree_dist(G, topic):
 
 
 def get_vevo_stats():
-    path = "data/vevo/static_graph.gpickle"
+    path_0 = "data/vevo/static_graph_2018_09_01.gpickle"
+    path_1 = "data/vevo/static_graph_2018_10_01.gpickle"
+    path_2 = "data/vevo/static_graph_2018_11_02.gpickle"
 
-    if not os.path.exists(path):
+    if not os.path.exists(path_0):
         f = h5py.File('data/vevo/vevo.hdf5', 'r')
         edges = f['edges']
-        G = nx.DiGraph()
-        for target_id, neighs in tqdm(enumerate(edges)):
-            for n in np.unique(np.vstack(neighs)):
-                if n != -1:
-                    G.add_edge(n, target_id)
-        nx.write_gpickle(G, path)
-
-    G1 = nx.read_gpickle(path)
-
-    print('Stats for Vevo graph')
-    get_stats(G1)
-
-
-def get_wiki_stats():
-    path = "data/wiki/static_graph.gpickle"
-    if not os.path.exists(path):
-        f2 = h5py.File('data/wiki/wiki.hdf5', 'r')
-        edges2 = f2['edges']
+        G0 = nx.DiGraph()
+        G1 = nx.DiGraph()
         G2 = nx.DiGraph()
-        for target_id, neighs in tqdm(enumerate(edges2)):
-            for n in np.unique(np.vstack(neighs)):
+        for target_id, neighs in tqdm(enumerate(edges)):
+            for n in np.unique(neighs[0]):
+                if n != -1:
+                    G0.add_edge(n, target_id)
+
+            for n in np.unique(neighs[30]):
+                if n != -1:
+                    G1.add_edge(n, target_id)
+
+            for n in np.unique(neighs[-1]):
                 if n != -1:
                     G2.add_edge(n, target_id)
 
-        nx.write_gpickle(G2, path)
+        nx.write_gpickle(G0, path_0)
+        nx.write_gpickle(G1, path_1)
+        nx.write_gpickle(G2, path_2)
 
-    G2 = nx.read_gpickle(path)
+    print('Stats for Vevo graph on 1 Sep 2018')
+    G0 = nx.read_gpickle(path_0)
+    get_stats(G0)
 
-    print('Stats for Wiki graph')
+    print('Stats for Vevo graph on 1 Oct 2018')
+    G1 = nx.read_gpickle(path_1)
+    get_stats(G1)
+
+    print('Stats for Vevo graph on 2 Nov 2018')
+    G2 = nx.read_gpickle(path_2)
+    get_stats(G2)
+
+
+def get_wiki_stats():
+    path_0 = "data/wiki/static_graph_2015_07_01.gpickle"
+    path_1 = "data/wiki/static_graph_2018_01_01.gpickle"
+    path_2 = "data/wiki/static_graph_2020_06_30.gpickle"
+
+    if not os.path.exists(path_0):
+        f2 = h5py.File('data/wiki/wiki.hdf5', 'r')
+        edges = f2['edges']
+        G0 = nx.DiGraph()
+        G1 = nx.DiGraph()
+        G2 = nx.DiGraph()
+        for target_id, neighs in tqdm(enumerate(edges)):
+            for n in np.unique(neighs[0]):
+                if n != -1:
+                    G0.add_edge(n, target_id)
+
+            for n in np.unique(neighs[915]):
+                if n != -1:
+                    G1.add_edge(n, target_id)
+
+            for n in np.unique(neighs[-1]):
+                if n != -1:
+                    G2.add_edge(n, target_id)
+
+        nx.write_gpickle(G0, path_0)
+        nx.write_gpickle(G1, path_1)
+        nx.write_gpickle(G2, path_2)
+
+    print('Stats for Wiki graph on 1 Jul 2015')
+    G0 = nx.read_gpickle(path_0)
+    get_stats(G0)
+
+    print('Stats for Wiki graph on 1 Jan 2018')
+    G1 = nx.read_gpickle(path_1)
+    get_stats(G1)
+
+    print('Stats for Wiki graph on 30 Jun 2020')
+    G2 = nx.read_gpickle(path_2)
     get_stats(G2)
 
 
@@ -288,9 +332,9 @@ def find_triangle_motifs(G):
 
 
 def main():
-    get_wiki_bivariate_nbeats_stats()
-    # get_vevo_stats()
-    # get_wiki_stats()
+    # get_wiki_bivariate_nbeats_stats()
+    get_vevo_stats()
+    get_wiki_stats()
 
     # get_vevo_bowtie_stats()
     # get_wiki_bowtie_stats()
