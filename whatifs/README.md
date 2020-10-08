@@ -20,6 +20,6 @@ rm -rfv dgraph/data/out
 # Shut down zero and start whole server
 docker-compose up
 
-# If we need to live load later
+# If we need to live load later. Takes 2.5 hours to load 635M edges
 docker exec -it $RATEL_CONTAINER_ID dgraph live -f /backups/wiki.rdf --alpha alpha:9080 --zero zero:5080 -c 1
 ```
