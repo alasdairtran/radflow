@@ -116,10 +116,12 @@ def evaluate(model: Model,
         smape = []
         daily_errors = []
         preds = []
+        preds_2 = []
         keys = []
         f_parts = []
         neigh_keys = []
         all_scores = []
+        all_scores_2 = []
         arima_sums = []
         for batch in generator_tqdm:
             batch_count += 1
@@ -137,6 +139,9 @@ def evaluate(model: Model,
             if 'preds' in output_dict:
                 preds += output_dict['preds']
 
+            if 'preds_2' in output_dict:
+                preds_2 += output_dict['preds_2']
+
             if 'f_parts' in output_dict:
                 f_parts += output_dict['f_parts']
 
@@ -145,6 +150,9 @@ def evaluate(model: Model,
 
             if 'all_scores' in output_dict:
                 all_scores += output_dict['all_scores']
+
+            if 'all_scores_2' in output_dict:
+                all_scores_2 += output_dict['all_scores_2']
 
             if 'arima' in output_dict:
                 arima_sums += output_dict['arima']
@@ -179,6 +187,10 @@ def evaluate(model: Model,
         final_metrics['f_parts'] = f_parts
         final_metrics['neigh_keys'] = neigh_keys
         final_metrics['all_scores'] = all_scores
+        if all_scores_2:
+            final_metrics['all_scores_2'] = all_scores_2
+        if preds_2:
+            final_metrics['preds_2'] = preds_2
         final_metrics['arima'] = arima_sums
 
         keys = [int(k) for k in keys]

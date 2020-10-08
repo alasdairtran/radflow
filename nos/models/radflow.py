@@ -69,6 +69,7 @@ class RADflow(BaseModel):
                  add_bias_kv: bool = True,  # having bias term seems important
                  attn_out_proj: bool = True,
                  share_attn_out: bool = True,
+                 counterfactual_mode: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -96,6 +97,7 @@ class RADflow(BaseModel):
         self.neigh_sample = neigh_sample
         self.edge_selection_method = edge_selection_method
         self.attn_out_proj = attn_out_proj
+        self.counterfactual_mode = counterfactual_mode
 
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
@@ -196,13 +198,13 @@ class RADflow(BaseModel):
 
         return X, forecast, f_parts
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len, eval_step=None):
+    def _get_neighbour_embeds(self, X, keys, start, total_len, eval_step=None, counterfactual=False):
         if self.agg_type == 'none':
             return X
 
         parents = [-99] * len(keys)
         Xm, masks, neigh_keys = self._construct_neighs(
-            X, keys, start, total_len, 1, parents, eval_step)
+            X, keys, start, total_len, 1, parents, eval_step, counterfactual)
 
         scores = None
         if self.agg_type == 'mean':
@@ -270,7 +272,7 @@ class RADflow(BaseModel):
 
         return edge_counters
 
-    def _construct_neighs(self, X, keys, start, total_len, level, parents=None, eval_step=None):
+    def _construct_neighs(self, X, keys, start, total_len, level, parents=None, eval_step=None, counterfactual=False):
         B, T, E = X.shape
 
         sorted_keys = sorted(set(keys))
@@ -389,6 +391,9 @@ class RADflow(BaseModel):
                     parents[i, j] = key
                     n_masks[i, j] = True
                     neigh_keys[i, j] = n
+
+                    if counterfactual and j == 0:
+                        neighs[i, j, -1] = 2 * neighs[i, j, -1]
 
         out_neigh_keys = neigh_keys.cpu().numpy()
         neighs = torch.from_numpy(neighs).to(X.device)
@@ -754,6 +759,9 @@ class RADflow(BaseModel):
             # targets.shape == [batch_size, forecast_len]
 
             preds = targets.new_zeros(*targets.shape)
+            if self.counterfactual_mode:
+                preds_2 = targets.new_zeros(*targets.shape)
+                all_scores_2 = [[] for _ in keys]
 
             series = log_raw_series[:, :-self.forecast_length]
             current_views = series[:, -1]
@@ -761,8 +769,8 @@ class RADflow(BaseModel):
                            for _ in keys]
             all_scores = [[] for _ in keys]
             for i in range(self.forecast_length):
-                X, pred, f_parts = self._forward_full(series)
-                pred = pred[:, -1]
+                X, pred_base, f_parts = self._forward_full(series)
+                pred_base = pred_base[:, -1]
                 for b in range(len(keys)):
                     for l, f_part in enumerate(f_parts):
                         all_f_parts[b][l].append(f_part[b])
@@ -774,22 +782,39 @@ class RADflow(BaseModel):
                     X_agg = X_agg.squeeze(-1)[:, -1]
                     if scores is not None:
                         scores = scores[:, -1].tolist()
-                    pred = pred + X_agg
+                    pred = pred_base + X_agg
                     # delta.shape == [batch_size]
+
+                    if self.counterfactual_mode:
+                        X_agg_2, scores_2, _ = self._get_neighbour_embeds(
+                            X, keys, start, seq_len, i, True)
+                        X_agg_2 = self.fc(X_agg_2)
+                        X_agg_2 = X_agg_2.squeeze(-1)[:, -1]
+                        if scores_2 is not None:
+                            scores_2 = scores_2[:, -1].tolist()
+                        pred_2 = pred_base + X_agg_2
 
                     for b, f in enumerate(X_agg.cpu().tolist()):
                         all_f_parts[b][-1].append(f)
                         if scores is not None:
                             all_scores[b].append(scores[b])
+                        if self.counterfactual_mode and scores_2 is not None:
+                            all_scores_2[b].append(scores_2[b])
+
                 else:
                     neigh_keys = np.array([])
+                    pred = pred_base
 
                 current_views = pred
                 preds[:, i] = current_views
+                if self.counterfactual_mode:
+                    preds_2[:, i] = pred_2
                 current_views = current_views.unsqueeze(1)
                 series = torch.cat([series, current_views], dim=1)
 
             preds = torch.exp(preds)
+            if self.counterfactual_mode:
+                preds_2 = torch.exp(preds_2)
 
             smapes, daily_errors = get_smape(targets, preds)
             # if self.views_all:
@@ -806,6 +831,9 @@ class RADflow(BaseModel):
             out_dict['f_parts'] = all_f_parts
             out_dict['neigh_keys'] = neigh_keys.tolist()
             out_dict['all_scores'] = all_scores
+            if self.counterfactual_mode:
+                out_dict['preds_2'] = preds_2.cpu().numpy().tolist()
+                out_dict['all_scores_2'] = all_scores_2
             if self.views_all:
                 self.history['_n_steps'] += smapes.shape[0] * \
                     smapes.shape[1] * smapes.shape[2]
