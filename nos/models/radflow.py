@@ -819,6 +819,60 @@ class RADflow(BaseModel):
 
         return out_dict
 
+    def get_pred_neigh_embeds(self, X, Xm, masks):
+        # X.shape == [batch_size, 1, hidden_size]
+        # Xm.shape == [batch_size, n_neighs, 1, hidden_size]
+        # masks.shape == [batch_size, n_neighs, 1]
+
+        Xm, scores = self._aggregate_attn(X, Xm, masks, 1)
+        X_out = self._pool(X, Xm, 1)
+        # X_out.shape == [batch_size, 1, hidden_size]
+
+        return X_out
+
+    def predict(self, backcast, neighs, forecast_len=28):
+        assert self.n_hops == 1
+        assert backcast.shape[0] == 1
+        p = next(self.parameters())
+
+        backcast = p.new_tensor(backcast)
+        backcast = torch.log1p(backcast)
+        B, _ = X.shape
+        # X.shape == [batch_size, backcast_len]
+
+        neighs = p.new_tensor(neighs)
+        neighs = torch.log1p(neighs)
+        B, N, T = neighs.shape
+        # neighs.shape == [batch_size, n_neighs, total_len]
+
+        masks = np.zeros((B, N, 1), dtype=bool)
+        masks = p.new_tensor(masks)
+        preds = p.new_zeros(B, forecast_len)
+
+        X_neighs, _, _ = self._forward_full(neighs.reshape(B * N, T))
+        X_neighs = X_neighs.reshape(B, N, T, -1)
+        X_neighs = X_neighs[:, :, -forecast_len:]
+        # neighs.shape == [batch_size, n_neighs, forecast_len, hidden_size]
+
+        for i in range(forecast_len):
+            X, pred, _ = self._forward_full(backcast)
+            pred = pred[:, -1:]
+            X = X[:, -1:]
+
+            if self.agg_type != 'none':
+                X_agg = self.get_pred_neigh_embeds(X, X_neighs[:, :, i], masks)
+                X_agg = self.fc(X_agg)
+                X_agg = X_agg.squeeze(-1)
+                pred = pred + X_agg
+
+            preds[:, i] = pred[:, 0]
+            backcast = torch.cat([backcast, pred], dim=1)
+
+        preds = torch.exp(preds)
+        # preds.shape == [batch_size, forecast_len]
+
+        return preds.cpu().numpy()
+
     def predict_no_agg(self, series, n_steps):
         if len(series.shape) == 3:
             preds = series.new_zeros(series.shape[0], n_steps, series.shape[2])
