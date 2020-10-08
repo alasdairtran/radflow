@@ -24,7 +24,7 @@ services:
       - 8280:8080
       - 9280:9080
     restart: on-failure
-    command: dgraph alpha --my=alpha:7080 --zero=zero:5080 --whitelist 172.21.0.1
+    command: dgraph alpha --my=alpha:7080 --zero=zero:5080 --whitelist 172.18.0.1 -p /dgraph/out/0/p  -w /dgraph/out/0/w
 
   ratel:
     image: dgraph/dgraph:v20.07.1
