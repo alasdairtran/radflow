@@ -496,6 +496,67 @@ def plot_attention_maps():
     fig.savefig('figures/attention_map.pdf')
 
 
+def plot_corr_density():
+    path = 'expt/network_aggregation/vevo_dynamic/imputation/one_hop/14_radflow/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o1 = json.load(f)
+
+    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/14_radflow/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o2 = json.load(f)
+
+    views_wiki = h5py.File('data/wiki/wiki.hdf5', 'r')['views'][...]
+    views_vevo = h5py.File('data/vevo/vevo.hdf5', 'r')['views'][...]
+
+    s_vevo = []
+    v_vevo = []
+    for key, scores, neighs in tqdm(zip(o1['keys'], o1['all_scores'], o1['neigh_keys'])):
+        scores = np.array(scores).transpose()[:-1]
+        for i, n in enumerate(neighs):
+            mean_score = scores[i].mean()
+            if mean_score == 0:
+                continue
+            s_vevo.append(np.corrcoef(
+                views_vevo[key, -49:], views_vevo[n, -49:])[0, 1])
+            v_vevo.append(mean_score)
+
+    s_wiki = []
+    v_wiki = []
+    for key, scores, neighs in tqdm(zip(o2['keys'], o2['all_scores'], o2['neigh_keys'])):
+        scores = np.array(scores).transpose()[:-1]
+        for i, n in enumerate(neighs):
+            mean_score = scores[i].mean()
+            if mean_score == 0:
+                continue
+            v_wiki.append(np.corrcoef(
+                views_wiki[key, -140:], views_wiki[n, -140:])[0, 1])
+            s_wiki.append(mean_score)
+
+    fig = plt.figure(figsize=(6, 3))
+
+    ax = plt.subplot(1, 2, 1)
+
+    sns.kdeplot(s_vevo, v_vevo, cmap="Blues",
+                shade=True, shade_lowest=True, ax=ax)
+    ax.set_xlabel('Attention Score')
+    ax.set_ylabel('Correlation Coefficient')
+    ax.set_title('VevoMusic')
+    ax.set_xlim(-0.5, 1)
+    ax.set_ylim(0, 0.15)
+
+    ax = plt.subplot(1, 2, 2)
+
+    sns.kdeplot(s_wiki, v_wiki, cmap="Blues",
+                shade=True, shade_lowest=True, ax=ax)
+    ax.set_xlabel('Attention Score')
+    ax.set_title('WikiTraffic')
+    ax.set_xlim(0, 0.15)
+    ax.set_ylim(-0.25, 1)
+
+    fig.tight_layout()
+    fig.savefig('figures/corr_attn.pdf')
+
+
 def main():
     plot_missing_expt('vevo')
     plot_missing_expt('wiki')
@@ -511,6 +572,7 @@ def main():
     plot_edge_dist()
     plot_network_contribution()
     plot_attention_maps()
+    plot_corr_density()
 
 
 if __name__ == '__main__':
