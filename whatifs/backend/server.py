@@ -1,3 +1,4 @@
+import pydgraph
 from ariadne import ObjectType, QueryType, gql, make_executable_schema
 from ariadne.asgi import GraphQL
 from starlette.middleware.cors import CORSMiddleware

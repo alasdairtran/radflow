@@ -8,7 +8,8 @@ RUN apt-get update \
 RUN pip install -U --no-cache-dir \
     ariadne \
     uvicorn[standard] \
-    starlette
+    starlette \
+    pydgraph
 
 COPY . /backend/
 WORKDIR /backend
