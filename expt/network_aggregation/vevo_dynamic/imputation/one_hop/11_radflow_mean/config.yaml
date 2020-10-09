@@ -73,7 +73,7 @@ trainer:
   cuda_device: 0
   grad_norm: 0.1
   patience: 10
-  validation_metric: "-smape_7"
+  validation_metric: "-loss"
   tensorboard_writer:
     summary_interval: 100
     should_log_parameter_statistics: false

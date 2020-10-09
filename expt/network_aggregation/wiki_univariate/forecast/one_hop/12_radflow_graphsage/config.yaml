@@ -26,7 +26,7 @@ model:
   max_agg_neighbours: 4
   neigh_sample: true
   base_model_config: expt/pure_time_series/wiki_univariate/08_radflow_no_network/config.yaml
-  base_model_weights: expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/model_state_epoch_9.th
+  base_model_weights: expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/best.th
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*
@@ -81,7 +81,7 @@ trainer:
   cuda_device: 0
   grad_norm: 0.1
   patience: 10
-  validation_metric: "-smape_28"
+  validation_metric: "-loss"
   tensorboard_writer:
     summary_interval: 100
     should_log_parameter_statistics: false
