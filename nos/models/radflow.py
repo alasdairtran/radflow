@@ -130,7 +130,14 @@ class RADflow(BaseModel):
                 self.key2pos = pickle.load(f)
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
-        node_size = hidden_size if variant == 'separate' else 2 * hidden_size
+
+        if variant in ['separate', 'h', 'p', 'q']:
+            node_size = hidden_size
+        elif variant in ['hp']:
+            node_size = 2 * hidden_size
+        elif variant in ['hpq']:
+            node_size = 3 * hidden_size
+
         self.agg_type = agg_type
         if agg_type in ['mean', 'attention', 'sage', 'gat']:
             self.fc = GehringLinear(node_size, input_size)
@@ -921,7 +928,8 @@ class RADflow(BaseModel):
 class LSTMDecoder(nn.Module):
     def __init__(self, hidden_size, n_layers, dropout, variant, input_size):
         super().__init__()
-        assert variant in ['none', 'combined', 'separate']
+        assert variant in ['none', 'h', 'p', 'q',
+                           'hp', 'hpq', 'separate']
         self.variant = variant
         self.input_size = input_size
         self.in_proj = GehringLinear(input_size, hidden_size)
@@ -943,9 +951,11 @@ class LSTMDecoder(nn.Module):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         forecast = X.new_zeros(*X.shape)
-        if self.variant == 'combined':
+        if self.variant == 'hp':
             hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
-        elif self.variant == 'separate':
+        elif self.variant == 'hpq':
+            hidden = X.new_zeros(X.shape[0], X.shape[1], 3 * X.shape[2])
+        elif self.variant in ['separate', 'h', 'p', 'q']:
             hidden = X.new_zeros(*X.shape)
         else:
             hidden = None
@@ -954,10 +964,19 @@ class LSTMDecoder(nn.Module):
         for layer in self.layers:
             h, b, f = layer(X)
             X = X - b
-            if self.variant == 'combined':
+            if self.variant == 'hp':
                 hidden = hidden + torch.cat([h, b], dim=-1)
+            elif self.variant == 'hpq':
+                hidden = hidden + torch.cat([h, b, f], dim=-1)
+            elif self.variant == 'h':
+                hidden = hidden + h
+            elif self.variant == 'p':
+                hidden = hidden + b
+            elif self.variant == 'q':
+                hidden = hidden + f
             elif self.variant == 'separate':
                 hidden = hidden + h
+
             forecast = forecast + f
 
             if not self.training:
@@ -984,7 +1003,8 @@ class LSTMDecoder(nn.Module):
 class LSTMLayer(nn.Module):
     def __init__(self, hidden_size, dropout, variant):
         super().__init__()
-        assert variant in ['none', 'combined', 'separate']
+        assert variant in ['none', 'h', 'p', 'q',
+                           'hp', 'hpq', 'combined', 'separate']
         self.variant = variant
 
         self.layer = nn.LSTM(hidden_size, hidden_size, 1,
