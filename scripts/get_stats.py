@@ -3,6 +3,7 @@ import os
 import pickle
 
 import h5py
+import igraph
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -43,7 +44,7 @@ def eccentricity(G, v=None, sp=None):
         return e
 
 
-def get_stats(G):
+def get_stats(G, g):
     print(f'Number of nodes with edges:', len(G))
     print(f'Number of edges:', G.number_of_edges())
 
@@ -69,8 +70,9 @@ def get_stats(G):
     print(f'    Average in-degree:', avg_out_degree)
     print(f'    Median in-degree:', med_out_degree)
 
-    # e = eccentricity(G)
-    # print(f'Diameter:', max(e.values()))
+    print(f'Diameter:', g.diameter())
+    print(f'Average path length:', g.average_path_length())
+    print(f'Global Transitivity:', g.transitivity_undirected())
 
     print()
 
@@ -97,9 +99,15 @@ def plot_degree_dist(G, topic):
 
 
 def get_vevo_stats():
-    path_0 = "data/vevo/static_graph_2018_09_01.gpickle"
-    path_1 = "data/vevo/static_graph_2018_10_01.gpickle"
-    path_2 = "data/vevo/static_graph_2018_11_02.gpickle"
+    os.makedirs('data/vevo/graphs', exist_ok=True)
+
+    path_0 = "data/vevo/graphs/static_graph_2018_09_01.gpickle"
+    path_1 = "data/vevo/graphs/static_graph_2018_10_01.gpickle"
+    path_2 = "data/vevo/graphs/static_graph_2018_11_02.gpickle"
+
+    edge_path_0 = "data/vevo/graphs/static_graph_2018_09_01.ncol"
+    edge_path_1 = "data/vevo/graphs/static_graph_2018_10_01.ncol"
+    edge_path_2 = "data/vevo/graphs/static_graph_2018_11_02.ncol"
 
     if not os.path.exists(path_0):
         f = h5py.File('data/vevo/vevo.hdf5', 'r')
@@ -124,23 +132,35 @@ def get_vevo_stats():
         nx.write_gpickle(G1, path_1)
         nx.write_gpickle(G2, path_2)
 
+        nx.write_edgelist(G0, edge_path_0, data=False)
+        nx.write_edgelist(G1, edge_path_1, data=False)
+        nx.write_edgelist(G2, edge_path_2, data=False)
+
     print('Stats for Vevo graph on 1 Sep 2018')
     G0 = nx.read_gpickle(path_0)
-    get_stats(G0)
+    g0 = igraph.Graph.Read_Ncol(edge_path_0)
+    get_stats(G0, g0)
 
     print('Stats for Vevo graph on 1 Oct 2018')
     G1 = nx.read_gpickle(path_1)
-    get_stats(G1)
+    g1 = igraph.Graph.Read_Ncol(edge_path_1)
+    get_stats(G1, g1)
 
     print('Stats for Vevo graph on 2 Nov 2018')
     G2 = nx.read_gpickle(path_2)
-    get_stats(G2)
+    g2 = igraph.Graph.Read_Ncol(edge_path_2)
+    get_stats(G2, g2)
 
 
 def get_wiki_stats():
-    path_0 = "data/wiki/static_graph_2015_07_01.gpickle"
-    path_1 = "data/wiki/static_graph_2018_01_01.gpickle"
-    path_2 = "data/wiki/static_graph_2020_06_30.gpickle"
+    os.makedirs('data/wiki/graphs', exist_ok=True)
+    path_0 = "data/wiki/graphs/static_graph_2015_07_01.gpickle"
+    path_1 = "data/wiki/graphs/static_graph_2018_01_01.gpickle"
+    path_2 = "data/wiki/graphs/static_graph_2020_06_30.gpickle"
+
+    edge_path_0 = "data/wiki/graphs/static_graph_2015_07_01.ncol"
+    edge_path_1 = "data/wiki/graphs/static_graph_2018_01_01.ncol"
+    edge_path_2 = "data/wiki/graphs/static_graph_2020_06_30.ncol"
 
     if not os.path.exists(path_0):
         f2 = h5py.File('data/wiki/wiki.hdf5', 'r')
@@ -165,17 +185,24 @@ def get_wiki_stats():
         nx.write_gpickle(G1, path_1)
         nx.write_gpickle(G2, path_2)
 
+        nx.write_edgelist(G0, edge_path_0, data=False)
+        nx.write_edgelist(G1, edge_path_1, data=False)
+        nx.write_edgelist(G2, edge_path_2, data=False)
+
     print('Stats for Wiki graph on 1 Jul 2015')
     G0 = nx.read_gpickle(path_0)
-    get_stats(G0)
+    g0 = igraph.Graph.Read_Ncol(edge_path_0)
+    get_stats(G0, g0)
 
     print('Stats for Wiki graph on 1 Jan 2018')
     G1 = nx.read_gpickle(path_1)
-    get_stats(G1)
+    g1 = igraph.Graph.Read_Ncol(edge_path_1)
+    get_stats(G1, g1)
 
     print('Stats for Wiki graph on 30 Jun 2020')
     G2 = nx.read_gpickle(path_2)
-    get_stats(G2)
+    g2 = igraph.Graph.Read_Ncol(edge_path_2)
+    get_stats(G2, g2)
 
 
 def get_wiki_bivariate_nbeats_stats():
