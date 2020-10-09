@@ -1,4 +1,4 @@
-# Number of trainable parameters:
+# Number of trainable parameters: 30701
 dataset_reader:
   type: taxi
   series_path: data/taxi/sz_speed.csv # 2976 points at 15m intervals (31 days)
@@ -41,7 +41,7 @@ trainer:
   num_epochs: 5000
   cuda_device: 0
   patience: 1000
-  validation_metric: "-loss"
+  validation_metric: "-rmse"
   tensorboard_writer:
     summary_interval: 100
     should_log_parameter_statistics: false
