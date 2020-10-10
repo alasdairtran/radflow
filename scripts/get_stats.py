@@ -359,9 +359,9 @@ def find_triangle_motifs(G):
 
 
 def main():
-    # get_wiki_bivariate_nbeats_stats()
-    get_vevo_stats()
-    get_wiki_stats()
+    get_wiki_bivariate_nbeats_stats()
+    # get_vevo_stats()
+    # get_wiki_stats()
 
     # get_vevo_bowtie_stats()
     # get_wiki_bowtie_stats()
