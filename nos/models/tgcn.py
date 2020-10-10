@@ -24,6 +24,7 @@ class TGCN(BaseModel):
                  vocab: Vocabulary,
                  hidden_size: int,
                  forecast_len: int,
+                 lambda_loss: float,
                  adj_path: str = 'data/taxi/sz_adj.csv',
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -32,6 +33,7 @@ class TGCN(BaseModel):
         adj_df = pd.read_csv(adj_path, header=None)
         adjacency_matrix = np.array(adj_df, dtype=np.float32)
         self.tgcn = TGCNCell(hidden_size, adjacency_matrix)
+        self.lambda_loss = lambda_loss
 
         self.W_out = nn.Linear(hidden_size, forecast_len, bias=False)
         self.b_out = nn.Parameter(torch.zeros(forecast_len))
@@ -72,7 +74,13 @@ class TGCN(BaseModel):
 
         targets = y.reshape(B * self.forecast_len, N)
 
-        loss = self.mse(forecasts, targets)
+        loss = ((forecasts - targets)**2).sum() / 2
+
+        l2_reg = 0
+        for p in self.parameters():
+            l2_reg += (p**2).sum() / 2
+        l2_reg = self.lambda_loss * l2_reg
+        loss += l2_reg
 
         targets = targets.detach().cpu().numpy()
         forecasts = forecasts.detach().cpu().numpy()
@@ -98,6 +106,7 @@ class TGCN(BaseModel):
         out_dict = {
             'loss': loss,
             'sample_size': self._long.new_tensor(B),
+            'keys': keys,
         }
 
         return out_dict
@@ -111,8 +120,17 @@ class TGCNCell(nn.Module):
         # I'm not convinced that the original authors had the correct code
         # to calculate the Laplacian. Here we'll use the built-in
         # function in scipy.
-        self.register_buffer('L_sym', torch.from_numpy(
-            laplacian(adjacency_matrix, normed=True)))
+
+        A = adjacency_matrix + np.eye(adjacency_matrix.shape[0])
+        row_sum = A.sum(1)
+        d_inv_sqrt = np.power(row_sum, -0.5).flatten()
+        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.0
+        d_mat_inv_sqrt = np.diag(d_inv_sqrt)
+        L_sym = A.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt)
+        L_sym = torch.from_numpy(L_sym).float()
+
+        # L_sym = torch.from_numpy(laplacian(adjacency_matrix, normed=True))
+        self.register_buffer('L_sym', L_sym)
         # L_sym.shape == [n_nodes, n_nodes]
 
         self.W_gates = nn.Linear(hidden_size + 1, hidden_size * 2, bias=False)

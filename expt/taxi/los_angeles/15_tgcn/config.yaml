@@ -15,6 +15,7 @@ model:
   adj_path: data/taxi/los_adj.csv # 207 roads
   hidden_size: 64
   forecast_len: 3
+  lambda_loss: 0.0015
   initializer:
     regexes:
       - - ^W_out.weight
@@ -35,9 +36,8 @@ trainer:
   apex_opt_level: O0
   keep_batchnorm_fp32: None
   optimizer:
-    type: adamw
+    type: adam
     lr: 0.001
-    weight_decay: 0.0015
   num_epochs: 5000
   cuda_device: 0
   patience: 1000
