@@ -1,0 +1,79 @@
+60740it [00:35, 1723.27it/s]
+Stats for Vevo graph on 1 Sep 2018
+Number of nodes with edges: 60663
+Number of edges: 1189460
+Number of nodes with incoming edges 56852
+    Average in-degree: 20.922043199887426
+    Median in-degree: 10.0
+Number of nodes with outgoing edges 60553
+    Average in-degree: 19.643287698379932
+    Median in-degree: 19.0
+Diameter: 32
+Average path length: 8.38010782474973
+Global Transitivity: 0.1659545730425787
+
+Stats for Vevo graph on 1 Oct 2018
+Number of nodes with edges: 60651
+Number of edges: 1170461
+Number of nodes with incoming edges 56220
+    Average in-degree: 20.81929918178584
+    Median in-degree: 10.0
+Number of nodes with outgoing edges 60527
+    Average in-degree: 19.33783270276075
+    Median in-degree: 19.0
+Diameter: 33
+Average path length: 8.333665594286188
+Global Transitivity: 0.1552215340863207
+
+Stats for Vevo graph on 2 Nov 2018
+Number of nodes with edges: 60664
+Number of edges: 1192478
+Number of nodes with incoming edges 56672
+    Average in-degree: 21.041749011857707
+    Median in-degree: 10.0
+Number of nodes with outgoing edges 60545
+    Average in-degree: 19.69573044842679
+    Median in-degree: 19.0
+Diameter: 27
+Average path length: 8.341158527050172
+Global Transitivity: 0.14963442031915136
+
+366802it [44:01, 138.84it/s]
+Stats for Wiki graph on 1 Jul 2015
+Number of nodes with edges: 329255
+Number of edges: 12869374
+Number of nodes with incoming edges 303440
+    Average in-degree: 42.41159372528342
+    Median in-degree: 14.0
+Number of nodes with outgoing edges 319426
+    Average in-degree: 40.28906225542066
+    Median in-degree: 26.0
+Diameter: 15
+Average path length: 4.129854130154818
+Global Transitivity: 0.013635025097689752
+
+Stats for Wiki graph on 1 Jan 2018
+Number of nodes with edges: 349159
+Number of edges: 14992408
+Number of nodes with incoming edges 328965
+    Average in-degree: 45.5744775280045
+    Median in-degree: 16.0
+Number of nodes with outgoing edges 341674
+    Average in-degree: 43.8792767374749
+    Median in-degree: 28.0
+Diameter: 25
+Average path length: 4.082435055466061
+Global Transitivity: 0.014694519700101463
+
+Stats for Wiki graph on 30 Jun 2020
+Number of nodes with edges: 366145
+Number of edges: 17417749
+Number of nodes with incoming edges 356120
+    Average in-degree: 48.909774795012915
+    Median in-degree: 17.0
+Number of nodes with outgoing edges 362148
+    Average in-degree: 48.09566530810608
+    Median in-degree: 31.0
+Diameter: 22
+Average path length: 4.027518500665081
+Global Transitivity: 0.015315547293025821
