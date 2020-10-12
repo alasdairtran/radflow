@@ -65,10 +65,10 @@ class RADflow(BaseModel):
                  edge_missing_p: float = 0,
                  view_randomize_p: bool = True,
                  forward_fill: bool = True,
-                 add_zero_attn: bool = False,
+                 add_zero_attn: bool = True,
                  add_bias_kv: bool = True,  # having bias term seems important
                  attn_out_proj: bool = True,
-                 share_attn_out: bool = True,
+                 share_attn_out: bool = False,
                  counterfactual_mode: bool = False,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):

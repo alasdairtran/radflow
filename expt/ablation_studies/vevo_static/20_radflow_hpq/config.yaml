@@ -15,19 +15,15 @@ model:
   key2pos_path: ./data/vevo/vevo_static.key2pos.pkl
   peek: true
   num_layers: 8
-  hidden_size: 112
+  hidden_size: 104
   dropout: 0.1
   forecast_length: 7
   backcast_length: 42
   test_lengths: [7]
   max_neighbours: 4
   max_agg_neighbours: 4
-  max_eval_neighbours: 8
   neigh_sample: true
-  n_hops: 2
-  hop_scale: 1
-  base_model_config: expt/pure_time_series/vevo/08_radflow_no_network/config.yaml
-  base_model_weights: expt/pure_time_series/vevo/08_radflow_no_network/serialization/best.th
+  variant: hpq
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*

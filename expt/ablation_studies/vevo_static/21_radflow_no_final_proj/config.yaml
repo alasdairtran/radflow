@@ -11,6 +11,8 @@ vocabulary:
 model:
   type: radflow
   agg_type: attention
+  data_path: ./data/vevo/vevo_static.hdf5
+  key2pos_path: ./data/vevo/vevo_static.key2pos.pkl
   peek: true
   num_layers: 8
   hidden_size: 116
@@ -21,8 +23,7 @@ model:
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
-  add_bias_kv: false
-  add_zero_attn: true
+  attn_out_proj: false
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*

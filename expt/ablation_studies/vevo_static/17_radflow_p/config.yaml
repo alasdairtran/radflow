@@ -1,8 +1,8 @@
 # Number of trainable parameters:
 dataset_reader:
   type: network
-  train_path: data/wiki/node_ids/train_ids.pkl
-  test_path: data/wiki/node_ids/test_ids.pkl
+  train_path: data/vevo/vevo_static_connected_nodes.pkl
+  test_path: data/vevo/vevo_static_connected_nodes.pkl
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -10,23 +10,20 @@ vocabulary:
   type: empty
 model:
   type: radflow
-  data_path: ./data/wiki/wiki.hdf5
-  key2pos_path: ./data/wiki/key2pos.pkl
-  test_keys_path: ./data/wiki/node_ids/test_ids.pkl
-  series_len: 1827
   agg_type: attention
+  data_path: ./data/vevo/vevo_static.hdf5
+  key2pos_path: ./data/vevo/vevo_static.key2pos.pkl
   peek: true
   num_layers: 8
-  hidden_size: 116
+  hidden_size: 124
   dropout: 0.1
-  forecast_length: 28
-  backcast_length: 112
-  test_lengths: [7, 14, 21, 28]
+  forecast_length: 7
+  backcast_length: 42
+  test_lengths: [7]
   max_neighbours: 4
   max_agg_neighbours: 4
   neigh_sample: true
-  add_bias_kv: false
-  add_zero_attn: true
+  variant: p
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*
