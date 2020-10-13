@@ -331,7 +331,7 @@ def plot_network_contribution():
             node_ids[cat] = pickle.load(f)
 
     f_vevo = h5py.File('data/vevo/vevo.hdf5', 'r')
-    path = 'expt/network_aggregation/vevo_dynamic/imputation/two_hops/14_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/vevo_dynamic/imputation/two_hops/15_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o8 = json.load(f)
 
@@ -356,7 +356,7 @@ def plot_network_contribution():
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
 
     f_wiki = h5py.File('data/wiki/wiki.hdf5', 'r')
-    path = 'expt/network_aggregation/wiki_univariate/imputation/two_hops/14_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/two_hops/15_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o8 = json.load(f)
 
@@ -395,7 +395,7 @@ def plot_network_contribution():
 
 
 def plot_attention_maps():
-    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/14_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o5 = json.load(f)
 
@@ -441,7 +441,7 @@ def plot_attention_maps():
         for start in range(27):
             attn = o5['all_scores'][test_pos][start][neigh_idx]
             plt.axvspan(start, start+1,
-                        color=cm.Blues(attn/(0.16)), alpha=0.7, lw=0)
+                        color=cm.Blues(attn/(0.15)), alpha=0.7, lw=0)
 
     # contribs = np.array(o5['f_parts'][1358])
     # net_contrib = contribs[-1]
@@ -459,7 +459,7 @@ def plot_attention_maps():
     ax0tr = axes[0].transData  # Axis 0 -> Display
     ax1tr = axes[-1].transData  # Axis 1 -> Display
     figtr = fig.transFigure.inverted()  # Display -> Figure
-    ptB = figtr.transform(ax0tr.transform((28, 0.5)))
+    ptB = figtr.transform(ax0tr.transform((27, 0.5)))
     ptE = figtr.transform(ax1tr.transform((6, 0.9)))
     arrow = mpl.patches.FancyArrowPatch(
         ptB, ptE, transform=fig.transFigure,  # Place arrow in figure coord system
@@ -471,8 +471,8 @@ def plot_attention_maps():
     ax0tr = axes[0].transData  # Axis 0 -> Display
     ax1tr = axes[-1].transData  # Axis 1 -> Display
     figtr = fig.transFigure.inverted()  # Display -> Figure
-    ptB = figtr.transform(ax0tr.transform((28, -0.7)))
-    ptE = figtr.transform(ax1tr.transform((-1, 0.5)))
+    ptB = figtr.transform(ax0tr.transform((27, -0.8)))
+    ptE = figtr.transform(ax1tr.transform((-0.9, 0.4)))
     arrow = mpl.patches.FancyArrowPatch(
         ptB, ptE, transform=fig.transFigure,  # Place arrow in figure coord system
         fc="grey", connectionstyle="arc3,rad=0", arrowstyle='simple', alpha=0.3,
@@ -483,7 +483,7 @@ def plot_attention_maps():
     ax0tr = axes[0].transData  # Axis 0 -> Display
     ax1tr = axes[-1].transData  # Axis 1 -> Display
     figtr = fig.transFigure.inverted()  # Display -> Figure
-    ptB = figtr.transform(ax0tr.transform((28, -2)))
+    ptB = figtr.transform(ax0tr.transform((27, -2.1)))
     ptE = figtr.transform(ax1tr.transform((6, -0.1)))
     arrow = mpl.patches.FancyArrowPatch(
         ptB, ptE, transform=fig.transFigure,  # Place arrow in figure coord system
@@ -492,16 +492,16 @@ def plot_attention_maps():
     )
     fig.patches.append(arrow)
 
-    fig.tight_layout()
+    fig.tight_layout(w_pad=2)
     fig.savefig('figures/attention_map.pdf')
 
 
 def plot_corr_density():
-    path = 'expt/network_aggregation/vevo_dynamic/imputation/one_hop/14_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o1 = json.load(f)
 
-    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/14_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o2 = json.load(f)
 
