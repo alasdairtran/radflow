@@ -1,4 +1,4 @@
-# Number of trainable parameters: 13378
+# Number of trainable parameters: 12410
 dataset_reader:
   type: taxi
   series_path: data/taxi/los_speed.csv # 2016 points at 5m intervals (7 days)
@@ -13,9 +13,9 @@ vocabulary:
 model:
   type: radflow_taxi
   adj_path: data/taxi/los_adj.csv # 207 roads
-  hidden_size: 16
+  hidden_size: 22
   forecast_len: 3
-  n_layers: 4
+  n_layers: 2
   dropout: 0.2
   variant: none
 data_loader:

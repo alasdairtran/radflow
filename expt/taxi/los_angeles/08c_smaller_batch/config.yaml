@@ -19,7 +19,7 @@ model:
   dropout: 0.2
   variant: none
 data_loader:
-  batch_size: 64
+  batch_size: 32
   shuffle: false
   batches_per_epoch: 10000
 validation_data_loader:

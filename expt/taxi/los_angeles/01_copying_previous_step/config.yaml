@@ -1,4 +1,4 @@
-# Number of trainable parameters: 13378
+# Number of trainable parameters: 12867
 dataset_reader:
   type: taxi
   series_path: data/taxi/los_speed.csv # 2016 points at 5m intervals (7 days)
@@ -11,17 +11,11 @@ test_data_path: test
 vocabulary:
   type: empty
 model:
-  type: radflow_taxi
-  adj_path: data/taxi/los_adj.csv # 207 roads
-  hidden_size: 16
-  forecast_len: 3
-  n_layers: 4
-  dropout: 0.2
-  variant: none
+  type: naive_taxi
+  lambda_loss: 0.0015
 data_loader:
   batch_size: 64
   shuffle: false
-  batches_per_epoch: 10000
 validation_data_loader:
   batch_size: 1024
 trainer:
@@ -30,16 +24,10 @@ trainer:
   apex_opt_level: O0
   keep_batchnorm_fp32: None
   optimizer:
-    type: adamw
-    lr: 0.0001
-    weight_decay: 0.0001
-  learning_rate_scheduler:
-    type: linear_with_warmup
-    warmup_steps: 5000
-    last_epoch: -1
-  num_epochs: 20
+    type: adam
+    lr: 0.001
+  num_epochs: 5000
   cuda_device: 0
-  grad_norm: 0.1
   patience: 1000
   validation_metric: "-rmse"
   tensorboard_writer:
