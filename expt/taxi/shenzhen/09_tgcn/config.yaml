@@ -1,9 +1,10 @@
-# Number of trainable parameters:
+# Number of trainable parameters: 30701
 dataset_reader:
-  type: taxi_2
-  series_path: data/taxi/los_speed.csv # 2016 points at 5m intervals (7 days)
-  seq_len: 12
-  pre_len: 4
+  type: taxi
+  series_path: data/taxi/sz_speed.csv # 2976 points at 15m intervals (31 days)
+  train_p: 0.8
+  seq_len: 4
+  pre_len: 1
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
@@ -11,9 +12,10 @@ vocabulary:
   type: empty
 model:
   type: tgcn
-  adj_path: data/taxi/los_adj.csv # 207 roads
-  hidden_size: 128 # 50,436 parameters
-  forecast_len: 4
+  adj_path: data/taxi/sz_adj.csv # 156 roads
+  hidden_size: 100
+  forecast_len: 1
+  lambda_loss: 0.0015
   initializer:
     regexes:
       - - ^W_out.weight
@@ -24,9 +26,8 @@ model:
       - - ^tgcn.*weight
         - xavier_uniform
 data_loader:
-  batch_size: 64
+  batch_size: 32
   shuffle: false
-  batches_per_epoch: 10000
 validation_data_loader:
   batch_size: 1024
 trainer:
@@ -35,13 +36,12 @@ trainer:
   apex_opt_level: O0
   keep_batchnorm_fp32: None
   optimizer:
-    type: adamw
+    type: adam
     lr: 0.001
-    weight_decay: 0.0015
-  num_epochs: 10
+  num_epochs: 5000
   cuda_device: 0
   patience: 1000
-  validation_metric: "-loss"
+  validation_metric: "-rmse"
   tensorboard_writer:
     summary_interval: 100
     should_log_parameter_statistics: false
