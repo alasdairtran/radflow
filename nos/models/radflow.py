@@ -822,6 +822,8 @@ class RADflow(BaseModel):
             if self.counterfactual_mode:
                 preds_2 = torch.exp(preds_2)
 
+            targets = targets.cpu().numpy()
+            preds = preds.cpu().numpy()
             smapes, daily_errors = get_smape(targets, preds)
             # if self.views_all:
             #     n_cats = smapes.shape[-1]
@@ -830,10 +832,13 @@ class RADflow(BaseModel):
             #             self.step_history[f'smape_{i}_{k}'] += np.sum(
             #                 smapes[:, :k, i])
 
+            rmse = (targets - preds)**2
+            mae = np.abs(targets - preds)
+
             out_dict['smapes'] = smapes.tolist()
             out_dict['daily_errors'] = daily_errors.tolist()
             out_dict['keys'] = keys
-            out_dict['preds'] = preds.cpu().numpy().tolist()
+            out_dict['preds'] = preds.tolist()
             out_dict['f_parts'] = all_f_parts
             out_dict['neigh_keys'] = neigh_keys.tolist()
             out_dict['all_scores'] = all_scores
@@ -848,6 +853,8 @@ class RADflow(BaseModel):
 
             for k in self.test_lengths:
                 self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
+                self.step_history[f'_rmse_{k}'] += np.sum(rmse[:, :k])
+                self.step_history[f'_mae_{k}'] += np.sum(mae[:, :k])
         else:
             self.current_t += 1
 
