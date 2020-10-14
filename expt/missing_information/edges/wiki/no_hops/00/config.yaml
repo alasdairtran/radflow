@@ -26,6 +26,7 @@ model:
   edge_missing_p: 0
   view_randomize_p: false
   forward_fill: true
+  variant: none
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*
