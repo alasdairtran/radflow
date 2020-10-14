@@ -17,6 +17,7 @@ from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
 from pymongo import MongoClient
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from torch_geometric.data import Data
 from torch_geometric.nn import GATConv, SAGEConv
 from tqdm import tqdm
@@ -471,11 +472,6 @@ class RADflow(BaseModel):
         masks = np.ones((B, max_n_neighs, S), dtype=bool)
         sorted_masks = self.masks[sorted_keys, start:start+total_len]
 
-        if not hasattr(self, 'key2pos'):
-            masks = np.zeros((B, max_n_neighs, S), dtype=bool)
-            masks = torch.from_numpy(masks).to(X.device)
-            return Xm, masks, out_neigh_keys
-
         for b, key in enumerate(keys):
             if key not in key_neighs:
                 continue
@@ -495,6 +491,9 @@ class RADflow(BaseModel):
                     n_mask[delete_idx] = True
                 n_mask = n_mask.reshape(D, N)
             for i, k in enumerate(key_neighs[key]):
+                if not hasattr(self, 'key2pos'):
+                    masks[b, i] = 0
+                    continue
                 mask = n_mask[:, self.key2pos[key][k]]
                 if self.peek:
                     mask = mask[1:]
