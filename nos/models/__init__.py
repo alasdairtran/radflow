@@ -4,4 +4,4 @@ from .naive import NaiveForecaster
 from .nbeats import NBEATS
 from .radflow import RADflow
 from .radflow_vevo import RADflowVevo
-from .taxi import TGCN, NaiveTaxi, RADflowTaxi
+from .taxi import TGCN

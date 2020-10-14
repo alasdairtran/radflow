@@ -1,47 +1,70 @@
-# Number of trainable parameters: 31702
+# Number of trainable parameters:
 dataset_reader:
-  type: taxi
-  series_path: data/taxi/sz_speed.csv # 2976 points at 15m intervals (31 days)
-  train_p: 0.8
-  seq_len: 4
-  pre_len: 1
+  type: network
+  n_nodes: 156
 train_data_path: train
 validation_data_path: valid
 test_data_path: test
 vocabulary:
   type: empty
 model:
-  type: radflow_taxi
-  adj_path: data/taxi/sz_adj.csv # 156 roads
-  hidden_size: 25
-  forecast_len: 1
-  n_layers: 4
-  dropout: 0.2
+  type: radflow
+  data_path: data/taxi/sz.h5
+  key2pos_path: null
+  series_len: 2976
+  agg_type: none
+  num_layers: 4
+  hidden_size: 73
+  dropout: 0.1
+  forecast_length: 4
+  backcast_length: 24
+  test_lengths: [4]
+  peek: false
+  max_neighbours: 4
   variant: none
+  initializer:
+    regexes:
+      - - ^decoder.layers.*.layer.weight*
+        - orthogonal
+      - - ^decoder.layers.*.layer.bias
+        - zero
 data_loader:
   batch_size: 64
   shuffle: false
   batches_per_epoch: 10000
 validation_data_loader:
-  batch_size: 1024
+  batch_size: 64
 trainer:
   type: apex_gradient_descent
   use_amp: false
-  apex_opt_level: O0
+  apex_opt_level: O1
   keep_batchnorm_fp32: None
   optimizer:
     type: adamw
     lr: 0.0001
     weight_decay: 0.0001
+    parameter_groups:
+      - - - ^decoder.in_proj
+        - {}
+      - - - ^decoder.layers.0
+        - {}
+      - - - ^decoder.layers.1
+        - {}
+      - - - ^decoder.layers.2
+        - {}
+      - - - ^decoder.layers.3
+        - {}
+      - - - ^decoder.out_f
+        - {}
   learning_rate_scheduler:
     type: linear_with_warmup
     warmup_steps: 5000
     last_epoch: -1
-  num_epochs: 20
+  num_epochs: 10
   cuda_device: 0
   grad_norm: 0.1
-  patience: 1000
-  validation_metric: "-rmse"
+  patience: 10
+  validation_metric: "-smape_4"
   tensorboard_writer:
     summary_interval: 100
     should_log_parameter_statistics: false

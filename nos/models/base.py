@@ -2,6 +2,7 @@ import logging
 from collections import defaultdict
 from typing import Any, Callable, Dict, Type, TypeVar
 
+import numpy as np
 from allennlp.common.params import Params
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
@@ -24,6 +25,7 @@ class BaseModel(LoadStateDictWithPrefix, Model):
         self.sample_history: Dict[str, float] = defaultdict(float)
         self.json_metrics: Dict[str, list] = defaultdict(list)
         self.step_history: Dict[str, float] = defaultdict(float)
+        self.squared_step_history: Dict[str, float] = defaultdict(float)
         self.epoch = 0
 
     @overrides
@@ -42,11 +44,15 @@ class BaseModel(LoadStateDictWithPrefix, Model):
             for metric, total in self.step_history.items():
                 all_metrics[metric] = total / self.history['_n_steps']
 
+            for metric, total in self.squared_step_history.items():
+                all_metrics[metric] = np.sqrt(total / self.history['_n_steps'])
+
         if reset:
             self.history = defaultdict(float)
             self.batch_history = defaultdict(float)
             self.sample_history = defaultdict(float)
             self.step_history = defaultdict(float)
+            self.squared_step_history = defaultdict(float)
             if not self.training:
                 self.epoch += 1
 

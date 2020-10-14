@@ -19,7 +19,7 @@ model:
   n_heads: 4
   dropout: 0.1
   forecast_length: 12
-  backcast_length: 72
+  backcast_length: 36
   test_lengths: [12]
   edge_selection_method: top
   max_neighbours: 128
@@ -56,14 +56,6 @@ trainer:
       - - - ^decoder.layers.2
         - {}
       - - - ^decoder.layers.3
-        - {}
-      - - - ^decoder.layers.4
-        - {}
-      - - - ^decoder.layers.5
-        - {}
-      - - - ^decoder.layers.6
-        - {}
-      - - - ^decoder.layers.7
         - {}
       - - - ^decoder.out_f
         - {}

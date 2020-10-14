@@ -71,6 +71,7 @@ class RADflow(BaseModel):
                  attn_out_proj: bool = True,
                  share_attn_out: bool = False,
                  counterfactual_mode: bool = False,
+                 log_space: bool = True,
                  n_hops: int = 1,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
@@ -99,6 +100,7 @@ class RADflow(BaseModel):
         self.edge_selection_method = edge_selection_method
         self.attn_out_proj = attn_out_proj
         self.counterfactual_mode = counterfactual_mode
+        self.log_space = log_space
 
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
@@ -425,7 +427,8 @@ class RADflow(BaseModel):
             Xm = X.new_zeros(B, 1, T, E)
             return Xm, masks, out_neigh_keys
 
-        neighs = torch.log1p(neighs)
+        if self.log_space:
+            neighs = torch.log1p(neighs)
 
         if self.base_model is not None and eval_step is not None:
             offset = eval_step + 1
@@ -724,9 +727,12 @@ class RADflow(BaseModel):
 
         # non_missing_idx = torch.stack(non_missing_list, dim=0)[:, 1:]
 
-        log_raw_series = torch.log1p(raw_series)
-
-        series = torch.log1p(raw_series)
+        if self.log_space:
+            log_raw_series = torch.log1p(raw_series)
+            series = torch.log1p(raw_series)
+        else:
+            log_raw_series = raw_series
+            series = raw_series
 
         X_full, preds_full, _ = self._forward_full(series)
         preds = preds_full[:, :-1]
@@ -744,7 +750,8 @@ class RADflow(BaseModel):
             preds = preds + X_agg.squeeze(-1)
             # preds.shape == [batch_size, seq_len]
 
-        preds = torch.exp(preds)
+        if self.log_space:
+            preds = torch.exp(preds)
         targets = raw_series[:, 1:]
 
         preds = torch.masked_select(preds, non_missing_idx)
@@ -818,9 +825,10 @@ class RADflow(BaseModel):
                 current_views = current_views.unsqueeze(1)
                 series = torch.cat([series, current_views], dim=1)
 
-            preds = torch.exp(preds)
-            if self.counterfactual_mode:
-                preds_2 = torch.exp(preds_2)
+            if self.log_space:
+                preds = torch.exp(preds)
+                if self.counterfactual_mode:
+                    preds_2 = torch.exp(preds_2)
 
             targets = targets.cpu().numpy()
             preds = preds.cpu().numpy()
@@ -853,7 +861,7 @@ class RADflow(BaseModel):
 
             for k in self.test_lengths:
                 self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
-                self.step_history[f'_rmse_{k}'] += np.sum(rmse[:, :k])
+                self.squared_step_history[f'_rmse_{k}'] += np.sum(rmse[:, :k])
                 self.step_history[f'_mae_{k}'] += np.sum(mae[:, :k])
         else:
             self.current_t += 1
@@ -909,7 +917,8 @@ class RADflow(BaseModel):
             preds[:, i] = pred[:, 0]
             backcast = torch.cat([backcast, pred], dim=1)
 
-        preds = torch.exp(preds)
+        if self.log_space:
+            preds = torch.exp(preds)
         # preds.shape == [batch_size, forecast_len]
 
         return preds.cpu().numpy()
