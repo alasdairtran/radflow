@@ -160,7 +160,7 @@ class NaiveForecaster(BaseModel):
 
             for k in self.test_lengths:
                 self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
-                self.step_history[f'_rmse_{k}'] += np.sum(rmse[:, :k])
+                self.squared_step_history[f'_rmse_{k}'] += np.sum(rmse[:, :k])
                 self.step_history[f'_mae_{k}'] += np.sum(mae[:, :k])
 
         return out_dict

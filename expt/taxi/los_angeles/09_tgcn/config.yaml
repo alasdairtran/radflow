@@ -45,7 +45,7 @@ trainer:
   num_epochs: 10
   cuda_device: 0
   patience: 1000
-  validation_metric: "-smape"
+  validation_metric: "-smape_12"
   tensorboard_writer:
     summary_interval: 100
     should_log_parameter_statistics: false
