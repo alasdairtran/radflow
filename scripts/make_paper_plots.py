@@ -43,7 +43,7 @@ def plot_missing_expt(data):
     y2 = get_means(get_paths('views', data, 'one_hop'))
     y3 = get_means(get_paths('views', data, 'two_hops'))
 
-    fig = plt.figure(figsize=(6, 2.5))
+    fig = plt.figure(figsize=(6, 3))
     ax = plt.subplot(1, 2, 1)
 
     xs = [0, 20, 40, 60, 80]
@@ -344,10 +344,10 @@ def plot_network_contribution():
         k_parts = np.array(k_parts)
         ratios.append(k_parts[-1].sum() / k_parts.sum() * 100)
 
-    fig = plt.figure(figsize=(6, 2.5))
+    fig = plt.figure(figsize=(6, 3))
     ax = plt.subplot(1, 2, 1)
     ax.scatter(np.array(views_list), ratios, s=1, alpha=0.05, edgecolors=None)
-    ax.set_ylim(21, 34)
+    ax.set_ylim(0, 6)
     # ax.set_xlim(10, 40000)
     ax.set_xscale('log')
     ax.set_xlabel('Average Daily Views')
@@ -356,7 +356,7 @@ def plot_network_contribution():
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
 
     f_wiki = h5py.File('data/wiki/wiki.hdf5', 'r')
-    path = 'expt/network_aggregation/wiki_univariate/imputation/two_hops/15_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o8 = json.load(f)
 
@@ -384,7 +384,7 @@ def plot_network_contribution():
     ax.legend(handles=circles, prop={
               'size': 8}, loc="lower left", scatterpoints=1, frameon=False)
 
-    ax.set_ylim(21, 26)
+    ax.set_ylim(0, 6)
     ax.set_xlim(10, 40000)
     ax.set_xscale('log')
     ax.set_xlabel('Average Daily Views')
