@@ -557,6 +557,52 @@ def plot_corr_density():
     fig.savefig('figures/corr_attn.pdf')
 
 
+def plot_counterfactuals():
+    path = 'expt/counterfactuals/doubling/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o = json.load(f)
+
+    path = 'data/wiki/title2graphid.pkl'
+    with open(path, 'rb') as f:
+        title2graphid = pickle.load(f)
+    id2title = {i: title for title, i in title2graphid.items()}
+
+    deltas = []
+    attns_2 = []
+    attns_1 = []
+    a_d = []
+    for p1, p2, s1, s2 in zip(o['preds'], o['preds_2'], o['all_scores'], o['all_scores_2']):
+        for d in range(28):
+            deltas.append(p2[d]/p1[d] - 1)
+            attns_1.append(s1[d][0])
+            attns_2.append(s2[d][0])
+            a_d.append(s2[d][0] - s1[d][0])
+
+    fig = plt.figure(figsize=(6, 3))
+
+    ax = plt.subplot(1, 2, 1)
+    ax.scatter(attns_1, attns_2, s=1, alpha=0.02, edgecolors=None)
+    ax.set_xlabel('Score Before Increase')
+    ax.set_ylabel('Score After Increase')
+    ax.plot([0, 1], [0, 1], linewidth=1, linestyle='--')
+    ax.set_ylim(0, 0.8)
+    ax.set_xlim(0, 0.8)
+    ax.set_yticks(np.round(np.linspace(0, 0.8, 5), 1))
+    ax.set_title('Changes in Attention Scores')
+
+    ax = plt.subplot(1, 2, 2)
+    ax.scatter(np.array(deltas) * 100, attns_2,
+               s=1, alpha=0.02, edgecolors=None)
+    ax.set_xlabel('% Increase in Views of Ego Node')
+    ax.set_ylabel('Score After Increase')
+    ax.set_ylim(0, 0.5)
+    ax.set_xlim(-5, 50)
+    ax.set_title("Doubling Neighbor's Views")
+
+    fig.tight_layout()
+    fig.savefig('figures/doubling_neighs.pdf')
+
+
 def main():
     plot_missing_expt('vevo')
     plot_missing_expt('wiki')
@@ -573,6 +619,7 @@ def main():
     plot_network_contribution()
     plot_attention_maps()
     plot_corr_density()
+    plot_counterfactuals()
 
 
 if __name__ == '__main__':
