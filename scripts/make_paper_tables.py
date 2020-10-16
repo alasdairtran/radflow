@@ -22,11 +22,11 @@ hs = {
 }
 
 ms = {
-    '10_lstm_mean': r'(10) LSTM-MeanPooling',
-    '11_radflow_mean': r'(11) \modelname-MeanPooling',
-    '12_radflow_graphsage': r'(12) \modelname-GraphSage',
-    '13_radflow_gat': r'(13) \modelname-GAT',
-    '14_radflow': r'(14) \modelname',
+    '11_lstm_mean': r'(11) LSTM-MeanPooling',
+    '12_radflow_mean': r'(12) \modelname-MeanPooling',
+    '13_radflow_graphsage': r'(13) \modelname-GraphSage',
+    '14_radflow_gat': r'(14) \modelname-GAT',
+    '15_radflow': r'(15) \modelname',
 }
 
 
@@ -51,8 +51,8 @@ def generate_pvalue_rows():
              'wiki_univariate', 'wiki_bivariate']
     kinds = ['forecast', 'imputation']
     hops = ['one_hop', 'two_hops']
-    models = ['10_lstm_mean', '11_radflow_mean',
-              '12_radflow_graphsage', '13_radflow_gat', '14_radflow']
+    models = ['11_lstm_mean', '12_radflow_mean',
+              '13_radflow_graphsage', '14_radflow_gat', '15_radflow']
     for data in datas:
         combs = list(product(kinds, hops, models))
         for i in range(len(combs)):
