@@ -22,7 +22,11 @@ pip install -U torch-sparse==latest+cu102 -f https://pytorch-geometric.com/whl/t
 pip install -U torch-cluster==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
 pip install -U torch-spline-conv==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
 pip install -U torch-geometric
+```
 
+## Preparing the Datasets
+
+```sh
 # Start an empty mongodb database
 mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
 
@@ -87,25 +91,10 @@ export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps
 export CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log
 
 # Naive baselines (no training is needed)
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/1_naive_previous_day/config.yaml
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/2_naive_seasonal/config.yaml
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/3_naive_rolling/config.yaml
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/4_naive_seasonal_diff/config.yaml
+CUDA_VISIBLE_DEVICES= nos evaluate expt/pure_time_series/vevo/01_copying_previous_day/config.yaml
+CUDA_VISIBLE_DEVICES= nos evaluate expt/pure_time_series/vevo/02_copying_previous_week/config.yaml
 
-# LSTM baseline
-CUDA_VISIBLE_DEVICES=0 nos train expt/7_lstm/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/7_lstm/config.yaml -m expt/7_lstm/serialization/best.th
-
-# Network baseline
-CUDA_VISIBLE_DEVICES=0 nos train expt/8_agg_attention/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/8_agg_attention/config.yaml -m expt/8_agg_attention/serialization/best.th
-
-CUDA_VISIBLE_DEVICES=0 nos train expt/9_agg_sum/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/9_agg_sum/config.yaml -m expt/9_agg_sum/serialization/best.th
-
-CUDA_VISIBLE_DEVICES=0 nos train expt/10_gcn/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/10_gcn/config.yaml -m expt/10_gcn/serialization/best.th
-
-CUDA_VISIBLE_DEVICES=0 nos train expt/11_no_agg/config.yaml -f
-CUDA_VISIBLE_DEVICES=0 nos evaluate expt/11_no_agg/config.yaml -m expt/11_no_agg/serialization/best.th
+# Example training and evaluation
+CUDA_VISIBLE_DEVICES=1 nos train expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/config.yaml -f
+CUDA_VISIBLE_DEVICES=1 nos evaluate expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/config.yaml -m expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/serialization/best.th
 ```
