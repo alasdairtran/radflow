@@ -600,7 +600,7 @@ def plot_counterfactuals():
     ax.set_title("Doubling Neighbor's Views")
 
     fig.tight_layout()
-    fig.savefig('figures/doubling_neighs.pdf')
+    fig.savefig('figures/doubling_neighs.png', dpi=300)
 
 
 def main():
