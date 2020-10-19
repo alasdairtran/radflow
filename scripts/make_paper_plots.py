@@ -105,7 +105,7 @@ def plot_wiki_smape_boxplots():
     with open(path) as f:
         o3 = json.load(f)
 
-    path = 'expt/network_aggregation/wiki_univariate/imputation/two_hops/14_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/two_hops/15_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o8 = json.load(f)
 
@@ -353,7 +353,8 @@ def plot_network_contribution():
     ax.set_xlabel('Average Daily Views')
     ax.set_ylabel('Network Contribution (%)')
     ax.set_title('VevoMusic')
-    ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+    ax.locator_params(nbins=10, axis='y')
+#     ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
 
     f_wiki = h5py.File('data/wiki/wiki.hdf5', 'r')
     path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json'
@@ -424,10 +425,9 @@ def plot_attention_maps():
     fig = plt.figure(figsize=(6, 3.5))
 
     order = [1, 3, 5]
+    idx = [0, 2, 4]
     axes = []
-    for i, o in enumerate(order):
-        if i == 2:
-            i = 3
+    for i, o in zip(idx, order):
         neigh_idx = best_neighs[i]
         ax = plt.subplot(3, 2, o)
         s = best_series[i]
@@ -516,9 +516,9 @@ def plot_corr_density():
             mean_score = scores[i].mean()
             if mean_score == 0:
                 continue
-            s_vevo.append(np.corrcoef(
+            v_vevo.append(np.corrcoef(
                 views_vevo[key, -49:], views_vevo[n, -49:])[0, 1])
-            v_vevo.append(mean_score)
+            s_vevo.append(mean_score)
 
     s_wiki = []
     v_wiki = []
@@ -541,8 +541,8 @@ def plot_corr_density():
     ax.set_xlabel('Attention Score')
     ax.set_ylabel('Correlation Coefficient')
     ax.set_title('VevoMusic')
-    ax.set_xlim(-0.5, 1)
-    ax.set_ylim(0, 0.15)
+    ax.set_xlim(0, 0.15)
+    ax.set_ylim(-0.25, 1)
 
     ax = plt.subplot(1, 2, 2)
 
