@@ -392,7 +392,7 @@ def plot_network_contribution():
     ax.set_title('WikiTraffic')
 
     fig.tight_layout()
-    fig.savefig('figures/network_contribution.pdf')
+    fig.savefig('figures/network_contribution.png', dpi=300)
 
 
 def plot_attention_maps():
@@ -582,8 +582,8 @@ def plot_counterfactuals():
 
     ax = plt.subplot(1, 2, 1)
     ax.scatter(attns_1, attns_2, s=1, alpha=0.02, edgecolors=None)
-    ax.set_xlabel('Score Before Increase')
-    ax.set_ylabel('Score After Increase')
+    ax.set_xlabel('Score Before Doubling')
+    ax.set_ylabel('Score After Doubling')
     ax.plot([0, 1], [0, 1], linewidth=1, linestyle='--')
     ax.set_ylim(0, 0.8)
     ax.set_xlim(0, 0.8)
@@ -594,10 +594,10 @@ def plot_counterfactuals():
     ax.scatter(np.array(deltas) * 100, attns_2,
                s=1, alpha=0.02, edgecolors=None)
     ax.set_xlabel('% Increase in Views of Ego Node')
-    ax.set_ylabel('Score After Increase')
+    ax.set_ylabel('Score After Doubling')
     ax.set_ylim(0, 0.5)
     ax.set_xlim(-5, 50)
-    ax.set_title("Doubling Neighbor's Views")
+    ax.set_title("Effect of Attention on Ego's Traffic")
 
     fig.tight_layout()
     fig.savefig('figures/doubling_neighs.png', dpi=300)
