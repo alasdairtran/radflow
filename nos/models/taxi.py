@@ -137,6 +137,9 @@ class TGCN(BaseModel):
             'keys': keys,
         }
 
+        if not self.training:
+            out_dict['smapes'] = smapes.tolist()
+
         return out_dict
 
 
