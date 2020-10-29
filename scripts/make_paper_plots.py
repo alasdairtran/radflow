@@ -603,6 +603,70 @@ def plot_counterfactuals():
     fig.savefig('figures/doubling_neighs.png', dpi=300)
 
 
+def plot_performance_by_traffic():
+    path = f'expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/evaluate-metrics.json'
+    with open(path) as f:
+        o = json.load(f)
+        keys5 = o['keys']
+        preds5 = o['preds']
+        smapes5 = o['smapes']
+
+    preds_agg = defaultdict(list)
+    preds_none = defaultdict(list)
+
+    for k, p5 in zip(keys5, smapes5):
+        avg_view = sum(wiki_views[k]) / len(wiki_views[k])
+        if avg_view < 25:
+            preds_none[25] += p5
+        elif avg_view < 50:
+            preds_none[50] += p5
+        elif avg_view < 100:
+            preds_none[100] += p5
+        elif avg_view < 200:
+            preds_none[200] += p5
+        elif avg_view < 500:
+            preds_none[500] += p5
+        elif avg_view < 1000:
+            preds_none[1000] += p5
+        elif avg_view < 3000:
+            preds_none[3000] += p5
+        else:
+            preds_none[10000] += p5
+
+    fig = plt.figure(figsize=(9, 4))
+    ax = plt.subplot(1, 1, 1)
+
+    smapes = [preds_none[25],
+              preds_none[50],
+              preds_none[100],
+              preds_none[200],
+              preds_none[500],
+              preds_none[1000],
+              preds_none[3000],
+              preds_none[10000],
+              ]
+
+    ax.boxplot(smapes, showfliers=False, meanline=True,
+               showmeans=True, widths=0.4)
+
+    # means = [np.mean(x) for x in smapes]
+    # pos = range(len(means))
+    # for tick, label in zip(pos, ax.get_xticklabels()):
+    #     ax.text(pos[tick] + 0.85, means[tick] +
+    #             0.07, '{0:.1f}'.format(means[tick]))
+
+    ax.set_xticklabels(
+        ['0-24', '25-49', '50-99', '100-199', '200-499',
+         '500-999',
+         '1000-2999', '>=3000'])
+    ax.set_ylabel('SMAPE-28')
+    ax.set_xlabel('Average Daily View Counts')
+    # ax.set_title('WikiTraffic Performance Split By Traffic Volume')
+    fig.tight_layout()
+    fig.savefig('figures/traffic_split.pdf')
+    plt.show()
+
+
 def main():
     plot_missing_expt('vevo')
     plot_missing_expt('wiki')
@@ -620,6 +684,7 @@ def main():
     plot_attention_maps()
     plot_corr_density()
     plot_counterfactuals()
+    plot_performance_by_traffic()
 
 
 if __name__ == '__main__':
