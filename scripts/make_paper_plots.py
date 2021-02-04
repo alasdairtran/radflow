@@ -667,6 +667,59 @@ def plot_performance_by_traffic():
     plt.show()
 
 
+def plot_taxi_series():
+    los_f = h5py.File('data/taxi/los.h5', 'r')
+    sz_f = h5py.File('data/taxi/sz.h5', 'r')
+
+    fig = plt.figure(figsize=(6, 4))
+    ax = fig.add_subplot(2, 1, 1)
+    ax.plot(np.median(los_f['views'][...], axis=0))
+    ax.set_xlim(0, 2015)
+    ax.set_title('Los-Loop')
+
+    ax = fig.add_subplot(2, 1, 2)
+    ax.plot(np.median(sz_f['views'][...], axis=0)[:])
+    ax.set_title('SZ-Taxi')
+    ax.set_xlim(0, 2975)
+
+    fig.tight_layout()
+    fig.savefig('figures/taxi_series.pdf')
+
+
+def plot_taxi_error_distribution():
+    sz_f = h5py.File('data/taxi/sz.h5', 'r')
+    with open('expt/taxi/shenzhen/15_radflow/serialization/evaluate-metrics.json') as f:
+        o15 = json.load(f)
+    with open('expt/taxi/shenzhen/01_copying_previous_step/serialization/evaluate-metrics.json') as f:
+        o1 = json.load(f)
+
+    y = sz_f['views'][:, -4:]
+    p1 = np.array(o1['preds'])
+    p15 = np.array(o15['preds'])
+
+    e1 = p1 - y
+    e15 = p15 - y
+
+    fig = plt.figure(figsize=(6, 2.5))
+    ax = plt.subplot(1, 2, 1)
+    ax.hist(e1.flatten(), bins=30)
+    ax.set_title('Copying Previous Step')
+    ax.set_xlim(-15, 15)
+    ax.set_xlabel('Prediction Error')
+
+    ax = plt.subplot(1, 2, 2)
+    ax.hist(e15.flatten(), bins=30)
+    ax.set_title('Radflow')
+    ax.set_xlim(-15, 15)
+    ax.set_xlabel('Prediction Error')
+
+    fig.tight_layout()
+    fig.savefig('figures/taxi_errors.pdf')
+
+
+plot_taxi_error_distribution()
+
+
 def main():
     plot_missing_expt('vevo')
     plot_missing_expt('wiki')
@@ -685,6 +738,9 @@ def main():
     plot_corr_density()
     plot_counterfactuals()
     plot_performance_by_traffic()
+
+    plot_taxi_series()
+    plot_taxi_error_distribution()
 
 
 if __name__ == '__main__':
