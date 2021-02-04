@@ -22,6 +22,7 @@ model:
   peek: false
   max_neighbours: 4
   variant: none
+  ignore_test_zeros: true
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*

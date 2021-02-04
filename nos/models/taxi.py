@@ -31,6 +31,7 @@ class TGCN(BaseModel):
                  lambda_loss: float = 0.0015,
                  log_space: bool = False,
                  adj_path: str = 'data/taxi/sz_adj.csv',
+                 ignore_test_zeros: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
 
@@ -40,6 +41,7 @@ class TGCN(BaseModel):
         self.tgcn = TGCNCell(hidden_size, adjacency_matrix)
         self.lambda_loss = lambda_loss
         self.log_space = log_space
+        self.ignore_test_zeros = ignore_test_zeros
 
         self.W_out = nn.Linear(hidden_size, forecast_len, bias=False)
         self.b_out = nn.Parameter(torch.zeros(forecast_len))
@@ -102,15 +104,20 @@ class TGCN(BaseModel):
         targets = targets.detach().cpu().numpy()
         forecasts = forecasts.detach().cpu().numpy()
 
+        if self.ignore_test_zeros:
+            nz = targets != 0
+            targets = targets[nz]
+            forecasts = forecasts[nz]
+
         # It doesn't matter whether the scale is inside or outside the
         # squared error computation.
         rmse = math.sqrt(mean_squared_error(targets, forecasts)) * scale[0]
         mae = mean_absolute_error(targets, forecasts) * scale[0]
 
-        F_norm = la.norm(targets - forecasts, 'fro') / la.norm(targets, 'fro')
-        r2 = 1 - ((targets - forecasts)**2).sum() / \
-            ((targets - targets.mean())**2).sum()
-        var = 1 - (np.var(targets - forecasts)) / np.var(targets)
+        # F_norm = la.norm(targets - forecasts, 'fro') / la.norm(targets, 'fro')
+        # r2 = 1 - ((targets - forecasts)**2).sum() / \
+        #     ((targets - targets.mean())**2).sum()
+        # var = 1 - (np.var(targets - forecasts)) / np.var(targets)
 
         targets = targets * scale[0]
         forecasts = forecasts * scale[0]
@@ -123,12 +130,16 @@ class TGCN(BaseModel):
         # validation batch at once to since we're taking the average here
         self.batch_history[f'_rmse_{k}'] += rmse
         self.batch_history[f'_mae_{k}'] += mae
-        self.batch_history[f'_acc_{k}'] += 1 - F_norm
-        self.batch_history[f'_r2_{k}'] += r2
-        self.batch_history[f'_var_{k}'] += var
+        # self.batch_history[f'_acc_{k}'] += 1 - F_norm
+        # self.batch_history[f'_r2_{k}'] += r2
+        # self.batch_history[f'_var_{k}'] += var
 
         smapes, _ = get_smape(targets, forecasts)
-        self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+        if len(smapes.shape) == 2:
+            self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+        else:
+            self.history['_n_steps'] += smapes.shape[0]
+
         self.step_history[f'smape_{k}'] += np.sum(smapes)
 
         out_dict = {

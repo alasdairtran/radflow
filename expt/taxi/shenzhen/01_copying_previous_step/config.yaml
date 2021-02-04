@@ -15,6 +15,7 @@ model:
   forecast_length: 4
   backcast_length: 24
   test_lengths: [4]
+  ignore_test_zeros: true
 data_loader:
   batch_size: 64
   shuffle: false

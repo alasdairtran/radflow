@@ -25,6 +25,7 @@ model:
   max_neighbours: 128
   max_agg_neighbours: 256
   neigh_sample: false
+  ignore_test_zeros: true
   initializer:
     regexes:
       - - ^decoder.layers.*.layer.weight*

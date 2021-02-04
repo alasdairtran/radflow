@@ -29,6 +29,7 @@ class NaiveForecaster(BaseModel):
                  backcast_length: int = 42,
                  test_lengths: List[int] = [7],
                  end_offset: int = 0,
+                 ignore_test_zeros: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.mse = nn.MSELoss()
@@ -40,6 +41,7 @@ class NaiveForecaster(BaseModel):
         self.device = torch.device('cuda:0')
         self.method = method
         self.end_offset = end_offset
+        self.ignore_test_zeros = ignore_test_zeros
 
         if os.path.exists(data_path):
             self.data = h5py.File(data_path, 'r')
@@ -137,6 +139,12 @@ class NaiveForecaster(BaseModel):
         if splits[0] in ['test']:
             targets = targets.cpu().numpy()
             preds = preds.cpu().numpy()
+
+            if self.ignore_test_zeros:
+                nz = targets != 0
+                targets = targets[nz]
+                preds = preds[nz]
+
             smapes, daily_errors = get_smape(targets, preds)
             # if self.views_all:
             #     n_cats = smapes.shape[-1]
@@ -155,12 +163,14 @@ class NaiveForecaster(BaseModel):
             if self.views_all:
                 self.history['_n_steps'] += smapes.shape[0] * \
                     smapes.shape[1] * smapes.shape[2]
-            else:
+            elif len(smapes.shape) == 2:
                 self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+            else:
+                self.history['_n_steps'] += smapes.shape[0]
 
-            for k in self.test_lengths:
-                self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
-                self.squared_step_history[f'_rmse_{k}'] += np.sum(rmse[:, :k])
-                self.step_history[f'_mae_{k}'] += np.sum(mae[:, :k])
+            k = self.test_lengths[-1]
+            self.step_history[f'smape_{k}'] += np.sum(smapes)
+            self.squared_step_history[f'_rmse_{k}'] += np.sum(rmse)
+            self.step_history[f'_mae_{k}'] += np.sum(mae)
 
         return out_dict

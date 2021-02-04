@@ -14,6 +14,7 @@ model:
   adj_path: data/taxi/sz_adj.csv # 156 roads
   hidden_size: 294
   forecast_len: 4
+  ignore_test_zeros: true
   initializer:
     regexes:
       - - ^W_out.weight

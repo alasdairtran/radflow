@@ -73,6 +73,7 @@ class RADflow(BaseModel):
                  counterfactual_mode: bool = False,
                  log_space: bool = True,
                  n_hops: int = 1,
+                 ignore_test_zeros: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.views_all = None
@@ -108,6 +109,7 @@ class RADflow(BaseModel):
         self.n_hops = n_hops
         self.hop_scale = hop_scale
         self.n_layers = num_layers
+        self.ignore_test_zeros = ignore_test_zeros
 
         self.test_keys = set()
         if test_keys_path and os.path.exists(test_keys_path):
@@ -832,6 +834,12 @@ class RADflow(BaseModel):
 
             targets = targets.cpu().numpy()
             preds = preds.cpu().numpy()
+
+            if self.ignore_test_zeros:
+                nz = targets != 0
+                targets = targets[nz]
+                preds = preds[nz]
+
             smapes, daily_errors = get_smape(targets, preds)
             # if self.views_all:
             #     n_cats = smapes.shape[-1]
@@ -856,13 +864,15 @@ class RADflow(BaseModel):
             if self.views_all:
                 self.history['_n_steps'] += smapes.shape[0] * \
                     smapes.shape[1] * smapes.shape[2]
-            else:
+            elif len(smapes.shape) == 2:
                 self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+            else:
+                self.history['_n_steps'] += smapes.shape[0]
 
-            for k in self.test_lengths:
-                self.step_history[f'smape_{k}'] += np.sum(smapes[:, :k])
-                self.squared_step_history[f'_rmse_{k}'] += np.sum(rmse[:, :k])
-                self.step_history[f'_mae_{k}'] += np.sum(mae[:, :k])
+            k = self.test_lengths[-1]
+            self.step_history[f'smape_{k}'] += np.sum(smapes)
+            self.squared_step_history[f'_rmse_{k}'] += np.sum(rmse)
+            self.step_history[f'_mae_{k}'] += np.sum(mae)
         else:
             self.current_t += 1
 
