@@ -139,6 +139,7 @@ class TGCN(BaseModel):
 
         if not self.training:
             out_dict['smapes'] = smapes.tolist()
+            out_dict['preds'] = forecasts.tolist()
 
         return out_dict
 
