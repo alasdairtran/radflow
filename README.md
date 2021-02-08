@@ -33,7 +33,7 @@ phenomena such as geographically dispersed networks of waterbodies.
 Please cite with the following BibTeX:
 
 ```raw
-@InProceedings{Tran_2021_Radflow,
+@InProceedings{Tran2021Radflow,
   author = {Tran, Alasdair and Mathews, Alexander and Ong, Cheng Soon and Xie, Lexing},
   title = {Radflow: A Recurrent, Aggregated, and Decomposable Model for Networks of Time Series},
   year = {2021},
