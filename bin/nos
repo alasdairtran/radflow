@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-python -m nos.commands "$@"
+python -m radflow.commands "$@"

@@ -10,7 +10,7 @@ from allennlp.models import Model
 from allennlp.models.archival import load_archive
 from jina.executors.encoders import BaseNumericEncoder
 
-from nos.commands.train import yaml_to_params
+from radflow.commands.train import yaml_to_params
 
 
 class RadflowForecaster(BaseNumericEncoder):

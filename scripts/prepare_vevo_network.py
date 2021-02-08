@@ -13,7 +13,7 @@ import pymongo
 from pymongo import MongoClient
 from tqdm import tqdm
 
-from nos.utils import setup_logger
+from radflow.utils import setup_logger
 
 logger = setup_logger()
 

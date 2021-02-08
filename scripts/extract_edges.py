@@ -52,7 +52,7 @@ def extract_edges(index_path):
 
     # We loop through the whole thing once to get build the page id index
     paths = glob(
-        '/localdata/u4921817/projects/nos/data/wiki/results/*.bz2.jsonl')
+        '/localdata/u4921817/projects/radflow/data/wiki/results/*.bz2.jsonl')
 
     # Note that these articles have the same title but different page IDs
     # Anjan Chowdhury 21606610 62911656
@@ -120,7 +120,7 @@ def construct_graph(id2title, title2id, f_edges):
 
     # Next we reindex the processed dumps
     paths = glob(
-        '/localdata/u4921817/projects/nos/data/wiki/results/*.bz2.jsonl')
+        '/localdata/u4921817/projects/radflow/data/wiki/results/*.bz2.jsonl')
     paths.sort()
 
     for path in tqdm(paths):

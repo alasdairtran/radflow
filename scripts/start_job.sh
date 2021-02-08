@@ -14,9 +14,9 @@
 #PBS -l wd
 
 source $HOME/.bashrc
-conda activate nos
-cd /g/data/v89/at3219/projects/nos
+conda activate radflow
+cd /g/data/v89/at3219/projects/radflow
 DUMP=/g/data/v89/at3219/wikidump
-OUT=/g/data/v89/at3219/projects/nos/results
+OUT=/g/data/v89/at3219/projects/radflow/results
 
 python scripts/extract_graph.py -s $SPLIT -d $DUMP -o $OUT -n 4

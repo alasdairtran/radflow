@@ -1,9 +1,9 @@
 """Train and run semantic diff models.
 
 Usage:
-    nos (train|generate|evaluate|serve) [options] PARAM_PATH
-    nos (-h | --help)
-    nos (-v | --version)
+    radflow (train|generate|evaluate|serve) [options] PARAM_PATH
+    radflow (-h | --help)
+    radflow (-v | --version)
 
 Options:
     -e --expt-dir EXPT_PATH
@@ -31,7 +31,7 @@ Options:
     -d --with-dropout   Evaluate with dropout on.
 
 Examples:
-    nos train -r -g expt/lstm/config.yaml
+    radflow train -r -g expt/lstm/config.yaml
 """
 
 import logging
@@ -42,10 +42,10 @@ import pudb
 from docopt import docopt
 from schema import And, Or, Schema, Use
 
-from nos.commands.evaluate import evaluate_from_file
-from nos.commands.server import serve_from_file
-from nos.commands.train import train_model_from_file
-from nos.utils import setup_logger
+from radflow.commands.evaluate import evaluate_from_file
+from radflow.commands.server import serve_from_file
+from radflow.commands.train import train_model_from_file
+from radflow.utils import setup_logger
 
 logger = setup_logger()
 

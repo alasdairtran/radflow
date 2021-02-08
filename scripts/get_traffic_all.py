@@ -26,7 +26,7 @@ from requests.exceptions import ChunkedEncodingError
 from schema import And, Or, Schema, Use
 from tqdm import tqdm
 
-from nos.utils import setup_logger
+from radflow.utils import setup_logger
 
 logger = setup_logger()
 

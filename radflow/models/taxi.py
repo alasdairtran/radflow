@@ -13,8 +13,8 @@ from allennlp.nn.initializers import InitializerApplicator
 from scipy.sparse.csgraph import laplacian
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from nos.modules.linear import GehringLinear
-from nos.modules.metrics import get_smape
+from radflow.modules.linear import GehringLinear
+from radflow.modules.metrics import get_smape
 
 from .base import BaseModel
 from .radflow import LSTMDecoder

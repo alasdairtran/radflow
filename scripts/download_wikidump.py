@@ -63,7 +63,7 @@ def download_pagecounts():
     # This takes half a day
     t = datetime(2011, 12, 1)
     end = datetime(2020, 2, 1)
-    data_dir = '/data4/u4921817/nos/data/pagecounts'
+    data_dir = '/data4/u4921817/radflow/data/pagecounts'
     os.makedirs(data_dir, exist_ok=True)
 
     while t < end:

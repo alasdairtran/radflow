@@ -1,4 +1,4 @@
-# nos
+# radflow
 
 Network of sequences
 
@@ -40,9 +40,9 @@ python scripts/download_wikidump.py
 # If we use a single thread (no parallelization), it takes between 3-7 hours
 # to go through each file. The following scripts construct a mongo database
 # for the entire wiki graph. This takes about 40 hours.
-python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 24 --total 232 --split 0 # braun
-python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 1 # cray
-python scripts/extract_graph.py --dump /data4/u4921817/nos/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 2 # cray
+python scripts/extract_graph.py --dump /data4/u4921817/radflow/data/wikidump --host dijkstra --n-jobs 24 --total 232 --split 0 # braun
+python scripts/extract_graph.py --dump /data4/u4921817/radflow/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 1 # cray
+python scripts/extract_graph.py --dump /data4/u4921817/radflow/data/wikidump --host dijkstra --n-jobs 20 --total 232 --split 2 # cray
 
 # Remove duplicate titles. Generate a cache title2pageid.pkl that maps
 # the title to the original page id. We also reindex the page IDs, taking 3h.
@@ -91,10 +91,10 @@ export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps
 export CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log
 
 # Naive baselines (no training is needed)
-CUDA_VISIBLE_DEVICES= nos evaluate expt/pure_time_series/vevo/01_copying_previous_day/config.yaml
-CUDA_VISIBLE_DEVICES= nos evaluate expt/pure_time_series/vevo/02_copying_previous_week/config.yaml
+CUDA_VISIBLE_DEVICES= radflow evaluate expt/pure_time_series/vevo/01_copying_previous_day/config.yaml
+CUDA_VISIBLE_DEVICES= radflow evaluate expt/pure_time_series/vevo/02_copying_previous_week/config.yaml
 
 # Example training and evaluation
-CUDA_VISIBLE_DEVICES=1 nos train expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/config.yaml -f
-CUDA_VISIBLE_DEVICES=1 nos evaluate expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/config.yaml -m expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/serialization/best.th
+CUDA_VISIBLE_DEVICES=1 radflow train expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/config.yaml -f
+CUDA_VISIBLE_DEVICES=1 radflow evaluate expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/config.yaml -m expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/serialization/best.th
 ```

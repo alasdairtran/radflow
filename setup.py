@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-setup(name='nos',
+setup(name='radflow',
       version='0.1',
       description='Network of sequences',
       url='https://github.com/alasdairtran/radflow',
@@ -9,5 +9,5 @@ setup(name='nos',
       license='MIT',
       packages=find_packages(),
       install_requires=[],
-      scripts=['bin/nos'],
+      scripts=['bin/radflow'],
       zip_safe=False)

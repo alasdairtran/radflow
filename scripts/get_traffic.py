@@ -43,7 +43,7 @@ from requests.exceptions import ChunkedEncodingError, ConnectionError
 from schema import And, Or, Schema, Use
 from tqdm import tqdm
 
-from nos.utils import setup_logger
+from radflow.utils import setup_logger
 
 logger = setup_logger()
 
@@ -195,7 +195,7 @@ def create_traffic_tile(traffic_path):
 
 
 def get_all_traffic(mongo_host, redis_host, n_jobs, traffic_path):
-    paths = glob('/data4/u4921817/nos/data/pagecounts/pagecounts*')
+    paths = glob('/data4/u4921817/radflow/data/pagecounts/pagecounts*')
     paths.sort(reverse=True)
 
     client = MongoClient(host=mongo_host, port=27017)

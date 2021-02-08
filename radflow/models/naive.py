@@ -10,7 +10,7 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 
-from nos.modules.metrics import get_smape
+from radflow.modules.metrics import get_smape
 
 from .base import BaseModel
 

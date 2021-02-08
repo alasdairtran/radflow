@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import pickle
@@ -18,22 +17,23 @@ from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
 from pymongo import MongoClient
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from torch_geometric.data import Data
 from torch_geometric.nn import GATConv, SAGEConv
 from tqdm import tqdm
 
-from nos.commands.train import yaml_to_params
-from nos.modules.linear import GehringLinear
-from nos.modules.metrics import get_smape
-from nos.utils import keystoint
+from radflow.commands.train import yaml_to_params
+from radflow.modules.linear import GehringLinear
+from radflow.modules.metrics import get_smape
+from radflow.utils import keystoint
 
 from .base import BaseModel
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register('radflow_vevo')
-class RADflowVevo(BaseModel):
+@Model.register('radflow')
+class RADflow(BaseModel):
     def __init__(self,
                  vocab: Vocabulary,
                  agg_type: str,
@@ -43,7 +43,6 @@ class RADflowVevo(BaseModel):
                  peek: bool = True,
                  data_path: str = './data/vevo/vevo.hdf5',
                  key2pos_path: str = './data/vevo/vevo.key2pos.pkl',
-                 out_path: str = 'scores.jsonl',
                  base_model_config: str = None,
                  base_model_weights: str = None,
                  multi_views_path: str = None,
@@ -67,7 +66,14 @@ class RADflowVevo(BaseModel):
                  edge_missing_p: float = 0,
                  view_randomize_p: bool = True,
                  forward_fill: bool = True,
+                 add_zero_attn: bool = True,
+                 add_bias_kv: bool = True,  # having bias term seems important
+                 attn_out_proj: bool = True,
+                 share_attn_out: bool = False,
+                 counterfactual_mode: bool = False,
+                 log_space: bool = True,
                  n_hops: int = 1,
+                 ignore_test_zeros: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
         self.views_all = None
@@ -93,7 +99,9 @@ class RADflowVevo(BaseModel):
         self.end_offset = end_offset
         self.neigh_sample = neigh_sample
         self.edge_selection_method = edge_selection_method
-        self.out_f = open(out_path, 'w')
+        self.attn_out_proj = attn_out_proj
+        self.counterfactual_mode = counterfactual_mode
+        self.log_space = log_space
 
         self.evaluate_mode = False
         self.view_missing_p = view_missing_p
@@ -101,6 +109,7 @@ class RADflowVevo(BaseModel):
         self.n_hops = n_hops
         self.hop_scale = hop_scale
         self.n_layers = num_layers
+        self.ignore_test_zeros = ignore_test_zeros
 
         self.test_keys = set()
         if test_keys_path and os.path.exists(test_keys_path):
@@ -126,7 +135,14 @@ class RADflowVevo(BaseModel):
                 self.key2pos = pickle.load(f)
 
         assert agg_type in ['mean', 'none', 'attention', 'sage', 'gat']
-        node_size = hidden_size if variant == 'separate' else 2 * hidden_size
+
+        if variant in ['separate', 'h', 'p', 'q']:
+            node_size = hidden_size
+        elif variant in ['hp']:
+            node_size = 2 * hidden_size
+        elif variant in ['hpq']:
+            node_size = 3 * hidden_size
+
         self.agg_type = agg_type
         if agg_type in ['mean', 'attention', 'sage', 'gat']:
             self.fc = GehringLinear(node_size, input_size)
@@ -134,7 +150,9 @@ class RADflowVevo(BaseModel):
         if agg_type == 'attention':
             self.attn = nn.MultiheadAttention(
                 node_size, n_heads, dropout=0.1, bias=True,
-                add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+                add_bias_kv=add_bias_kv, add_zero_attn=add_zero_attn, kdim=None, vdim=None)
+            self.proj_alter = GehringLinear(node_size, node_size)
+            self.proj_ego = GehringLinear(node_size, node_size)
         elif agg_type == 'sage':
             self.conv = SAGEConv(node_size, node_size)
         elif agg_type == 'gat':
@@ -146,7 +164,13 @@ class RADflowVevo(BaseModel):
             if agg_type == 'attention':
                 self.attn2 = nn.MultiheadAttention(
                     node_size, n_heads, dropout=0.1, bias=True,
-                    add_bias_kv=True, add_zero_attn=True, kdim=None, vdim=None)
+                    add_bias_kv=add_bias_kv, add_zero_attn=add_zero_attn, kdim=None, vdim=None)
+                if share_attn_out:
+                    self.proj_alter2 = self.proj_alter
+                    self.proj_ego2 = self.proj_ego
+                else:
+                    self.proj_alter2 = GehringLinear(node_size, node_size)
+                    self.proj_ego2 = GehringLinear(node_size, node_size)
             elif agg_type == 'sage':
                 self.conv2 = SAGEConv(node_size, node_size)
             elif agg_type == 'gat':
@@ -186,13 +210,13 @@ class RADflowVevo(BaseModel):
 
         return X, forecast, f_parts
 
-    def _get_neighbour_embeds(self, X, keys, start, total_len, eval_step=None):
+    def _get_neighbour_embeds(self, X, keys, start, total_len, eval_step=None, counterfactual=False):
         if self.agg_type == 'none':
             return X
 
         parents = [-99] * len(keys)
         Xm, masks, neigh_keys = self._construct_neighs(
-            X, keys, start, total_len, 1, parents, eval_step)
+            X, keys, start, total_len, 1, parents, eval_step, counterfactual)
 
         scores = None
         if self.agg_type == 'mean':
@@ -202,7 +226,7 @@ class RADflowVevo(BaseModel):
         elif self.agg_type in ['gat', 'sage']:
             Xm = self._aggregate_gat(X, Xm, masks, 1)
 
-        X_out = self._pool(X, Xm)
+        X_out = self._pool(X, Xm, 1)
         return X_out, scores, neigh_keys
 
     def _get_edges_by_probs(self, keys, sorted_keys, key_map, start, total_len, parents):
@@ -260,7 +284,7 @@ class RADflowVevo(BaseModel):
 
         return edge_counters
 
-    def _construct_neighs(self, X, keys, start, total_len, level, parents=None, eval_step=None):
+    def _construct_neighs(self, X, keys, start, total_len, level, parents=None, eval_step=None, counterfactual=False):
         B, T, E = X.shape
 
         sorted_keys = sorted(set(keys))
@@ -315,10 +339,13 @@ class RADflowVevo(BaseModel):
         neigh_keys = X.new_full((B, max_n_neighs), -1).long()
 
         neigh_list = sorted(neigh_set)
-        # end = start + self.total_length
+        end = start + self.total_length
         neigh_map = {k: i for i, k in enumerate(neigh_list)}
 
-        neigh_series = self.series[neigh_list]
+        if self.views_all:
+            neigh_series = self.views_all[neigh_list, start:end]
+        else:
+            neigh_series = self.series[neigh_list, start:end]
         neigh_series = neigh_series.astype(np.float32)
 
         if self.view_missing_p > 0:
@@ -377,6 +404,9 @@ class RADflowVevo(BaseModel):
                     n_masks[i, j] = True
                     neigh_keys[i, j] = n
 
+                    if counterfactual and j == 0:
+                        neighs[i, j, -1] = 2 * neighs[i, j, -1]
+
         out_neigh_keys = neigh_keys.cpu().numpy()
         neighs = torch.from_numpy(neighs).to(X.device)
         if self.views_all:
@@ -399,7 +429,8 @@ class RADflowVevo(BaseModel):
             Xm = X.new_zeros(B, 1, T, E)
             return Xm, masks, out_neigh_keys
 
-        neighs = torch.log1p(neighs)
+        if self.log_space:
+            neighs = torch.log1p(neighs)
 
         if self.base_model is not None and eval_step is not None:
             offset = eval_step + 1
@@ -434,7 +465,7 @@ class RADflowVevo(BaseModel):
                     Xn[idx], Xm_2, masks_2, level + 1)
             elif self.agg_type in ['gat', 'sage']:
                 Xm_2 = self._aggregate_gat(Xn[idx], Xm_2, masks_2, level + 1)
-            Xn[idx] = self._pool(Xn[idx], Xm_2).type_as(Xn)
+            Xn[idx] = self._pool(Xn[idx], Xm_2, level + 1).type_as(Xn)
 
         _, S, E = Xn.shape
 
@@ -445,11 +476,6 @@ class RADflowVevo(BaseModel):
 
         masks = np.ones((B, max_n_neighs, S), dtype=bool)
         sorted_masks = self.masks[sorted_keys, start:start+total_len]
-
-        if not hasattr(self, 'key2pos'):
-            masks = np.zeros((B, max_n_neighs, S), dtype=bool)
-            masks = torch.from_numpy(masks).to(X.device)
-            return Xm, masks, out_neigh_keys
 
         for b, key in enumerate(keys):
             if key not in key_neighs:
@@ -470,6 +496,9 @@ class RADflowVevo(BaseModel):
                     n_mask[delete_idx] = True
                 n_mask = n_mask.reshape(D, N)
             for i, k in enumerate(key_neighs[key]):
+                if not hasattr(self, 'key2pos'):
+                    masks[b, i] = 0
+                    continue
                 mask = n_mask[:, self.key2pos[key][k]]
                 if self.peek:
                     mask = mask[1:]
@@ -481,8 +510,21 @@ class RADflowVevo(BaseModel):
 
         return Xm, masks, out_neigh_keys
 
-    def _pool(self, X, Xn):
-        X_out = X + Xn
+    def _pool(self, X, Xn, level):
+        if self.agg_type == 'mean':
+            X_out = X + Xn
+        elif self.agg_type == 'attention' and not self.attn_out_proj:
+            X_out = X + Xn
+            X_out = F.gelu(X_out).type_as(X)
+        elif self.agg_type == 'attention' and self.attn_out_proj:
+            if level == 1:
+                X_out = self.proj_ego(X) + self.proj_alter(Xn)
+            elif level == 2:
+                X_out = self.proj_ego2(X) + self.proj_alter2(Xn)
+            X_out = F.gelu(X_out).type_as(X)
+        elif self.agg_type in ['gat', 'sage']:
+            X_out = Xn
+
         return X_out
 
     def _aggregate_mean(self, Xn, masks):
@@ -536,8 +578,6 @@ class RADflowVevo(BaseModel):
         # X_attn.shape == [1, batch_size * seq_len, hidden_size]
 
         X_out = X_attn.reshape(B, T, E)
-
-        X_out = F.gelu(X_out).type_as(X)
 
         if scores is not None:
             scores = scores.reshape(B, T, -1)
@@ -623,10 +663,23 @@ class RADflowVevo(BaseModel):
             'sample_size': p.new_tensor(B),
         }
 
+        if split == 'train':
+            if self.max_start == 0:
+                start = 0
+            else:
+                start = self.rs.randint(0, self.max_start)
+        elif split == 'valid':
+            start = self.max_start + self.forecast_length
+        elif split == 'test':
+            start = self.max_start + self.forecast_length * 2
+
+        # Find all series of given keys
+        end = start + self.total_length
+
         if self.views_all:
-            series = self.views_all[keys].astype(np.float32)
+            series = self.views_all[keys, start:end].astype(np.float32)
         else:
-            series = self.series[keys].astype(np.float32)
+            series = self.series[keys, start:end].astype(np.float32)
 
         if self.view_missing_p > 0:
             # Don't delete test data during evaluation
@@ -676,9 +729,12 @@ class RADflowVevo(BaseModel):
 
         # non_missing_idx = torch.stack(non_missing_list, dim=0)[:, 1:]
 
-        log_raw_series = torch.log1p(raw_series)
-
-        series = torch.log1p(raw_series)
+        if self.log_space:
+            log_raw_series = torch.log1p(raw_series)
+            series = torch.log1p(raw_series)
+        else:
+            log_raw_series = raw_series
+            series = raw_series
 
         X_full, preds_full, _ = self._forward_full(series)
         preds = preds_full[:, :-1]
@@ -686,8 +742,8 @@ class RADflowVevo(BaseModel):
 
         if self.agg_type != 'none':
             X = X_full[:, :-1]
-            X_agg, scores, neigh_keys = self._get_neighbour_embeds(
-                X, keys, 0, self.total_length)
+            X_agg, _, _ = self._get_neighbour_embeds(
+                X, keys, start, self.total_length)
             # X_agg.shape == [batch_size, seq_len, out_hidden_size]
 
             X_agg = self.fc(X_agg)
@@ -696,7 +752,8 @@ class RADflowVevo(BaseModel):
             preds = preds + X_agg.squeeze(-1)
             # preds.shape == [batch_size, seq_len]
 
-        preds = torch.exp(preds)
+        if self.log_space:
+            preds = torch.exp(preds)
         targets = raw_series[:, 1:]
 
         preds = torch.masked_select(preds, non_missing_idx)
@@ -708,13 +765,173 @@ class RADflowVevo(BaseModel):
         loss[torch.isnan(loss)] = 0
         loss = loss.mean()
         out_dict['loss'] = loss
-        out_dict['keys'] = keys
 
-        for k, ns, ss in zip(keys, neigh_keys.tolist(), scores.tolist()):
-            line = json.dumps({'k': k, 'n': ns, 's': ss})
-            self.out_f.write(line + '\n')
+        # During evaluation, we compute one time step at a time
+        if split in ['valid', 'test']:
+            s = self.backcast_length
+            e = s + self.forecast_length
+            targets = raw_series[:, s:e]
+            # targets.shape == [batch_size, forecast_len]
+
+            preds = targets.new_zeros(*targets.shape)
+            if self.counterfactual_mode:
+                preds_2 = targets.new_zeros(*targets.shape)
+                all_scores_2 = [[] for _ in keys]
+
+            series = log_raw_series[:, :-self.forecast_length]
+            current_views = series[:, -1]
+            all_f_parts = [[[] for _ in range(self.n_layers + 1)]
+                           for _ in keys]
+            all_scores = [[] for _ in keys]
+            for i in range(self.forecast_length):
+                X, pred_base, f_parts = self._forward_full(series)
+                pred_base = pred_base[:, -1]
+                for b in range(len(keys)):
+                    for l, f_part in enumerate(f_parts):
+                        all_f_parts[b][l].append(f_part[b])
+                if self.agg_type != 'none':
+                    seq_len = self.total_length - self.forecast_length + i + 1
+                    X_agg, scores, neigh_keys = self._get_neighbour_embeds(
+                        X, keys, start, seq_len, i)
+                    X_agg = self.fc(X_agg)
+                    X_agg = X_agg.squeeze(-1)[:, -1]
+                    if scores is not None:
+                        scores = scores[:, -1].tolist()
+                    pred = pred_base + X_agg
+                    # delta.shape == [batch_size]
+
+                    if self.counterfactual_mode:
+                        X_agg_2, scores_2, _ = self._get_neighbour_embeds(
+                            X, keys, start, seq_len, i, True)
+                        X_agg_2 = self.fc(X_agg_2)
+                        X_agg_2 = X_agg_2.squeeze(-1)[:, -1]
+                        if scores_2 is not None:
+                            scores_2 = scores_2[:, -1].tolist()
+                        pred_2 = pred_base + X_agg_2
+
+                    for b, f in enumerate(X_agg.cpu().tolist()):
+                        all_f_parts[b][-1].append(f)
+                        if scores is not None:
+                            all_scores[b].append(scores[b])
+                        if self.counterfactual_mode and scores_2 is not None:
+                            all_scores_2[b].append(scores_2[b])
+
+                else:
+                    neigh_keys = np.array([])
+                    pred = pred_base
+
+                current_views = pred
+                preds[:, i] = current_views
+                if self.counterfactual_mode:
+                    preds_2[:, i] = pred_2
+                current_views = current_views.unsqueeze(1)
+                series = torch.cat([series, current_views], dim=1)
+
+            if self.log_space:
+                preds = torch.exp(preds)
+                if self.counterfactual_mode:
+                    preds_2 = torch.exp(preds_2)
+
+            targets = targets.cpu().numpy()
+            preds = preds.cpu().numpy()
+
+            if self.ignore_test_zeros:
+                nz = targets != 0
+                targets = targets[nz]
+                preds = preds[nz]
+
+            smapes, daily_errors = get_smape(targets, preds)
+            # if self.views_all:
+            #     n_cats = smapes.shape[-1]
+            #     for i in range(n_cats):
+            #         for k in self.test_lengths:
+            #             self.step_history[f'smape_{i}_{k}'] += np.sum(
+            #                 smapes[:, :k, i])
+
+            rmse = (targets - preds)**2
+            mae = np.abs(targets - preds)
+
+            out_dict['smapes'] = smapes.tolist()
+            out_dict['daily_errors'] = daily_errors.tolist()
+            out_dict['keys'] = keys
+            out_dict['preds'] = preds.tolist()
+            out_dict['f_parts'] = all_f_parts
+            out_dict['neigh_keys'] = neigh_keys.tolist()
+            out_dict['all_scores'] = all_scores
+            if self.counterfactual_mode:
+                out_dict['preds_2'] = preds_2.cpu().numpy().tolist()
+                out_dict['all_scores_2'] = all_scores_2
+            if self.views_all:
+                self.history['_n_steps'] += smapes.shape[0] * \
+                    smapes.shape[1] * smapes.shape[2]
+            elif len(smapes.shape) == 2:
+                self.history['_n_steps'] += smapes.shape[0] * smapes.shape[1]
+            else:
+                self.history['_n_steps'] += smapes.shape[0]
+
+            k = self.test_lengths[-1]
+            self.step_history[f'smape_{k}'] += np.sum(smapes)
+            self.squared_step_history[f'_rmse_{k}'] += np.sum(rmse)
+            self.step_history[f'_mae_{k}'] += np.sum(mae)
+        else:
+            self.current_t += 1
 
         return out_dict
+
+    def get_pred_neigh_embeds(self, X, Xm, masks):
+        # X.shape == [batch_size, 1, hidden_size]
+        # Xm.shape == [batch_size, n_neighs, 1, hidden_size]
+        # masks.shape == [batch_size, n_neighs, 1]
+
+        Xm, scores = self._aggregate_attn(X, Xm, masks, 1)
+        X_out = self._pool(X, Xm, 1)
+        # X_out.shape == [batch_size, 1, hidden_size]
+
+        return X_out
+
+    def predict(self, backcast, neighs, forecast_len=28):
+        assert self.n_hops == 1
+        assert backcast.shape[0] == 1
+        p = next(self.parameters())
+
+        backcast = p.new_tensor(backcast)
+        backcast = torch.log1p(backcast)
+        B, _ = X.shape
+        # X.shape == [batch_size, backcast_len]
+
+        neighs = p.new_tensor(neighs)
+        neighs = torch.log1p(neighs)
+        B, N, T = neighs.shape
+        # neighs.shape == [batch_size, n_neighs, total_len]
+
+        masks = np.zeros((B, N, 1), dtype=bool)
+        masks = p.new_tensor(masks)
+        preds = p.new_zeros(B, forecast_len)
+
+        X_neighs, _, _ = self._forward_full(neighs.reshape(B * N, T))
+        X_neighs = X_neighs.reshape(B, N, T, -1)
+        X_neighs = X_neighs[:, :, -forecast_len:]
+        # neighs.shape == [batch_size, n_neighs, forecast_len, hidden_size]
+
+        for i in range(forecast_len):
+            X, pred, _ = self._forward_full(backcast)
+            pred = pred[:, -1:]
+            X = X[:, -1:]
+
+            if self.agg_type != 'none':
+                X_agg = self.get_pred_neigh_embeds(X, X_neighs[:, :, i], masks)
+                X_agg = self.fc(X_agg)
+                X_agg = X_agg.squeeze(-1)
+                pred = pred + X_agg
+
+            preds[:, i] = pred[:, 0]
+            backcast = torch.cat([backcast, pred], dim=1)
+
+        if self.log_space:
+            preds = torch.exp(preds)
+        # preds.shape == [batch_size, forecast_len]
+
+        return preds.cpu().numpy()
 
     def predict_no_agg(self, series, n_steps):
         if len(series.shape) == 3:
@@ -736,7 +953,8 @@ class RADflowVevo(BaseModel):
 class LSTMDecoder(nn.Module):
     def __init__(self, hidden_size, n_layers, dropout, variant, input_size):
         super().__init__()
-        assert variant in ['none', 'combined', 'separate']
+        assert variant in ['none', 'h', 'p', 'q',
+                           'hp', 'hpq', 'separate']
         self.variant = variant
         self.input_size = input_size
         self.in_proj = GehringLinear(input_size, hidden_size)
@@ -758,9 +976,11 @@ class LSTMDecoder(nn.Module):
         # X.shape == [batch_size, seq_len, hidden_size]
 
         forecast = X.new_zeros(*X.shape)
-        if self.variant == 'combined':
+        if self.variant == 'hp':
             hidden = X.new_zeros(X.shape[0], X.shape[1], 2 * X.shape[2])
-        elif self.variant == 'separate':
+        elif self.variant == 'hpq':
+            hidden = X.new_zeros(X.shape[0], X.shape[1], 3 * X.shape[2])
+        elif self.variant in ['separate', 'h', 'p', 'q']:
             hidden = X.new_zeros(*X.shape)
         else:
             hidden = None
@@ -769,10 +989,19 @@ class LSTMDecoder(nn.Module):
         for layer in self.layers:
             h, b, f = layer(X)
             X = X - b
-            if self.variant == 'combined':
+            if self.variant == 'hp':
                 hidden = hidden + torch.cat([h, b], dim=-1)
+            elif self.variant == 'hpq':
+                hidden = hidden + torch.cat([h, b, f], dim=-1)
+            elif self.variant == 'h':
+                hidden = hidden + h
+            elif self.variant == 'p':
+                hidden = hidden + b
+            elif self.variant == 'q':
+                hidden = hidden + f
             elif self.variant == 'separate':
                 hidden = hidden + h
+
             forecast = forecast + f
 
             if not self.training:
@@ -799,7 +1028,8 @@ class LSTMDecoder(nn.Module):
 class LSTMLayer(nn.Module):
     def __init__(self, hidden_size, dropout, variant):
         super().__init__()
-        assert variant in ['none', 'combined', 'separate']
+        assert variant in ['none', 'h', 'p', 'q',
+                           'hp', 'hpq', 'combined', 'separate']
         self.variant = variant
 
         self.layer = nn.LSTM(hidden_size, hidden_size, 1,

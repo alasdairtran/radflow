@@ -9,7 +9,7 @@ from allennlp.models.model import Model
 from allennlp.nn.initializers import InitializerApplicator
 from overrides import overrides
 
-from nos.modules import LoadStateDictWithPrefix
+from radflow.modules import LoadStateDictWithPrefix
 
 logger = logging.getLogger(__name__)
 

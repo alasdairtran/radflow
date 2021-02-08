@@ -6,7 +6,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 from torch_geometric.nn import SAGEConv
 
-from nos.modules.linear import GehringLinear
+from radflow.modules.linear import GehringLinear
 
 
 class NBeatsNet(nn.Module):

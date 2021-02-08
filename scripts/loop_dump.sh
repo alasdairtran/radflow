@@ -6,6 +6,6 @@
 # queue size of 300.
 # Processes reaching the time limit will terminate with error code 271
 for i in {0..167}; do
-    qsub -v SPLIT=$i -o dump-$i /g/data/v89/at3219/projects/nos/scripts/start_job.sh
+    qsub -v SPLIT=$i -o dump-$i /g/data/v89/at3219/projects/radflow/scripts/start_job.sh
     sleep 2
 done
