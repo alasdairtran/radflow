@@ -30,6 +30,19 @@ broadly, Radflow can be used to improve the forecasts in correlated time series
 networks such as the stock market, or impute missing measurements of natural
 phenomena such as geographically dispersed networks of waterbodies.
 
+Please cite with the following BibTeX:
+
+```raw
+@InProceedings{Tran_2021_Radflow,
+  author = {Tran, Alasdair and Mathews, Alexander and Ong, Cheng Soon and Xie, Lexing},
+  title = {Radflow: A Recurrent, Aggregated, and Decomposable Model for Networks of Time Series},
+  year = {2021},
+  publisher = {Association for Computing Machinery},
+  url = {https://doi.org/10.1145/3442381.3449945},
+  booktitle = {Proceedings of The Web Conference 2021}
+}
+```
+
 ## Getting Started
 
 ```sh
