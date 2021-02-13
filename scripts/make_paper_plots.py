@@ -105,7 +105,7 @@ def plot_wiki_smape_boxplots():
     with open(path) as f:
         o3 = json.load(f)
 
-    path = 'expt/network_aggregation/wiki_univariate/imputation/two_hops/15_radflow/serialization/evaluate-metrics.json'
+    path = 'expt/network_aggregation/wiki_univariate/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json'
     with open(path) as f:
         o8 = json.load(f)
 
@@ -595,7 +595,8 @@ def plot_counterfactuals():
                s=1, alpha=0.02, edgecolors=None)
     ax.set_xlabel('% Increase in Views of Ego Node')
     ax.set_ylabel('Score After Doubling')
-    ax.set_ylim(0, 0.5)
+    ax.set_ylim(0, 0.8)
+    ax.set_yticks(np.round(np.linspace(0, 0.8, 5), 1))
     ax.set_xlim(-5, 50)
     ax.set_title("Effect of Attention on Ego's Traffic")
 
