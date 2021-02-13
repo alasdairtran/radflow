@@ -144,6 +144,34 @@ def generate_taxi_pvalue_rows():
                 print_taxi_row(data, m1, smapes1, m2, smapes2)
 
 
+def generate_main_paper_pvalues():
+    pairs = [
+        ['./expt/pure_time_series/vevo/08_radflow_no_network/serialization/evaluate-metrics.json',
+         './expt/network_aggregation/vevo_static/forecast/one_hop/15_radflow/serialization/evaluate-metrics.json'],
+
+        ['./expt/pure_time_series/wiki_univariate/08_radflow_no_network/serialization/evaluate-metrics.json',
+         './expt/network_aggregation/wiki_univariate/forecast/one_hop/13_radflow_graphsage/serialization/evaluate-metrics.json'],
+
+        ['./expt/network_aggregation/vevo_static/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json',
+         './expt/network_aggregation/vevo_static/imputation/two_hops/15_radflow/serialization/evaluate-metrics.json'],
+
+        ['./expt/network_aggregation/vevo_dynamic/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json',
+         './expt/network_aggregation/vevo_dynamic/imputation/two_hops/15_radflow/serialization/evaluate-metrics.json'],
+    ]
+
+    for path1, path2 in pairs:
+        with open(path1) as f:
+            smapes1 = json.load(f)['smapes']
+            smapes1 = np.array(smapes1).reshape(-1)
+
+        with open(path2) as f:
+            smapes2 = json.load(f)['smapes']
+            smapes2 = np.array(smapes2).reshape(-1)
+
+        pvalue = ttest_rel(smapes1, smapes2)[1]
+        print(smapes1.mean(), smapes2.mean(), pvalue)
+
+
 def main():
     # generate_pvalue_rows()
     generate_taxi_pvalue_rows()
