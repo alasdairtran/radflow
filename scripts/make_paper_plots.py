@@ -354,6 +354,7 @@ def plot_network_contribution():
     ax.set_ylabel('Network Contribution (%)')
     ax.set_title('VevoMusic')
     ax.locator_params(nbins=10, axis='y')
+    ax.grid(True)
 #     ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
 
     f_wiki = h5py.File('data/wiki/wiki.hdf5', 'r')
@@ -383,13 +384,14 @@ def plot_network_contribution():
                                   markersize=5, linestyle=''))
 
     ax.legend(handles=circles, prop={
-              'size': 8}, loc="lower left", scatterpoints=1, frameon=False)
+              'size': 8}, loc="lower left", scatterpoints=1, frameon=True)
 
     ax.set_ylim(0, 6)
     ax.set_xlim(10, 40000)
     ax.set_xscale('log')
     ax.set_xlabel('Average Daily Views')
     ax.set_title('WikiTraffic')
+    ax.grid(True)
 
     fig.tight_layout()
     fig.savefig('figures/network_contribution.png', dpi=300)
