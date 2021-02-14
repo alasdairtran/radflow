@@ -108,6 +108,26 @@ def generate_pvalue_rows():
                 print_row(data, k1, h1, m1, smapes1, k2, h2, m2, smapes2)
 
 
+def generate_ablation_pvalues():
+    datas = ['vevo_static', 'vevo_dynamic']
+    models = ['16_radflow_h', '17_radflow_p', '18_radflow_q', '19_radflow_hp',
+              '20_radflow_hpq', '21_radflow_no_final_proj', '22_radflow_one_head']
+
+    for data in datas:
+        for model in models:
+            path1 = f'./expt/network_aggregation/{data}/imputation/one_hop/15_radflow/serialization/evaluate-metrics.json'
+            path2 = f'./expt/ablation_studies/{data}/{model}/serialization/evaluate-metrics.json'
+            with open(path1) as f:
+                smapes1 = json.load(f)['smapes']
+                smapes1 = np.array(smapes1).reshape(-1)
+            with open(path2) as f:
+                smapes2 = json.load(f)['smapes']
+                smapes2 = np.array(smapes2).reshape(-1)
+
+            pvalue = ttest_rel(smapes1, smapes2)[1]
+            print(data, model, smapes1.mean(), smapes2.mean(), pvalue)
+
+
 def print_taxi_row(d, m1, s1, m2, s2):
     pvalue = ttest_rel(s1, s2)[1]
     if pvalue < 0.0001:
@@ -173,8 +193,9 @@ def generate_main_paper_pvalues():
 
 
 def main():
-    # generate_pvalue_rows()
+    generate_pvalue_rows()
     generate_taxi_pvalue_rows()
+    generate_ablation_pvalues()
 
 
 if __name__ == '__main__':
