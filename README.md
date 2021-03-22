@@ -70,6 +70,11 @@ pip install -U torch-geometric
 
 ## Preparing the Datasets
 
+All the datasets and experimental results are available at:
+https://cloudstor.aarnet.edu.au/plus/s/wQbOswE7qi50mci
+
+The steps provided below are for constructing the dataset from scratch.
+
 ```sh
 # Start an empty mongodb database
 mongod --bind_ip_all --dbpath data/mongodb --wiredTigerCacheSizeGB 10
