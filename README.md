@@ -70,10 +70,24 @@ pip install -U torch-geometric
 
 ## Preparing the Datasets
 
-All the datasets and experimental results are available at:
-https://cloudstor.aarnet.edu.au/plus/s/wQbOswE7qi50mci
+You can download all the pre-processed datasets and pretrained models as
+follows:
 
-The steps provided below are for constructing the dataset from scratch.
+```sh
+# Datasets (70GB)
+wget --continue https://object-store.rc.nectar.org.au/v1/AUTH_c0e4d64401cf433fb0260d211c3f23f8/radflow/data.tar.gz
+tar -zxvf data.tar.gz
+
+# Pretrained models and results (123GB)
+wget --continue https://object-store.rc.nectar.org.au/v1/AUTH_c0e4d64401cf433fb0260d211c3f23f8/radflow/expt.tar.gz
+tar -zxvf expt.tar.gz
+```
+
+Or if the archives are too big, you can also browse the individual directories
+and files at: https://cloudstor.aarnet.edu.au/plus/s/wQbOswE7qi50mci
+
+Finally, the steps provided below are for constructing the dataset from
+scratch:
 
 ```sh
 # Start an empty mongodb database
