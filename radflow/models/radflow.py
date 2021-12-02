@@ -896,7 +896,7 @@ class RADflow(BaseModel):
 
         backcast = p.new_tensor(backcast)
         backcast = torch.log1p(backcast)
-        B, _ = X.shape
+        B, _ = backcast.shape
         # X.shape == [batch_size, backcast_len]
 
         neighs = p.new_tensor(neighs)
