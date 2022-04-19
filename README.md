@@ -135,6 +135,17 @@ mongodump --db wiki2 --host=localhost --port=27017 --gzip --archive=data/mongoba
 mongodump --db vevo --host=localhost --port=27017 --gzip --archive=data/mongobackups/vevo-2020-09-17.gz
 ```
 
+## Data Description
+
+For the WikiTraffic dataset, the most important file is `data/wiki/wiki.h5df`. Two of the keys
+in that file are:
+
+* `views` of shape `(366802, 1827)`: Each row contains the view count of a wiki page over 1827 days,
+
+* `edges` of shape `(366802, 1827, max_edges)`: Each row contains the neighbors of a page on each day,
+
+from which we can reconstruct the entire graph. The structure of `data/vevo/vevo.h5df` is the same.
+
 ## Training
 
 ```sh
